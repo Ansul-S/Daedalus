@@ -1,0 +1,109 @@
+[project]
+name = "daedalus"
+version = "0.1.0"
+description = "AI-powered interview preparation platform for AI/ML students — grounded RAG over study material"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-dotenv>=1.0",
+    "python-multipart>=0.0.9",
+    "aiofiles>=24.1",
+    "httpx>=0.27",
+    "orjson>=3.10",
+    "numpy>=1.26",
+    "pymupdf4llm>=0.0.17",
+    "nbformat>=5.10",
+    "markdown-it-py>=3.0",
+]
+
+
+# Optional Dependencies
+
+
+[project.optional-dependencies]
+
+ocr = [
+    # PDF OCR
+    "ocrmypdf>=16",
+
+    # Image OCR
+    "paddleocr>=2.8",
+    "paddlepaddle>=3.0",
+
+    # Image Processing
+    "opencv-python>=4.10",
+    "pillow>=10",
+]
+
+ml = [
+    # Embeddings
+    "sentence-transformers>=3,<5",
+
+    # HuggingFace
+    "transformers<5",
+
+    # Tokenizer
+    "sentencepiece>=0.2",
+
+    # Required by tokenizer
+    "protobuf>=4",
+]
+
+
+# Development
+
+
+[dependency-groups]
+
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+]
+
+
+# Build System
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+# Packaging
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/daedalus"]
+
+
+# Pytest
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+
+# Ruff
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+
+# Project Metadata
+
+
+[project.urls]
+Homepage = "https://github.com/Ansul-S/Daedalus"
+Repository = "https://github.com/Ansul-S/Daedalus"
+Issues = "https://github.com/Ansul-S/Daedalus/issues"
