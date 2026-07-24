@@ -1,0 +1,81 @@
+# Python
+
+# Virtual environment
+.venv/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+
+# Testing & Linting
+
+
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+
+# Environment Variables
+
+
+.env
+.env.*
+
+# Keep the example file
+!.env.example
+
+# Local Data
+
+
+# Uploaded files, embeddings, caches, local databases
+backend/data/
+
+
+# Operating System
+
+
+.DS_Store
+Thumbs.db
+
+
+# IDE
+
+
+.vscode/
+.idea/
+
+
+# Logs
+
+
+*.log
+
+
+# Jupyter
+
+
+.ipynb_checkpoints/
+
+
+# Node.js (Frontend)
+
+
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+
+# Misc
+
+
+*.sqlite
+*.sqlite3
