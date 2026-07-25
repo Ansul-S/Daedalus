@@ -29,6 +29,9 @@ class Settings(BaseSettings):
 
     ollama_url: str = "http://localhost:11434"
 
+    #Logging
+    log_level: str = "INFO"
+
     #Project paths
 
     data_dir: Path = Path("data")
