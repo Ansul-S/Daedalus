@@ -12,3 +12,9 @@ def root():
 @app.get("/")
 def health():
     return {"status":"ok"}
+
+#Logger
+from daedalus.core import configure_logging
+import logging
+
+configure_logging()
