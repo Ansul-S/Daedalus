@@ -6,14 +6,18 @@ Do Not store environment-specific values here.
 
 from pathlib import Path
 
-#Application
+# Application
 
 APP_NAME = "Daedalus"
 VERSION = "0.1.0"
 
-#Directory structure
+# Directory structure
 
-DATA_DIR = Path("data")
+# Anchored to backend/ rather than the process working directory, so data
+# always lands in the same place regardless of where the app is launched.
+BACKEND_ROOT = Path(__file__).resolve().parents[3]
+
+DATA_DIR = BACKEND_ROOT / "data"
 
 RAW_DIR = DATA_DIR / "raw"
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -28,12 +32,12 @@ SUPPORTED_EXTENSIONS = {
     ".ipynb",
 }
 
-#Document Processing
+# Document Processing
 
 DEFAULT_CHUNK_SIZE = 1000
 DEFAULT_CHUNK_OVERLAP = 200
 
-#Retrieval
+# Retrieval
 
 DEFAULT_TOP_K = 5
 
