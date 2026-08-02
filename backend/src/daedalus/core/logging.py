@@ -21,18 +21,13 @@ __all__ = ["configure_logging"]
 
 # Logging Format
 
-LOG_FORMAT = (
-    "%(asctime)s | "
-    "%(levelname)-8s | "
-    "%(name)s | "
-    "%(message)s"
-)
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
-
 # Logging Configuration
+
 
 def configure_logging() -> None:
     """

@@ -90,6 +90,8 @@ packages = ["src/daedalus"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
 
 
 # Ruff
@@ -99,6 +101,37 @@ pythonpath = ["src"]
 line-length = 100
 target-version = "py311"
 src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting
+    "N",    # pep8 naming
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "PTH",  # prefer pathlib over os.path
+    "T20",  # no print() — this project logs
+    "RUF",  # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use assert freely and don't need the print ban.
+"tests/**" = ["S101", "T20"]
+
+
+# Mypy
+
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
 
 
 # Project Metadata
