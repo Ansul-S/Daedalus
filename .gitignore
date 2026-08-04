@@ -42,6 +42,20 @@ htmlcov/
 backend/data/
 
 # ============================================================
+# Evaluation Corpus
+# ============================================================
+
+# The corpus and its frozen parsed text ARE committed — they are the fixed
+# reference the evaluation harness measures against, and without them the
+# reported metrics are not reproducible.
+#
+# Exception: third-party material we do not have the right to redistribute.
+corpus/Images/Vector database.jpg
+
+# Model caches downloaded at runtime, not source material.
+corpus/**/.ipynb_checkpoints/
+
+# ============================================================
 # Operating System
 # ============================================================
 
