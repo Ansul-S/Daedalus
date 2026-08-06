@@ -133,6 +133,17 @@ strict = true
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
 
+# Third-party libraries that ship no type information.
+[[tool.mypy.overrides]]
+module = ["sqlite_vec.*", "pymupdf4llm.*", "nbformat.*"]
+ignore_missing_imports = true
+
+# Modules that call directly into those untyped libraries. Scoped as
+# narrowly as possible so the rest of the codebase stays strict.
+[[tool.mypy.overrides]]
+module = ["daedalus.ingestion.pdf", "daedalus.ingestion.notebook"]
+disallow_untyped_calls = false
+
 
 # Project Metadata
 

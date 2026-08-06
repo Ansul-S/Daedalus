@@ -6,6 +6,11 @@
 # Run against everything:
 #     uv run pre-commit run --all-files
 
+# The evaluation corpus is frozen reference material, not source code.
+# Formatting or "fixing" it would change the text that evaluation labels
+# anchor to and silently invalidate every label. Never touch it.
+exclude: ^corpus/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
