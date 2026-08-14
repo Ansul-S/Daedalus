@@ -19,7 +19,7 @@ from daedalus.config import constants
 __all__ = ["SCHEMA_VERSION", "initialize_schema"]
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 # Core Tables
@@ -106,6 +106,20 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
 );
 """
 
+# Vectors cannot be computed in SQL, so inserts are the indexing code's job.
+# Deletes can be, and a foreign key would not help here: ON DELETE CASCADE
+# does not reach into a virtual table. Without this trigger, deleting a
+# document leaves its vectors behind and dense retrieval keeps returning
+# chunk ids that no longer exist.
+#
+# There is deliberately no update trigger. A chunk's text and its vector
+# cannot be kept in step by SQL, so chunks are replaced rather than updated.
+_VEC_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS chunks_vec_delete AFTER DELETE ON chunks BEGIN
+    DELETE FROM chunks_vec WHERE chunk_id = old.id;
+END;
+"""
+
 
 # Initialization
 
@@ -124,4 +138,5 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
         connection.executescript(_FTS)
         connection.executescript(_FTS_TRIGGERS)
         connection.executescript(_VEC)
+        connection.executescript(_VEC_TRIGGERS)
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
