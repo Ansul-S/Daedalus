@@ -68,9 +68,7 @@ def test_asking_for_no_results_returns_none(
     assert DenseRetriever(indexed, embedder).search(corpus[0], top_k=0) == []
 
 
-def test_an_empty_index_returns_nothing(
-    db: sqlite3.Connection, embedder: Embedder
-) -> None:
+def test_an_empty_index_returns_nothing(db: sqlite3.Connection, embedder: Embedder) -> None:
     """An empty corpus is a normal state, not an error."""
 
     assert DenseRetriever(db, embedder).search("anything") == []

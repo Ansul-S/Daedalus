@@ -48,9 +48,7 @@ def test_an_empty_query_has_no_expression() -> None:
 # Searching
 
 
-def test_an_exact_term_finds_its_chunk(
-    indexed: sqlite3.Connection, chunk_ids: list[int]
-) -> None:
+def test_an_exact_term_finds_its_chunk(indexed: sqlite3.Connection, chunk_ids: list[int]) -> None:
     hits = LexicalRetriever(indexed).search("convolution")
 
     assert [hit.chunk_id for hit in hits] == [chunk_ids[3]]
@@ -77,9 +75,7 @@ def test_scores_are_higher_is_better(indexed: sqlite3.Connection) -> None:
     "query",
     ["C++", 'what is "attention"?', "", "   ", "?!*", "NEAR(a b)", "softmax OR", "a AND"],
 )
-def test_hostile_queries_do_not_reach_fts5(
-    indexed: sqlite3.Connection, query: str
-) -> None:
+def test_hostile_queries_do_not_reach_fts5(indexed: sqlite3.Connection, query: str) -> None:
     """Every one of these is a syntax error if passed to MATCH raw."""
 
     LexicalRetriever(indexed).search(query)
@@ -105,9 +101,7 @@ def test_asking_for_no_results_returns_none(indexed: sqlite3.Connection) -> None
     assert LexicalRetriever(indexed).search("softmax", top_k=0) == []
 
 
-def test_deleted_chunks_stop_matching(
-    indexed: sqlite3.Connection, chunk_ids: list[int]
-) -> None:
+def test_deleted_chunks_stop_matching(indexed: sqlite3.Connection, chunk_ids: list[int]) -> None:
     """Guards the FTS delete trigger from the storage layer."""
 
     indexed.execute("DELETE FROM chunks WHERE id = ?", (chunk_ids[3],))

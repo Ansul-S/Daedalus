@@ -182,9 +182,7 @@ def test_a_query_with_no_searchable_terms_still_returns_dense_results(
     assert HybridRetriever(db, pinned).search("?!*") != []
 
 
-def test_an_empty_index_returns_nothing(
-    db: sqlite3.Connection, pinned: FakeEmbedder
-) -> None:
+def test_an_empty_index_returns_nothing(db: sqlite3.Connection, pinned: FakeEmbedder) -> None:
     assert HybridRetriever(db, pinned).search(QUERY) == []
 
 

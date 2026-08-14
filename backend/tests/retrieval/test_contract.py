@@ -50,9 +50,7 @@ def test_no_chunk_appears_twice(retriever: Retriever, corpus: list[str]) -> None
     assert len({hit.chunk_id for hit in hits}) == len(hits)
 
 
-def test_asking_for_no_results_returns_none(
-    retriever: Retriever, corpus: list[str]
-) -> None:
+def test_asking_for_no_results_returns_none(retriever: Retriever, corpus: list[str]) -> None:
     assert retriever.search(corpus[0], top_k=0) == []
 
 

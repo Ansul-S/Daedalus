@@ -58,8 +58,6 @@ class HybridRetriever(Retriever):
         dense = self._dense.search(query, candidates)
         lexical = self._lexical.search(query, candidates)
 
-        logger.debug(
-            "Query %r: %d dense, %d lexical candidates", query, len(dense), len(lexical)
-        )
+        logger.debug("Query %r: %d dense, %d lexical candidates", query, len(dense), len(lexical))
 
         return reciprocal_rank_fusion([dense, lexical], top_k=top_k, k=self._rrf_k)
