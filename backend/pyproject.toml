@@ -91,7 +91,10 @@ packages = ["src/daedalus"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
-addopts = "-q --strict-markers"
+# importlib import mode lets two packages both have a tests/<pkg>/test_contract.py.
+# Under the default "prepend" mode every test module is imported as a top-level
+# name, so equal basenames in different directories collide at collection.
+addopts = "-q --strict-markers --import-mode=importlib"
 
 
 # Ruff
