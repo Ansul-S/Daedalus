@@ -2,10 +2,32 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
+
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from starlette.routing import BaseRoute
 
 from daedalus.api.main import app
 from daedalus.config import constants
+
+
+def _api_routes(routes: Sequence[BaseRoute]) -> Iterator[APIRoute]:
+    """Every registered route, including those inside included routers.
+
+    ``include_router`` nests a router object in ``app.routes`` rather than
+    flattening its routes into it, so reading ``app.routes`` directly sees
+    only the routes declared on the app itself.
+    """
+
+    for route in routes:
+        if isinstance(route, APIRoute):
+            yield route
+
+        included = getattr(route, "original_router", None)
+
+        if included is not None:
+            yield from _api_routes(included.routes)
 
 
 def test_root_identifies_the_service(client: TestClient) -> None:
@@ -32,6 +54,8 @@ def test_every_route_path_is_unique() -> None:
     silently accepted at import time, so only a test catches it.
     """
 
-    paths = [route.path for route in app.routes]  # type: ignore[attr-defined]
+    registered = [
+        (route.path, method) for route in _api_routes(app.routes) for method in route.methods
+    ]
 
-    assert len(paths) == len(set(paths)), f"duplicate route paths: {paths}"
+    assert len(registered) == len(set(registered)), f"duplicate routes: {registered}"

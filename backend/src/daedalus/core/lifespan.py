@@ -20,6 +20,8 @@ from fastapi import FastAPI
 
 from daedalus.config import constants
 from daedalus.core.logging import configure_logging
+from daedalus.db import get_connection, initialize_schema
+from daedalus.storage import documents
 
 __all__ = ["lifespan"]
 
@@ -48,6 +50,20 @@ def _create_data_directories() -> None:
         directory.mkdir(parents=True, exist_ok=True)
 
 
+def _prepare_database() -> None:
+    """
+    Create the schema and clean up after any previous process.
+
+    Background tasks do not survive a restart (ADR-008), so a document
+    left in ``processing`` has no task behind it and would be polled
+    forever. Failing it here is what makes the status endpoint honest.
+    """
+
+    with get_connection() as connection:
+        initialize_schema(connection)
+        documents.reset_stale_processing(connection)
+
+
 # Lifespan
 
 
@@ -65,7 +81,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("Starting %s v%s", constants.APP_NAME, constants.VERSION)
 
+    # Directories first: the database file lives in one of them.
     _create_data_directories()
+    _prepare_database()
 
     yield
 

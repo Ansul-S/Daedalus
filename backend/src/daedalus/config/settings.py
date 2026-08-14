@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     vision_model: str = "qwen2.5vl:7b"
     embedding_model: str = "BAAI/bge-m3"
 
+    # Which embedder the API serves with. "fake" is deterministic and needs
+    # no model, which is what lets the test suite and a fresh clone exercise
+    # the full pipeline; it produces meaningless neighbourhoods, so it is
+    # never the default.
+    embedding_backend: str = "bge"
+
+    # Uploads
+
+    # Ingestion reads the whole file, so an unbounded upload is an
+    # unbounded memory and disk cost.
+    max_upload_mb: int = 100
+
     # Services
 
     ollama_url: str = "http://localhost:11434"
