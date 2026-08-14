@@ -66,11 +66,31 @@ EXTRACTION_METHODS = {
 # essentially none. See ADR-009.
 TEXT_LAYER_MIN_CHARS = 100
 
+# Ingestion Status
+
+# The lifecycle of a document record. Mirrors the CHECK constraint on
+# documents.status — change one and the other rejects every write.
+STATUS_PENDING = "pending"
+STATUS_PROCESSING = "processing"
+STATUS_COMPLETED = "completed"
+STATUS_FAILED = "failed"
+
+DOCUMENT_STATUSES = {
+    STATUS_PENDING,
+    STATUS_PROCESSING,
+    STATUS_COMPLETED,
+    STATUS_FAILED,
+}
+
 # Embeddings
 
 # BAAI/bge-m3 produces 1024-dimensional vectors. Fixed at table creation
 # time by the vec0 virtual table, so changing it requires a re-index.
 EMBEDDING_DIM = 1024
+
+# Texts encoded per forward pass. Large enough to keep the model busy, small
+# enough that a batch of long chunks fits in memory on a laptop GPU.
+EMBEDDING_BATCH_SIZE = 32
 
 # Retrieval
 

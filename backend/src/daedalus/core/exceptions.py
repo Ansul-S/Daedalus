@@ -9,7 +9,11 @@ from __future__ import annotations
 
 __all__ = [
     "DaedalusError",
+    "DocumentNotFoundError",
+    "DuplicateDocumentError",
+    "EmbeddingError",
     "ExtractionError",
+    "StorageError",
     "UnsupportedFileTypeError",
 ]
 
@@ -24,3 +28,23 @@ class UnsupportedFileTypeError(DaedalusError):
 
 class ExtractionError(DaedalusError):
     """A document could not be converted to text."""
+
+
+class EmbeddingError(DaedalusError):
+    """Text could not be turned into vectors.
+
+    Raised when the embedding backend is unavailable or produces vectors of
+    a dimension the vector index cannot store.
+    """
+
+
+class StorageError(DaedalusError):
+    """A write to the database was rejected before it was attempted."""
+
+
+class DuplicateDocumentError(StorageError):
+    """A document with the same content has already been ingested."""
+
+
+class DocumentNotFoundError(StorageError):
+    """No document record exists for the given identifier."""
