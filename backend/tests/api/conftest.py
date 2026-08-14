@@ -19,9 +19,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from daedalus.api.dependencies import get_embedder
+from daedalus.api.dependencies import get_embedder, get_llm
 from daedalus.api.main import app
 from daedalus.embeddings import FakeEmbedder
+from daedalus.llm import FakeLLM
 
 MARKDOWN = """# Attention
 
@@ -48,6 +49,7 @@ def api(data_dir: Path) -> Iterator[TestClient]:
     # signature, so passing FakeEmbedder would turn its __init__ parameters
     # into request fields and every request body would fail validation.
     app.dependency_overrides[get_embedder] = lambda: FakeEmbedder()
+    app.dependency_overrides[get_llm] = lambda: FakeLLM()
 
     try:
         with TestClient(app) as test_client:

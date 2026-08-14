@@ -93,9 +93,7 @@ def test_a_traversing_filename_cannot_escape_the_upload_directory(
     assert [path.name for path in stored] == ["escaped.md"]
 
 
-def test_a_document_id_collision_is_refused(
-    upload: Upload, document: Path, tmp_path: Path
-) -> None:
+def test_a_document_id_collision_is_refused(upload: Upload, document: Path, tmp_path: Path) -> None:
     """Different content whose name slugs the same must not overwrite."""
 
     upload(document)
@@ -118,9 +116,7 @@ def test_the_same_content_is_not_ingested_twice(upload: Upload, document: Path) 
     assert second.json()["id"] == first.json()["id"]
 
 
-def test_the_same_content_under_a_new_name_is_recognised(
-    upload: Upload, document: Path
-) -> None:
+def test_the_same_content_under_a_new_name_is_recognised(upload: Upload, document: Path) -> None:
     """Identity is the bytes, not the filename."""
 
     original = upload(document).json()
@@ -137,9 +133,7 @@ def test_an_unknown_document_is_not_found(api: TestClient) -> None:
     assert api.get("/documents/nonexistent").status_code == 404
 
 
-def test_a_failed_ingestion_is_reported(
-    upload: Upload, tmp_path: Path, api: TestClient
-) -> None:
+def test_a_failed_ingestion_is_reported(upload: Upload, tmp_path: Path, api: TestClient) -> None:
     """A file that cannot be parsed must end as failed, not stuck processing."""
 
     broken = tmp_path / "broken.ipynb"

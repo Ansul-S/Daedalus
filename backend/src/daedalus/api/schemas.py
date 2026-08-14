@@ -13,13 +13,17 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from daedalus.config import constants
+from daedalus.generation import Answer, Source
 from daedalus.storage.types import ChunkRecord, DocumentRecord
 
 __all__ = [
+    "AnswerRequest",
+    "AnswerResponse",
     "DocumentResponse",
     "SearchRequest",
     "SearchResponse",
     "SearchResult",
+    "SourceResponse",
 ]
 
 
@@ -101,3 +105,64 @@ class SearchResponse(BaseModel):
 
     query: str
     results: list[SearchResult]
+
+
+class AnswerRequest(BaseModel):
+    """A question to answer from the indexed material."""
+
+    question: str = Field(min_length=1, max_length=1000)
+    top_k: int = Field(default=constants.DEFAULT_TOP_K, ge=1, le=20)
+
+
+class SourceResponse(BaseModel):
+    """A numbered source, as offered to the model."""
+
+    index: int
+    chunk_id: int
+    doc_id: str
+    ordinal: int
+    text: str
+    extraction: str
+    source_start: int
+    source_end: int
+    page: int | None = None
+
+    @classmethod
+    def from_source(cls, source: Source) -> SourceResponse:
+        return cls(
+            index=source.index,
+            chunk_id=source.chunk_id,
+            doc_id=source.doc_id,
+            ordinal=source.ordinal,
+            text=source.text,
+            extraction=source.extraction,
+            source_start=source.source_start,
+            source_end=source.source_end,
+            page=source.page,
+        )
+
+
+class AnswerResponse(BaseModel):
+    """
+    A grounded answer.
+
+    Both lists are returned: ``citations`` is what the model referenced,
+    ``sources`` is everything it was shown. A client renders the first and
+    a reviewer inspects the gap between them.
+    """
+
+    question: str
+    answer: str
+    model: str
+    citations: list[SourceResponse]
+    sources: list[SourceResponse]
+
+    @classmethod
+    def from_answer(cls, answer: Answer) -> AnswerResponse:
+        return cls(
+            question=answer.question,
+            answer=answer.text,
+            model=answer.model,
+            citations=[SourceResponse.from_source(source) for source in answer.citations],
+            sources=[SourceResponse.from_source(source) for source in answer.sources],
+        )

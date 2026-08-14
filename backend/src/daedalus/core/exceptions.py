@@ -13,6 +13,7 @@ __all__ = [
     "DuplicateDocumentError",
     "EmbeddingError",
     "ExtractionError",
+    "LLMError",
     "RetrievalError",
     "StorageError",
     "UnsupportedFileTypeError",
@@ -41,6 +42,14 @@ class EmbeddingError(DaedalusError):
 
 class StorageError(DaedalusError):
     """A write to the database was rejected before it was attempted."""
+
+
+class LLMError(DaedalusError):
+    """The language model could not produce an answer.
+
+    Covers an unreachable backend, a model that is not installed, and a
+    response that arrives but contains no usable text.
+    """
 
 
 class RetrievalError(DaedalusError):

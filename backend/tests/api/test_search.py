@@ -40,9 +40,9 @@ def test_results_carry_the_text_and_its_source_offsets(ingested: TestClient) -> 
 
 
 def test_results_are_ordered_best_first(ingested: TestClient) -> None:
-    results = ingested.post(
-        "/search", json={"query": "normalization", "top_k": 3}
-    ).json()["results"]
+    results = ingested.post("/search", json={"query": "normalization", "top_k": 3}).json()[
+        "results"
+    ]
 
     scores = [result["score"] for result in results]
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from daedalus.api import documents, search
+from daedalus.api import answer, documents, search
 from daedalus.config import constants
 from daedalus.core.lifespan import lifespan
 
@@ -29,6 +29,7 @@ app = FastAPI(
 
 app.include_router(documents.router)
 app.include_router(search.router)
+app.include_router(answer.router)
 
 
 # Routes

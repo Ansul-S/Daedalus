@@ -42,6 +42,19 @@ class Settings(BaseSettings):
     # never the default.
     embedding_backend: str = "bge"
 
+    # The generation counterpart. "fake" returns scripted text and contacts
+    # nothing, so the API can be exercised without Ollama running.
+    llm_backend: str = "ollama"
+
+    # Greedy. Grounded answers should restate the sources rather than
+    # improvise, and a benchmark cannot be built on a generator that
+    # answers differently each run — at 0.1 the same question over the
+    # same context alternated between answering and refusing.
+    llm_temperature: float = 0.0
+
+    # Generous: a local 8B model on CPU can take a minute for a long answer.
+    llm_timeout_seconds: float = 120.0
+
     # Uploads
 
     # Ingestion reads the whole file, so an unbounded upload is an
