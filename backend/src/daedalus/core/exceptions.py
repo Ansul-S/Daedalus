@@ -13,6 +13,7 @@ __all__ = [
     "DuplicateDocumentError",
     "EmbeddingError",
     "ExtractionError",
+    "RetrievalError",
     "StorageError",
     "UnsupportedFileTypeError",
 ]
@@ -40,6 +41,15 @@ class EmbeddingError(DaedalusError):
 
 class StorageError(DaedalusError):
     """A write to the database was rejected before it was attempted."""
+
+
+class RetrievalError(DaedalusError):
+    """A search could not be run against the index.
+
+    Raised when the query cannot be posed at all — an embedder whose
+    vectors do not fit the index, for instance — never when a well-formed
+    query simply matches nothing.
+    """
 
 
 class DuplicateDocumentError(StorageError):
