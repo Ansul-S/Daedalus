@@ -2,7 +2,7 @@
 name = "daedalus"
 version = "0.1.0"
 description = "AI-powered interview preparation platform for AI/ML students — grounded RAG over study material"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 dependencies = [
     "fastapi>=0.111",
@@ -99,7 +99,7 @@ addopts = "-q --strict-markers"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 src = ["src"]
 
 [tool.ruff.lint]
@@ -127,7 +127,10 @@ select = [
 
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12 rather than 3.11: numpy's bundled stubs use PEP 695 `type` statements,
+# which mypy refuses to parse when asked to target 3.11. Type checking on
+# 3.11 is therefore not possible while numpy is a dependency.
+python_version = "3.12"
 files = ["src"]
 strict = true
 warn_unreachable = true
@@ -135,7 +138,7 @@ plugins = ["pydantic.mypy"]
 
 # Third-party libraries that ship no type information.
 [[tool.mypy.overrides]]
-module = ["sqlite_vec.*", "pymupdf4llm.*", "nbformat.*"]
+module = ["sqlite_vec.*", "pymupdf4llm.*", "nbformat.*", "sentence_transformers.*"]
 ignore_missing_imports = true
 
 # Modules that call directly into those untyped libraries. Scoped as
