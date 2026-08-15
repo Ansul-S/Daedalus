@@ -26,6 +26,40 @@ PROCESSED_DIR = DATA_DIR / "processed"
 
 DB_PATH = DATA_DIR / "daedalus.db"
 
+# Evaluation
+
+# Committed, unlike data/. Frozen parsed text and the labelled datasets are
+# the fixed reference every reported metric is measured against — see
+# docs/pipelines/EVALUATION_ENGINE.md. Re-parsing is a versioned migration,
+# not a side effect of running the pipeline.
+CORPUS_DIR = BACKEND_ROOT.parent / "corpus"
+
+EVAL_DIR = BACKEND_ROOT / "eval"
+EVAL_PARSED_DIR = EVAL_DIR / "parsed"
+EVAL_DATASETS_DIR = EVAL_DIR / "datasets"
+
+EVAL_MANIFEST_PATH = EVAL_PARSED_DIR / "manifest.json"
+
+# Query stratification for the retrieval dataset. Each type stresses a
+# different half of hybrid retrieval, which is what makes the benchmark
+# discriminative rather than a single averaged number.
+QUERY_TYPES = {
+    "exact_term",
+    "conceptual",
+    "definitional",
+    "multi_hop",
+    "comparative",
+    "unanswerable",
+}
+
+# Tune freely against dev; touch test only when reporting final numbers.
+SPLITS = {"dev", "test"}
+
+# 2 = essential, the question cannot be answered without this span.
+# 1 = supporting.
+GRADE_ESSENTIAL = 2
+GRADE_SUPPORTING = 1
+
 SUPPORTED_EXTENSIONS = {
     ".pdf",
     ".md",

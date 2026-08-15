@@ -1,0 +1,4611 @@
+# Document Reading and Question Answering using Hugging Face Transformers
+
+## From Pretrained BERT-Style Inference to Fine-Tuning Readiness
+
+In the previous lectures, we built the Transformer Encoder manually.
+
+We understood:
+
+```text
+Token IDs
+→ Token Embeddings
+→ Positional Embeddings
+→ Transformer Encoder Blocks
+→ Contextual Token Representations
+→ Task Head
+
+Now we will move from building the architecture ourselves to using a pretrained Transformer model.
+
+But we will not use Hugging Face only as a black box.
+
+We will open the model-level workflow using:
+
+AutoTokenizer
++
+AutoModelForQuestionAnswering
+
+This will make the notebook useful not only for inference, but also for future fine-tuning.
+
+## Why We Are Starting Fresh
+
+In the previous class, the QnA pipeline could not execute because the installed `transformers` version did not recognize:
+
+```python
+pipeline("question-answering")
+
+So in this fresh Colab notebook, we will avoid relying on the pipeline registry.
+
+Instead, we will directly use the model classes:
+```text
+AutoTokenizer
+AutoModelForQuestionAnswering
+
+This is more transparent and more useful for learning.
+
+## Project Goal
+
+We will build a high-level document question answering system.
+
+The final project flow will be:
+
+```text
+PDF Document
+→ Text Extraction
+→ Text Cleaning
+→ Text Chunking
+→ Question
+→ Pretrained Transformer QnA Model
+→ Candidate Answers
+→ Ranked Best Answer
+
+This is not yet full RAG.
+
+But it is the natural bridge toward RAG.
+
+## What Is Extractive Question Answering?
+
+In extractive question answering, the model receives:
+
+```text
+Question
++
+Context
+
+and returns an answer span from the context.
+
+Example:
+
+Question:
+What is BERT?
+
+Context:
+BERT is an encoder-only Transformer model.
+
+Answer:
+encoder-only Transformer model
+
+The model does not freely generate an answer.
+
+It selects the most likely answer span from the given context.
+
+## Why This Project Is Fine-Tuning Ready
+
+For fine-tuning a QnA model, the training data usually needs examples like:
+
+```text
+question
+context
+answer_text
+answer_start
+
+In this notebook, we will already work with:
+
+question
+context
+predicted answer
+start position
+end position
+
+So the same structure can later be extended into a fine-tuning notebook.
+
+Today:
+
+Use pretrained QnA model for inference
+
+Later:
+
+Fine-tune QnA model on custom examples
+
+## Full Notebook Workflow
+
+The notebook will follow this structure:
+
+```text
+Section 0:
+Lecture tone and project workflow
+
+Section 1:
+Install and verify required libraries
+
+Section 2:
+Load pretrained tokenizer and QnA model manually
+
+Section 3:
+Run first manual QnA example on a small paragraph
+
+Section 4:
+Inspect tokenizer output and model output
+
+Section 5:
+Understand start_logits and end_logits
+
+Section 6:
+Build a robust answer-span extraction function
+
+Section 7:
+Upload and read a PDF document
+
+Section 8:
+Clean and organize extracted document text
+
+Section 9:
+Chunk long document text
+
+Section 10:
+Ask a question over multiple chunks
+
+Section 11:
+Rank answers and show source chunk
+
+Section 12:
+Bridge to fine-tuning, RAG, and LLM-based QnA
+
+## System View
+
+The system we are building today can be viewed as:
+
+```text
+User uploads PDF
+        ↓
+System extracts text
+        ↓
+Text is divided into chunks
+        ↓
+User asks a question
+        ↓
+Each chunk is passed to a QnA Transformer
+        ↓
+Model predicts answer span from each chunk
+        ↓
+Best answer is selected using confidence score
+
+This gives students a real project-level experience while still staying close to Transformer fundamentals.
+
+## Connection With Transformer Encoder
+
+A QnA model still uses Transformer representations.
+
+The difference is the task head.
+
+For sentiment classification:
+
+```text
+Transformer Encoder
+→ Classification Head
+→ Class Label
+
+For extractive QnA:
+```text
+
+Transformer Encoder
+→ Start Position Head
+→ End Position Head
+→ Answer Span
+
+So the backbone idea remains the same.
+
+Only the output task changes.
+
+## Concept Check Questions: Lecture Workflow
+
+### Q1. Regular Question
+
+Why are we avoiding `pipeline("question-answering")` in this fresh notebook?
+
+### Q2. Conceptual Question
+
+What is the main difference between extractive QnA and generative QnA?
+
+### Q3. Architecture-Based Question
+
+In sentiment classification, the Transformer model predicts a class label. What does an extractive QnA model predict?
+
+### Q4. Fine-Tuning Readiness Question
+
+Why is it useful to track the answer text and answer position?
+
+### Q5. Interview-Type Question
+
+Why is document QnA a natural bridge between basic Transformer inference and RAG?
+
+## Instructor-Only Answers: Lecture Workflow
+
+### Answer 1
+
+We are avoiding `pipeline("question-answering")` because the previous Colab environment did not recognize `"question-answering"` as a valid pipeline task.
+
+Using `AutoTokenizer` and `AutoModelForQuestionAnswering` is more stable and more transparent for teaching and later for fine tunning also
+
+### Answer 2
+
+Extractive QnA selects an answer span directly from the given context.
+
+Generative QnA creates a natural-language answer, which may or may not exactly copy text from the context.
+
+### Answer 3
+
+An extractive QnA model predicts:
+
+```text
+start position
+end position
+
+These positions define the answer span inside the tokenized context.
+
+### Answer 4
+
+Fine-tuning a QnA model requires knowing where the correct answer starts inside the context.
+
+So tracking:
+
+answer_text
+
+answer_start
+
+prepares us for supervised QnA fine-tuning.
+
+### Answer 5
+
+Document QnA introduces the problem of long context.
+
+A Transformer model cannot read an entire long document at once.
+
+So we must chunk the document and find relevant context.
+
+This naturally leads to RAG, where retrieval is used before answering.
+
+## Bridge to Next Section
+
+Now the project direction is clear.
+
+Next, we will prepare the Colab environment for this specific notebook.
+
+We will install only the libraries required for:
+
+```text
+Hugging Face model loading
+manual QnA inference
+PDF reading
+data handling
+
+# Section 1: Colab Setup and Library Verification
+
+In this section, we will prepare the Google Colab environment for our document QnA project.
+
+The goal is to install only the libraries required for:
+
+```text
+1. Loading pretrained Hugging Face models
+2. Running manual extractive QnA inference
+3. Reading PDF documents
+4. Handling data tables
+5. Keeping the notebook fine-tuning ready
+
+We will not install RAG or LLM fine-tuning libraries yet.
+
+## Why This Setup Is Different From the Previous Notebook
+
+Previously, we tried to use:
+
+```text
+pipeline("question-answering")
+
+But the installed environment did not recognize "question-answering" as a valid pipeline task.
+
+So in this notebook, we will directly use:
+
+AutoTokenizer
+AutoModelForQuestionAnswering
+
+This is better for two reasons:
+
+1. It avoids pipeline registry issues.
+2. It prepares us for fine-tuning later.
+
+## Libraries Required for This Lecture
+
+We will install:
+
+```text
+transformers
+For pretrained Transformer models, tokenizers, and model classes.
+
+datasets
+For future fine-tuning readiness.
+
+accelerate
+For smoother model execution and later training support.
+
+evaluate
+For future evaluation during fine-tuning.
+
+safetensors
+For safe and efficient model weight loading.
+
+sentencepiece
+For tokenizer support in several Transformer models.
+
+protobuf
+For compatibility with tokenizer/model utilities.
+
+pypdf
+For simple PDF text extraction.
+
+pymupdf
+For fast and reliable PDF text extraction using fitz.
+
+pandas
+For creating result tables.
+
+# ============================================================
+# Cell 1: Install Required Libraries (Colab-Optimized)
+# ============================================================
+
+# We install only the libraries not pre-included in the standard Colab environment.
+# We keep protobuf version restricted for compatibility with existing system tools.
+!pip -q install \
+    transformers \
+    datasets \
+    accelerate \
+    evaluate \
+    safetensors \
+    sentencepiece \
+    pypdf \
+    pymupdf \
+    "protobuf<6.0.0"
+
+[?25l   [90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/84.1 kB[0m [31m?[0m eta [36m-:--:--[0m[2K   [90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m84.1/84.1 kB[0m [31m4.2 MB/s[0m eta [36m0:00:00[0m
+[2K   [90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m349.5/349.5 kB[0m [31m13.6 MB/s[0m eta [36m0:00:00[0m
+[2K   [90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m25.7/25.7 MB[0m [31m80.9 MB/s[0m eta [36m0:00:00[0m
+[?25h
+
+# ============================================================
+# Cell 2: Check Python, PyTorch, and GPU
+# ============================================================
+
+import sys
+import torch
+
+print("Python version:")
+print(sys.version)
+
+print("\nPyTorch version:")
+print(torch.__version__)
+
+print("\nCUDA available:")
+print(torch.cuda.is_available())
+
+if torch.cuda.is_available():
+    print("\nGPU name:")
+    print(torch.cuda.get_device_name(0))
+else:
+    print("\nNo GPU detected. This notebook can still run on CPU.")
+
+Python version:
+3.12.13 (main, Mar  4 2026, 09:23:07) [GCC 11.4.0]
+
+PyTorch version:
+2.11.0+cu128
+
+CUDA available:
+True
+
+GPU name:
+Tesla T4
+
+## Observation: Runtime Check
+
+This cell tells us:
+
+```text
+Python version
+PyTorch version
+CUDA availability
+GPU name if available
+
+For this notebook, GPU is helpful but not mandatory.
+
+We are doing inference first, not heavy fine-tuning yet.
+
+# ============================================================
+# Cell 3: Verify Hugging Face Core Imports
+# ============================================================
+
+import transformers
+import datasets
+import accelerate
+import evaluate
+
+from transformers import (
+    AutoTokenizer,
+    AutoModelForQuestionAnswering
+)
+
+print("Transformers version:", transformers.__version__)
+print("Datasets version:", datasets.__version__)
+print("Accelerate version:", accelerate.__version__)
+print("Evaluate version:", evaluate.__version__)
+
+print("\nHugging Face core imports successful.")
+
+Transformers version: 5.12.0
+Datasets version: 4.0.0
+Accelerate version: 1.14.0
+Evaluate version: 0.4.6
+
+Hugging Face core imports successful.
+
+## Observation: Hugging Face Import Check
+
+This confirms that the main Hugging Face components are available.
+
+The two most important classes for this notebook are:
+
+```python
+AutoTokenizer
+AutoModelForQuestionAnswering
+
+# ============================================================
+# Cell 4: Verify PDF Reading Imports
+# ============================================================
+
+from pypdf import PdfReader
+import fitz
+
+print("PDF reading libraries imported successfully.")
+print("PyMuPDF imported as fitz.")
+
+PDF reading libraries imported successfully.
+PyMuPDF imported as fitz.
+
+## Observation: PDF Reading Check
+
+We will use PDF readers later for document QnA.
+
+Two options are available:
+
+```text
+pypdf
+
+Simple PDF reading.
+
+PyMuPDF / fitz
+
+Fast PDF reading and useful for page-wise extraction.
+
+For this lecture, we will mainly use:
+
+fitz
+
+because it is reliable for extracting text page by page.
+
+# ============================================================
+# Cell 5: Verify Data Handling Imports
+# ============================================================
+
+import pandas as pd
+import numpy as np
+import re
+import os
+
+print("Data handling libraries imported successfully.")
+
+Data handling libraries imported successfully.
+
+# ============================================================
+# Cell 6: Define Device
+# ============================================================
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+print("Using device:", device)
+
+Using device: cuda
+
+## Why Device Setup Matters
+
+The model can run on:
+
+```text
+CPU
+
+or
+
+GPU
+
+If GPU is available, inference will usually be faster.
+
+# ============================================================
+# Cell 7: Final Environment Health Check
+# ============================================================
+
+required_checks = {
+    "torch": torch.__version__,
+    "transformers": transformers.__version__,
+    "datasets": datasets.__version__,
+    "accelerate": accelerate.__version__,
+    "evaluate": evaluate.__version__,
+    "pandas": pd.__version__,
+}
+
+print("Environment Health Check")
+print("-" * 50)
+
+for library_name, version in required_checks.items():
+    print(f"{library_name:15s}: {version}")
+
+print("-" * 50)
+print("Device:", device)
+print("Setup complete.")
+
+Environment Health Check
+--------------------------------------------------
+torch          : 2.11.0+cu128
+transformers   : 5.12.0
+datasets       : 4.0.0
+accelerate     : 1.14.0
+evaluate       : 0.4.6
+pandas         : 2.2.2
+--------------------------------------------------
+Device: cuda
+Setup complete.
+
+## Final Observation: Environment Is Ready
+
+If all cells ran successfully, the environment is ready for the project.
+
+At this point, we have prepared support for:
+
+```text
+pretrained Transformer loading
+manual QnA inference
+PDF reading
+data cleaning
+result tabulation
+future fine-tuning
+
+We have not loaded the QnA model yet.
+
+That will happen in the next section.
+
+## Concept Check Questions: Colab Setup and Library Verification
+
+### Q1. Regular Question
+
+Why are we using `AutoTokenizer` and `AutoModelForQuestionAnswering` instead of `pipeline("question-answering")`?
+
+### Q2. Library-Based Question
+
+Which library provides `AutoTokenizer` and `AutoModelForQuestionAnswering`?
+
+### Q3. Practical Debugging Question
+
+If `transformers` imports successfully but the model fails to download, what could be a possible reason?
+
+### Q4. Fine-Tuning Readiness Question
+
+Why are we installing `datasets` and `evaluate` even though we are not fine-tuning in this section?
+
+### Q5. Interview-Type Question
+
+Why is it a good practice to verify the environment before loading large pretrained models?
+
+### Answer 3
+
+Possible reasons include:
+
+```text
+internet connectivity issue
+Hugging Face Hub access issue
+model name typo
+restricted model access
+runtime memory issue
+version incompatibility
+
+### Answer 5
+
+Environment verification catches package, runtime, GPU, and import issues early.
+
+This avoids wasting lecture time after downloading or loading large models.
+
+## Bridge to Next Section
+
+The environment is now ready.
+
+Next, we will load a pretrained extractive QnA model manually using:
+
+```python
+AutoTokenizer.from_pretrained(...)
+AutoModelForQuestionAnswering.from_pretrained(...)
+
+# Section 2: Loading the Pretrained QnA Tokenizer and Model Manually
+
+In this section, we will load a pretrained Transformer model for extractive question answering.
+
+We will not use:
+
+```python
+pipeline("question-answering")
+
+Instead, we will directly use:
+
+AutoTokenizer
+AutoModelForQuestionAnswering
+
+This gives us more control and prepares us for fine-tuning later.
+
+## Why Manual Model Loading?
+
+A pipeline hides many steps.
+
+For this lecture, we want to see the actual workflow:
+
+```text
+Question + Context
+→ Tokenizer
+→ input_ids + attention_mask
+→ QnA Transformer Model
+→ start_logits + end_logits
+→ Answer Span
+
+This is the same structure we will need later for fine-tuning.
+
+## Model Choice
+
+We will use:
+
+```text
+distilbert-base-cased-distilled-squad
+
+Why this model?
+
+1. It is smaller than full BERT.
+2. It is already fine-tuned on extractive QnA.
+3. It works well for teaching.
+4. It exposes start_logits and end_logits clearly.
+
+Later, during fine-tuning, we can use a similar QnA model structure and train it on our own examples.
+
+# ============================================================
+# Cell 8: Load Pretrained QnA Tokenizer and Model
+# ============================================================
+
+from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+import torch
+
+qa_model_name = "distilbert-base-cased-distilled-squad"
+
+qa_tokenizer = AutoTokenizer.from_pretrained(qa_model_name)
+
+qa_model = AutoModelForQuestionAnswering.from_pretrained(qa_model_name)
+
+qa_model = qa_model.to(device)
+
+qa_model.eval()
+
+print("QnA tokenizer and model loaded successfully.")
+print("Model name:", qa_model_name)
+print("Device:", device)
+
+config.json:   0%|          | 0.00/473 [00:00<?, ?B/s]
+tokenizer_config.json:   0%|          | 0.00/49.0 [00:00<?, ?B/s]
+vocab.txt:   0%|          | 0.00/213k [00:00<?, ?B/s]
+tokenizer.json:   0%|          | 0.00/436k [00:00<?, ?B/s]
+model.safetensors:   0%|          | 0.00/261M [00:00<?, ?B/s]
+Loading weights:   0%|          | 0/102 [00:00<?, ?it/s]
+QnA tokenizer and model loaded successfully.
+Model name: distilbert-base-cased-distilled-squad
+Device: cuda
+
+## Observation: What We Loaded
+
+We loaded two objects:
+
+```text
+qa_tokenizer
+
+This converts question and context into model-ready tensors.
+
+qa_model
+
+This receives tokenized input and predicts answer span positions.
+
+The model is now in evaluation mode using:
+
+qa_model.eval()
+
+This disables training-specific behavior such as dropout.
+
+# ============================================================
+# Cell 9: Inspect Tokenizer Basic Information
+# ============================================================
+
+print("Tokenizer class:")
+print(type(qa_tokenizer))
+
+print("\nModel max length:")
+print(qa_tokenizer.model_max_length)
+
+print("\nSpecial tokens:")
+print(qa_tokenizer.special_tokens_map)
+
+print("\nPadding token:")
+print(qa_tokenizer.pad_token)
+
+print("\nCLS token:")
+print(qa_tokenizer.cls_token)
+
+print("\nSEP token:")
+print(qa_tokenizer.sep_token)
+
+Tokenizer class:
+<class 'transformers.models.bert.tokenization_bert.BertTokenizer'>
+
+Model max length:
+512
+
+Special tokens:
+{'unk_token': '[UNK]', 'sep_token': '[SEP]', 'pad_token': '[PAD]', 'cls_token': '[CLS]', 'mask_token': '[MASK]'}
+
+Padding token:
+[PAD]
+
+CLS token:
+[CLS]
+
+SEP token:
+[SEP]
+
+## Observation: Tokenizer Information
+
+The tokenizer has special tokens.
+
+For BERT-style models, common special tokens are:
+
+```text
+[CLS]
+[SEP]
+[PAD]
+
+They help the model understand input structure.
+
+For question answering, the tokenizer usually arranges the input like:
+
+[CLS] Question [SEP] Context [SEP]
+
+# ============================================================
+# Cell 10: Inspect Model Basic Information
+# ============================================================
+
+print("Model class:")
+print(type(qa_model))
+
+print("\nModel configuration:")
+print(qa_model.config)
+
+print("\nNumber of labels:")
+print(qa_model.config.num_labels)
+
+## Observation: Model Configuration
+
+The model is designed for extractive QnA.
+
+Unlike sentiment classification, it does not output class labels such as:
+
+```text
+POSITIVE
+NEGATIVE
+
+Instead, it outputs two score vectors:
+
+start_logits
+end_logits
+
+These help the model identify:
+
+where the answer starts
+where the answer ends
+
+# ============================================================
+# Cell 11: Count Trainable Parameters
+# ============================================================
+
+def count_trainable_parameters(model):
+    return sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+
+num_params = count_trainable_parameters(qa_model)
+
+print("Trainable parameters:")
+print(f"{num_params:,}")
+
+Trainable parameters:
+65,192,450
+
+## Teaching Note: Why Parameter Count Matters
+
+This model has millions of parameters.
+
+In our earlier from-scratch Transformer, the model was tiny.
+
+Here, we are using a pretrained model that already contains a large amount of learned language knowledge.
+
+This is why pretrained Transformers are useful:
+
+```text
+We do not start from random weights.
+We start from a model that already understands many language patterns.
+
+## 2.1 Prepare a Small Question and Context
+
+Before using a PDF document, we will test the model on a short paragraph.
+
+This helps us understand the input-output structure clearly.
+
+# ============================================================
+# Cell 12: Prepare a Small QnA Example
+# ============================================================
+
+question = "What type of model is BERT?"
+
+context = """
+BERT is an encoder-only Transformer model.
+It is widely used for natural language processing tasks such as
+question answering, text classification, and named entity recognition.
+"""
+
+print("Question:")
+print(question)
+
+print("\nContext:")
+print(context)
+
+Question:
+What type of model is BERT?
+
+Context:
+
+BERT is an encoder-only Transformer model.
+It is widely used for natural language processing tasks such as
+question answering, text classification, and named entity recognition.
+
+## 2.2 Tokenize Question and Context Together
+
+For extractive QnA, the tokenizer receives both:
+
+```text
+question
+context
+
+The model needs both because it must understand:
+
+what is being asked
++
+where the answer may appear
+
+# ============================================================
+# Cell 13: Tokenize Question and Context
+# ============================================================
+
+encoded_input = qa_tokenizer(
+    question,
+    context,
+    return_tensors="pt",
+    truncation=True,
+    max_length=384
+)
+
+encoded_input = {
+    key: value.to(device)
+    for key, value in encoded_input.items()
+}
+
+print("Tokenizer output keys:")
+print(encoded_input.keys())
+
+print("\ninput_ids shape:")
+print(encoded_input["input_ids"].shape)
+
+print("\nattention_mask shape:")
+print(encoded_input["attention_mask"].shape)
+
+Tokenizer output keys:
+dict_keys(['input_ids', 'token_type_ids', 'attention_mask'])
+
+input_ids shape:
+torch.Size([1, 48])
+
+attention_mask shape:
+torch.Size([1, 48])
+
+## Observation: Tokenized QnA Input
+
+The tokenizer returns:
+
+```text
+input_ids
+attention_mask
+
+For one question-context pair, the shape is:
+
+[1, sequence_length]
+
+Here:
+
+1 = batch size
+sequence_length = number of tokens after tokenization
+
+# ============================================================
+# Cell 14: Convert Token IDs Back to Tokens
+# ============================================================
+
+input_ids = encoded_input["input_ids"][0]
+
+tokens = qa_tokenizer.convert_ids_to_tokens(input_ids)
+
+print("Number of tokens:", len(tokens))
+print("\nTokens:")
+print(tokens)
+
+Number of tokens: 48
+
+Tokens:
+['[CLS]', 'What', 'type', 'of', 'model', 'is', 'B', '##ER', '##T', '?', '[SEP]', 'B', '##ER', '##T', 'is', 'an', 'en', '##code', '##r', '-', 'only', 'Trans', '##former', 'model', '.', 'It', 'is', 'widely', 'used', 'for', 'natural', 'language', 'processing', 'tasks', 'such', 'as', 'question', 'answering', ',', 'text', 'classification', ',', 'and', 'named', 'entity', 'recognition', '.', '[SEP]']
+
+## Observation: Input Structure
+
+The token sequence should roughly look like:
+
+```text
+[CLS] question tokens [SEP] context tokens [SEP]
+
+This structure tells the model:
+
+This part is the question.
+This part is the context.
+
+The answer should come from the context part.
+
+# ============================================================
+# Cell 15: Decode Full Tokenized Input
+# ============================================================
+
+decoded_input = qa_tokenizer.decode(input_ids)
+
+print("Decoded model input:")
+print(decoded_input)
+
+Decoded model input:
+[CLS] What type of model is BERT? [SEP] BERT is an encoder - only Transformer model. It is widely used for natural language processing tasks such as question answering, text classification, and named entity recognition. [SEP]
+
+## 2.3 Run the First Forward Pass
+
+Now we will pass the tokenized input into the model.
+
+The model will return:
+
+```text
+start_logits
+end_logits
+
+Each token gets a start score and an end score.
+
+# ============================================================
+# Cell 16: Forward Pass Through QnA Model
+# ============================================================
+
+with torch.no_grad():
+    model_outputs = qa_model(**encoded_input)
+
+start_logits = model_outputs.start_logits
+end_logits = model_outputs.end_logits
+
+print("start_logits shape:")
+print(start_logits.shape)
+
+print("\nend_logits shape:")
+print(end_logits.shape)
+
+start_logits shape:
+torch.Size([1, 48])
+
+end_logits shape:
+torch.Size([1, 48])
+
+## Observation: QnA Output Shape
+
+For one input pair, the output shape is:
+
+```text
+start_logits: [1, sequence_length]
+end_logits:   [1, sequence_length]
+
+This means:
+
+For every token, the model gives:
+1. score for being answer start
+2. score for being answer end
+
+The answer span is selected from these scores.
+
+# ============================================================
+# Cell 17: Select Start and End Tokens Using Argmax
+# ============================================================
+
+start_index = torch.argmax(start_logits, dim=-1).item()
+end_index = torch.argmax(end_logits, dim=-1).item()
+
+print("Predicted start token index:", start_index)
+print("Predicted end token index:", end_index)
+
+print("\nStart token:")
+print(tokens[start_index])
+
+print("\nEnd token:")
+print(tokens[end_index])
+
+Predicted start token index: 16
+Predicted end token index: 22
+
+Start token:
+en
+
+End token:
+##former
+
+# ============================================================
+# Cell 18: Decode Predicted Answer Span
+# ============================================================
+
+answer_token_ids = encoded_input["input_ids"][0][start_index : end_index + 1]
+
+predicted_answer = qa_tokenizer.decode(
+    answer_token_ids,
+    skip_special_tokens=True
+)
+
+print("Question:")
+print(question)
+
+print("\nPredicted Answer:")
+print(predicted_answer)
+
+Question:
+What type of model is BERT?
+
+Predicted Answer:
+encoder - only Transformer
+
+fc_out = torch.randn(1, 48, 2)
+print(f"Start index shape: {fc_out[:, :, 0].shape}, End index shape: {fc_out[:, :, 1].shape}")
+
+Start index shape: torch.Size([1, 48]), End index shape: torch.Size([1, 48])
+
+## Observation: First Manual QnA Result
+
+We manually performed extractive QnA.
+
+The full flow was:
+
+```text
+question + context
+→ tokenizer
+→ input_ids + attention_mask
+→ QnA model
+→ start_logits + end_logits
+→ predicted start index
+→ predicted end index
+→ decoded answer
+
+This is the core mechanism of extractive QnA.
+
+## 2.4 Why This Prepares Us for Fine-Tuning
+
+During fine-tuning, the model must learn the correct:
+
+```text
+start position
+end position
+
+For each training example.
+
+A training example usually contains:
+```text
+
+question
+context
+answer_text
+answer_start
+
+The model learns to produce high scores at the correct start and end token positions.
+
+So today’s inference logic is directly connected to tomorrow’s fine-tuning logic.
+
+## Concept Check Questions: Loading the Pretrained QnA Model
+
+### Q1. Regular Question
+
+What are the two main Hugging Face classes used in this section?
+
+### Q2. Shape-Based Question
+
+If the tokenized question-context pair has sequence length 64, what will be the shape of `start_logits`?
+
+### Q3. Practical Debugging Question
+
+If the model loads successfully but runs slowly, what could be one possible reason?
+
+### Q4. Architecture-Based Question
+
+How is the output of a QnA model different from the output of a sentiment classification model?
+
+### Q5. Fine-Tuning Readiness Question
+
+Why are `start_logits` and `end_logits` important for later fine-tuning?
+
+## Bridge to Next Section
+
+We have now loaded the QnA tokenizer and model manually.
+
+We also completed one forward pass and saw:
+
+```text
+start_logits
+end_logits
+
+in the next section, we will build a clean reusable function:
+
+question + context
+→ answer
+
+But we will also improve the answer span selection so that it is more reliable than simply taking independent argmax values.
+
+# Section 3: Building a Reusable Manual Extractive QnA Function
+
+In the previous section, we manually performed one QnA forward pass.
+
+The flow was:
+
+```text
+Question + Context
+→ Tokenizer
+→ input_ids + attention_mask
+→ QnA Model
+→ start_logits + end_logits
+→ Answer Span
+
+Now we will convert this process into a reusable function.
+
+This function will later be used for:
+
+1. Small paragraph QnA
+2. Selected PDF page QnA
+3. Full document chunk-based QnA
+4. Fine-tuning dataset preparation discussion
+
+## Why We Need a Reusable Function
+
+In a real project, we will not manually write the same code again and again.
+
+We need a function that accepts:
+
+```text
+question
+context
+tokenizer
+model
+
+and returns:
+```text
+answer
+confidence score
+start token index
+end token index
+
+Later, when we process PDF chunks, this same function will run over every chunk.
+
+## Important Improvement
+
+In the previous section, we used:
+
+```python
+torch.argmax(start_logits)
+torch.argmax(end_logits)
+
+independently.
+
+This can create a problem.
+
+Example:
+
+start_index = 40
+
+end_index = 25
+
+This is invalid because the answer cannot end before it starts.
+
+So we will build a more reliable span selector:
+
+Choose the best valid span where:
+
+start_index <= end_index
+
+## Span Selection Idea
+
+The model gives:
+
+```text
+start_logits: score for each token being answer start
+end_logits:   score for each token being answer end
+
+We will search for a good pair:
+```text
+
+(start_index, end_index)
+
+such that:
+
+start_index <= end_index
+
+and the answer span is not too long.
+
+This is more stable than independent argmax.
+
+# ============================================================
+# Cell 19: Helper Function to Select Best Valid Answer Span
+# ============================================================
+
+def select_best_answer_span(
+    start_logits,
+    end_logits,
+    max_answer_length=40
+):
+    """
+    Select the best valid answer span.
+
+    Instead of independently selecting:
+        argmax(start_logits)
+        argmax(end_logits)
+
+    we search over valid spans where:
+        start_index <= end_index
+        answer length <= max_answer_length
+
+    Score of a span:
+        start_logit + end_logit
+    """
+
+    start_logits = start_logits[0]
+    end_logits = end_logits[0]
+
+    best_score = -float("inf")
+    best_start = 0
+    best_end = 0
+
+    sequence_length = start_logits.shape[0]
+
+    for start_index in range(sequence_length):
+        max_end_index = min(
+            start_index + max_answer_length,
+            sequence_length
+        )
+
+        for end_index in range(start_index, max_end_index):
+            span_score = (
+                start_logits[start_index].item()
+                + end_logits[end_index].item()
+            )
+
+            if span_score > best_score:
+                best_score = span_score
+                best_start = start_index
+                best_end = end_index
+
+    return best_start, best_end, best_score
+
+## Observation: Span Selection
+
+This function searches for a valid answer span.
+
+It avoids impossible cases like:
+
+```text
+end token before start token
+
+it also avoids extremely long answer spans using:
+
+max_answer_length
+
+This makes the QnA function more reliable for document chunks.
+
+# ============================================================
+# Cell 20: Reusable Manual Extractive QnA Function
+# ============================================================
+
+def manual_extractive_qa(
+    question,
+    context,
+    tokenizer,
+    model,
+    device=device,
+    max_length=384,
+    max_answer_length=40
+):
+    """
+    Manual extractive question answering.
+
+    Input:
+        question: user question
+        context: text passage where answer may exist
+        tokenizer: Hugging Face tokenizer
+        model: Hugging Face QnA model
+
+    Output:
+        dictionary containing answer and useful metadata
+    """
+
+    encoded = tokenizer(
+        question,
+        context,
+        return_tensors="pt",
+        truncation=True,
+        max_length=max_length
+    )
+
+    encoded = {
+        key: value.to(device)
+        for key, value in encoded.items()
+    }
+
+    with torch.no_grad():
+        outputs = model(**encoded)
+
+    start_logits = outputs.start_logits
+    end_logits = outputs.end_logits
+
+    start_index, end_index, span_score = select_best_answer_span(
+        start_logits=start_logits,
+        end_logits=end_logits,
+        max_answer_length=max_answer_length
+    )
+
+    input_ids = encoded["input_ids"][0]
+
+    answer_token_ids = input_ids[start_index : end_index + 1]
+
+    answer = tokenizer.decode(
+        answer_token_ids,
+        skip_special_tokens=True
+    ).strip()
+
+    start_probability = torch.softmax(start_logits, dim=-1)[0, start_index].item()
+    end_probability = torch.softmax(end_logits, dim=-1)[0, end_index].item()
+
+    confidence_score = (start_probability + end_probability) / 2
+
+    result = {
+        "question": question,
+        "answer": answer,
+        "confidence_score": round(confidence_score, 4),
+        "span_score": round(span_score, 4),
+        "start_token_index": start_index,
+        "end_token_index": end_index,
+        "context_length_characters": len(context)
+    }
+
+    return result
+
+## Observation: Function Output
+
+Our function returns:
+
+```text
+question
+answer
+confidence_score
+span_score
+start_token_index
+end_token_index
+context_length_characters
+
+This output is useful for both:
+
+teaching and debugging
+
+When we later process PDF chunks, we will add:
+```text
+chunk_id
+page_number
+context_preview
+
+## 3.1 Test the Function on a Small Context
+
+Before using a PDF, we test the function on a short paragraph.
+
+# ============================================================
+# Cell 21: Test Reusable QnA Function
+# ============================================================
+
+question = "What type of model is BERT?"
+
+context = """
+BERT is an encoder-only Transformer model.
+It is widely used for natural language processing tasks such as
+question answering, text classification, and named entity recognition.
+"""
+
+result = manual_extractive_qa(
+    question=question,
+    context=context,
+    tokenizer=qa_tokenizer,
+    model=qa_model
+)
+
+result
+
+{'question': 'What type of model is BERT?',
+ 'answer': 'encoder - only Transformer',
+ 'confidence_score': 0.5896,
+ 'span_score': 22.8177,
+ 'start_token_index': 16,
+ 'end_token_index': 22,
+ 'context_length_characters': 179}
+
+## 3.2 Test Multiple Questions on the Same Context
+
+Now we check whether the function works for different questions.
+
+# ============================================================
+# Cell 22: Multiple Questions on Same Context
+# ============================================================
+
+questions = [
+    "What type of model is BERT?",
+    "Which tasks use BERT?",
+    "What is BERT used for?",
+    "Which task involves finding entities?"
+]
+
+results = []
+
+for question in questions:
+    result = manual_extractive_qa(
+        question=question,
+        context=context,
+        tokenizer=qa_tokenizer,
+        model=qa_model
+    )
+    results.append(result)
+
+pd.DataFrame(results)
+
+## Observation: Result Table
+
+The table helps us compare:
+
+```text
+question
+answer
+confidence_score
+span_score
+start_token_index
+end_token_index
+
+This format will become very useful when we ask the same question over many document chunks.
+
+## 3.3 Test a Question Whose Answer Is Not Present
+
+A QnA model is not a truth engine.
+
+If the answer is not present in the context, the model may still select some span.
+
+This is an important limitation.
+
+# ============================================================
+# Cell 23: Test Question Not Clearly Answered by Context
+# ============================================================
+
+unanswerable_question = "Who invented BERT?"
+
+unanswerable_result = manual_extractive_qa(
+    question=unanswerable_question,
+    context=context,
+    tokenizer=qa_tokenizer,
+    model=qa_model
+)
+
+unanswerable_result
+
+{'question': 'Who invented BERT?',
+ 'answer': 'encoder - only Transformer model',
+ 'confidence_score': 0.3851,
+ 'span_score': -11.9487,
+ 'start_token_index': 13,
+ 'end_token_index': 20,
+ 'context_length_characters': 179}
+
+## Observation: Unanswerable Question
+
+If the context does not contain the answer, the model may:
+
+```text
+1. Return an empty or poor answer
+2. Extract an irrelevant phrase
+3. Return a low-confidence answer
+
+This teaches an important principle:
+
+Extractive QnA can only answer well if the context contains the answer.
+
+Later, RAG improves this by retrieving better context.
+
+## 3.4 Add Better Context and Ask Again
+
+Now we add the missing information to the context.
+
+# ============================================================
+# Cell 24: Better Context Improves Answering
+# ============================================================
+
+better_context = """
+BERT is an encoder-only Transformer model.
+It was introduced by Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova.
+It is widely used for natural language processing tasks such as
+question answering, text classification, and named entity recognition.
+"""
+
+question = "Who introduced BERT?"
+
+better_result = manual_extractive_qa(
+    question=question,
+    context=better_context,
+    tokenizer=qa_tokenizer,
+    model=qa_model
+)
+
+better_result
+
+{'question': 'Who introduced BERT?',
+ 'answer': 'Jacob Devlin, Ming - Wei Chang, Kenton Lee, and Kristina Toutanova',
+ 'confidence_score': 0.9225,
+ 'span_score': 24.2352,
+ 'start_token_index': 26,
+ 'end_token_index': 43,
+ 'context_length_characters': 266}
+
+## Observation: Context Quality Matters
+
+When the context contains the required information, the model has a better chance of answering correctly.
+
+This gives us the core document QnA principle:
+
+```text
+Better context
+→ Better answer possibility
+
+For long documents, the challenge becomes:
+
+How do we find the right context?
+
+That question leads directly to chunking and later RAG.
+
+## 3.5 Teaching Link: Why We Need Chunking Later
+
+A Transformer QnA model cannot read an entire long PDF directly.
+
+The input has a maximum token length.
+
+For example, we used:
+
+```python
+max_length=384
+
+So if the context is too long, the tokenizer truncates it.
+
+That means the answer may be removed before the model even sees it.
+
+Therefore, for long PDFs, we need:
+
+PDF
+→ pages
+→ chunks
+→ QnA over chunks
+
+## Concept Check Questions: Reusable Manual Extractive QnA Function
+
+### Q1. Regular Question
+
+Why did we create a reusable QnA function instead of writing the model forward pass repeatedly?
+
+### Q2. Shape-Based Question
+
+For one question-context pair with 100 tokens, what is the shape of `start_logits`?
+
+### Q3. Practical Debugging Question
+
+Why is independently taking `argmax(start_logits)` and `argmax(end_logits)` sometimes problematic?
+
+### Q4. Context-Based Question
+
+Why can an extractive QnA model fail if the context does not contain the answer?
+
+### Q5. Fine-Tuning Readiness Question
+
+How does this function connect to future QnA fine-tuning?
+
+### Q6. Interview-Type Question
+
+Why is extractive QnA an important intermediate step before RAG?
+
+###Answer 6
+
+Extractive QnA teaches the idea of answering from provided context.
+
+RAG extends this by first retrieving the most relevant context from a larger document collection before answering.
+
+## Bridge to Next Section
+
+Now we have a reusable QnA function.
+
+Next, we will move from small paragraphs to real PDF documents.
+
+We will first learn how to:
+
+```text
+upload a PDF
+extract text page-wise
+clean extracted text
+preview selected pages
+
+# Section 4: Uploading and Reading a PDF Document Page-Wise
+
+Until now, we tested QnA using small manually written paragraphs.
+
+Now we will move toward a real document.
+
+Our document flow will be:
+
+```text
+Upload PDF
+→ Extract text page-wise
+→ Clean extracted text
+→ Preview selected pages
+→ Use selected pages as context
+→ Later chunk full document
+
+For the first classroom demo, we will be using a text-based PDF.
+
+Recommended example:
+
+BERT paper PDF
+
+But the same code will work for any clean text-based PDF.
+
+## Important PDF Requirement
+
+The PDF should be text-based.
+
+That means:
+
+```text
+You should be able to select and copy text from the PDF.
+
+Good PDFs:
+```text
+research papers
+lecture notes
+technical reports
+documentation PDFs
+short articles saved as PDF
+
+Avoid initially:
+```text
+scanned PDFs
+image-only PDFs
+handwritten PDFs
+photocopy-based PDFs
+
+Because normal PDF text extraction will fail on image-only documents.
+
+Scanned PDFs require OCR, which is a separate pipeline.
+
+## Teaching Strategy for the BERT Paper
+
+The full BERT paper is long.
+
+So we will handle it in two stages:
+
+```text
+Stage 1:
+Extract only first few pages, for example pages 1 to 4.
+
+Stage 2:
+Extract full PDF page-wise and later divide it into chunks.
+
+This gives a natural realization:
+
+1. Small selected context can be answered directly.
+2. Long documents need chunking.
+3. Chunking leads naturally to RAG.
+
+# ============================================================
+# Cell 25: Upload PDF in Google Colab
+# ============================================================
+
+from google.colab import files
+
+uploaded = files.upload()
+
+print("Uploaded files:")
+print(list(uploaded.keys()))
+
+<IPython.core.display.HTML object>
+Saving Bert_Model.pdf to Bert_Model.pdf
+Uploaded files:
+['Bert_Model.pdf']
+
+# ============================================================
+# Cell 26: Select Uploaded PDF File
+# ============================================================
+
+import os
+
+uploaded_file_names = list(uploaded.keys())
+
+if len(uploaded_file_names) == 0:
+    raise ValueError("No file uploaded. Please upload a PDF file.")
+
+pdf_path = uploaded_file_names[0]
+
+if not pdf_path.lower().endswith(".pdf"):
+    raise ValueError("The uploaded file is not a PDF. Please upload a .pdf file.")
+
+print("Selected PDF file:")
+print(pdf_path)
+
+print("\nFile size in MB:")
+print(round(os.path.getsize(pdf_path) / (1024 * 1024), 2))
+
+Selected PDF file:
+Bert_Model.pdf
+
+File size in MB:
+0.75
+
+## Observation: PDF Upload
+
+At this stage, the PDF file is uploaded into the Colab runtime.
+
+The variable:
+
+```python
+pdf_path
+
+stores the file path.
+
+We will use this path for page-wise text extraction.
+
+# ============================================================
+# Cell 27: Define Basic Text Cleaning Function
+# ============================================================
+
+import re
+
+def clean_text(text):
+    """
+    Basic cleaning for PDF-extracted text.
+
+    This removes repeated spaces, newlines, and extra whitespace.
+    """
+
+    text = re.sub(r"\s+", " ", text)
+    text = text.strip()
+
+    return text
+
+## Why Text Cleaning Is Needed
+
+PDF text extraction often contains:
+
+```text
+line breaks
+extra spaces
+broken formatting
+page headers
+page footers
+
+For a QnA model, cleaner text usually gives better results.
+
+This cleaning function is intentionally simple.
+
+Later, we can improve it if needed.
+
+# ============================================================
+# Cell 28: Extract PDF Text Page-Wise Using PyMuPDF
+# ============================================================
+
+import fitz
+
+def extract_pdf_pagewise(pdf_path):
+    """
+    Extract text from every page of a PDF.
+
+    Output:
+        List of dictionaries:
+        [
+            {
+                "page_number": 1,
+                "text": "..."
+            },
+            ...
+        ]
+    """
+
+    doc = fitz.open(pdf_path)
+
+    pages = []
+
+    for page_index, page in enumerate(doc):
+        page_number = page_index + 1
+        raw_text = page.get_text()
+        cleaned_page_text = clean_text(raw_text)
+
+        pages.append({
+            "page_number": page_number,
+            "text": cleaned_page_text,
+            "num_characters": len(cleaned_page_text)
+        })
+
+    doc.close()
+
+    return pages
+
+# ============================================================
+# Cell 29: Run Page-Wise Extraction
+# ============================================================
+
+pages = extract_pdf_pagewise(pdf_path)
+
+print("Total pages extracted:", len(pages))
+
+print("\nFirst few page character counts:")
+for page in pages[:5]:
+    print(
+        "Page:",
+        page["page_number"],
+        "| Characters:",
+        page["num_characters"]
+    )
+
+Total pages extracted: 16
+
+First few page character counts:
+Page: 1 | Characters: 4061
+Page: 2 | Characters: 4531
+Page: 3 | Characters: 3701
+Page: 4 | Characters: 4853
+Page: 5 | Characters: 3852
+
+## Observation: Page-Wise Extraction
+
+Each page is stored separately.
+
+This is important because later we want to know:
+
+```text
+Which page produced the answer?
+
+So instead of combining everything immediately, we preserve page-level metadata:
+```text
+page_number
+text
+num_characters
+
+# ============================================================
+# Cell 30: Preview Extracted Text from First Page
+# ============================================================
+
+page_to_preview = 1
+
+page_text = pages[page_to_preview - 1]["text"]
+
+print("Page:", page_to_preview)
+print("Characters:", len(page_text))
+print("-" * 100)
+print(page_text[:2000])
+
+## Observation: Preview First Page
+
+This preview helps us check whether the PDF extraction is working.
+
+If the output looks like normal readable English text, the PDF is suitable.
+
+If the output is empty or random, the PDF may be:
+
+```text
+scanned
+image-based
+too noisy
+not extraction-friendly
+
+# ============================================================
+# Cell 31: Check Whether PDF Extraction Looks Healthy
+# ============================================================
+
+total_characters = sum(page["num_characters"] for page in pages)
+average_characters_per_page = total_characters / max(len(pages), 1)
+
+print("Total extracted characters:", total_characters)
+print("Average characters per page:", round(average_characters_per_page, 2))
+
+if total_characters < 500:
+    print("\nWarning:")
+    print("Very little text was extracted.")
+    print("This PDF may be scanned or image-based.")
+    print("For this lecture, use a text-based PDF.")
+else:
+    print("\nExtraction looks usable for this lecture.")
+
+Total extracted characters: 64105
+Average characters per page: 4006.56
+
+Extraction looks usable for this lecture.
+
+# 4.1 Extract Only Selected Pages
+
+For the first demo, we do not need the full PDF.
+
+If we use the BERT paper, the first few pages are enough for questions like:
+
+```text
+What does BERT stand for?
+What is BERT designed for?
+What tasks is BERT used for?
+What is the main idea of BERT?
+
+So we will create a helper function that extracts only selected pages.
+
+# ============================================================
+# Cell 32: Extract Text from Selected Pages
+# ============================================================
+
+def extract_selected_pages_text(pages, start_page=1, end_page=4):
+    """
+    Combine text from selected page range.
+
+    Page numbering is human-friendly:
+        start_page=1 means first page.
+
+    Output:
+        selected_pages: list of page dictionaries
+        combined_text: combined cleaned text from selected pages
+    """
+
+    selected_pages = []
+
+    for page in pages:
+        page_number = page["page_number"]
+
+        if start_page <= page_number <= end_page:
+            selected_pages.append(page)
+
+    combined_text = " ".join(page["text"] for page in selected_pages)
+    combined_text = clean_text(combined_text)
+
+    return selected_pages, combined_text
+
+# ============================================================
+# Cell 33: Select First Few Pages for Demo
+# ============================================================
+
+selected_pages, selected_text = extract_selected_pages_text(
+    pages=pages,
+    start_page=1,
+    end_page=4
+)
+
+print("Selected page numbers:")
+print([page["page_number"] for page in selected_pages])
+
+print("\nTotal selected characters:")
+print(len(selected_text))
+
+print("\nPreview of selected text:")
+print(selected_text[:2000])
+
+## Observation: Selected Pages as Context
+
+Now we have:
+
+```python
+selected_text
+
+This variable contains only the selected page range.
+
+For a first classroom demo, this is better than passing the full PDF.
+
+### Why?
+
+The model has a maximum input length.
+
+If the context is too long, tokenizer truncation may remove the answer.
+
+So selected pages help us keep the first demo controlled.
+
+# 4.2 First PDF-Based QnA Using Selected Pages
+
+Now we will use the previously created function:
+
+```python
+manual_extractive_qa()
+
+The input will be:
+
+question
++
+selected_text
+
+This is our first PDF-based QnA.
+
+# ============================================================
+# Cell 34: Ask First Question from Selected PDF Pages
+# ============================================================
+
+question = "What does BERT stand for?"
+
+pdf_result = manual_extractive_qa(
+    question=question,
+    context=selected_text,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    max_length=384,
+    max_answer_length=40
+)
+
+pdf_result
+
+{'question': 'What does BERT stand for?',
+ 'answer': 'Bidirectional Encoder Representations from Transformers',
+ 'confidence_score': 0.8434,
+ 'span_score': 19.5212,
+ 'start_token_index': 136,
+ 'end_token_index': 148,
+ 'context_length_characters': 17149}
+
+# ============================================================
+# Cell 35: Try Multiple Questions from Selected Pages
+# ============================================================
+
+pdf_questions = [
+    "What does BERT stand for?",
+    "What is BERT designed to pre-train?",
+    "What tasks can BERT be fine-tuned for?",
+    "What is the main advantage of BERT?"
+]
+
+pdf_results = []
+
+for question in pdf_questions:
+    result = manual_extractive_qa(
+        question=question,
+        context=selected_text,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        max_length=384,
+        max_answer_length=40
+    )
+
+    pdf_results.append(result)
+
+pd.DataFrame(pdf_results)
+
+## Observation: PDF-Based QnA on Selected Pages
+
+We have now moved from:
+
+```text
+manually written paragraph
+
+to:
+
+real PDF document text
+
+The model still follows the same logic:
+
+question + context
+→ start_logits + end_logits
+→ answer span
+
+The only difference is that the context now comes from a PDF.
+
+## Important Limitation
+
+Even though `selected_text` may contain thousands of characters, the tokenizer uses:
+
+```python
+max_length=384
+
+This means the model may only see part of the selected text after tokenization.
+
+If the answer is outside the visible token window, the model cannot answer correctly.
+
+This is why selected pages are useful only for small demos.
+
+For full-document QnA, we need chunking.
+
+# ============================================================
+# Cell 36: Inspect Tokenized Length of Selected Text
+# ============================================================
+
+encoded_selected = qa_tokenizer(
+    "What does BERT stand for?",
+    selected_text,
+    return_tensors="pt",
+    truncation=False
+)
+
+sequence_length_without_truncation = encoded_selected["input_ids"].shape[1]
+
+print("Tokenized length without truncation:")
+print(sequence_length_without_truncation)
+
+print("\nModel max length used in our QnA function:")
+print(384)
+
+if sequence_length_without_truncation > 384:
+    print("\nObservation:")
+    print("Selected text is longer than the model input limit.")
+    print("Some text will be truncated during QnA.")
+    print("This motivates chunking.")
+else:
+    print("\nObservation:")
+    print("Selected text fits within the current model input limit.")
+
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (4556 > 512). Running this sequence through the model will result in indexing errors
+Tokenized length without truncation:
+4556
+
+Model max length used in our QnA function:
+384
+
+Observation:
+Selected text is longer than the model input limit.
+Some text will be truncated during QnA.
+This motivates chunking.
+
+## Observation: Why Long Context Is a Problem
+
+This cell checks how many tokens the selected text creates.
+
+If the tokenized length is greater than the model limit, then truncation happens.
+
+That means:
+
+```text
+The model does not see the full context.
+
+This is the central limitation that motivates:
+
+chunking and later:
+
+retrieval-based systems
+
+## Concept Check Questions: Uploading and Reading a PDF Page-Wise
+
+### Q1. Regular Question
+
+Why do we extract PDF text page-wise instead of immediately combining the full document?
+
+### Q2. Practical Question
+
+What type of PDF is best for this lecture?
+
+### Q3. Debugging Question
+
+If the extracted text is almost empty, what is the likely reason?
+
+### Q4. Model Limitation Question
+
+Why can passing the entire PDF text directly to the model fail?
+
+### Q5. Fine-Tuning Readiness Question
+
+Why is it useful to preserve page number information while extracting text?
+
+### Q6. Interview-Type Question
+
+How does page-wise extraction help in building a document QnA or RAG system?
+
+## Instructor-Only Answers: Uploading and Reading a PDF Page-Wise
+
+### Answer 1
+
+Page-wise extraction preserves metadata.
+
+It allows us to know which page produced the answer.
+
+This is useful for debugging, source tracking, and later RAG.
+
+### Answer 2
+
+A text-based PDF is best.
+
+The text should be selectable and copyable.
+
+Examples include research papers, lecture notes, documentation, and technical reports.
+
+### Answer 3
+
+The PDF is likely scanned or image-based.
+
+Normal PDF text extraction cannot read images as text.
+
+Such PDFs require OCR.
+
+### Answer 4
+
+Transformer models have maximum input length limits.
+
+If the document is too long, the tokenizer will truncate it.
+
+The answer may be removed before the model sees it.
+
+### Answer 5
+
+Fine-tuning and document QnA both benefit from source tracking.
+
+If we know the page number, we can later create better labeled examples or verify answers more easily.
+
+### Answer 6
+
+Page-wise extraction gives structure to the document.
+
+A RAG system needs chunks with metadata such as page number, section, or source.
+
+So page-wise extraction is an early step toward retrieval-based document QnA.
+
+## Bridge to Next Section
+
+We have now extracted text from a real PDF.
+
+We also used selected pages for the first PDF-based QnA demo.
+
+But we saw a limitation:
+
+```text
+Long document text may exceed the model input length.
+
+Next, we will solve this using chunking.
+
+The next flow will be:
+
+Full PDF pages
+→ Overlapping chunks
+→ Each chunk keeps page number
+→ Ask QnA over every chunk
+→ Rank candidate answers
+
+This is the direct bridge from document QnA to RAG.
+
+# Section 5: Chunking Long PDF Text for Document QnA
+
+In the previous section, we extracted PDF text page-wise.
+
+We also tried QnA on selected pages.
+
+But we saw one important limitation:
+
+```text
+A Transformer QnA model cannot read a full long PDF at once.
+
+The model has a maximum input length.
+
+So the next practical step is:
+
+Full PDF pages
+→ Smaller chunks
+→ QnA on each chunk
+→ Rank candidate answers
+
+This is the first real step toward RAG.
+
+## Why Chunking Is Needed
+
+Our QnA model receives:
+
+```text
+question + context
+
+But the tokenizer has a limit.
+
+For example, in our function we used:
+
+
+max_length = 384
+
+If the context is longer than this, the tokenizer truncates it.
+
+That means:
+
+The model may never see the part of the document that contains the answer.
+
+Chunking solves this by breaking the document into smaller pieces.
+
+## Chunking Idea
+
+Instead of passing the full document:
+
+```text
+Page 1 + Page 2 + Page 3 + ... + Page N
+
+We create smaller chunks:
+```text
+Chunk 0: Page 1, words 0 to 180
+Chunk 1: Page 1, words 140 to 320
+Chunk 2: Page 1, words 280 to 460
+Chunk 3: Page 2, words 0 to 180
+...
+
+Notice the overlap.
+
+Overlap helps because an answer may lie near the boundary between two chunks.
+
+## Why Overlap Is Useful
+
+Without overlap:
+
+```text
+Chunk 1 ends here | Chunk 2 starts here
+
+If the answer is split across the boundary, the model may miss it.
+
+With overlap:
+
+Chunk 1: words 0 to 180
+Chunk 2: words 140 to 320
+
+Some words are repeated.
+
+This gives the model another chance to see the full answer.
+
+# ============================================================
+# Cell 37: Chunk Page-Wise PDF Text by Words
+# ============================================================
+
+def chunk_pages_by_words(
+    pages,
+    chunk_size=180,
+    overlap=40,
+    min_chunk_words=30
+):
+    """
+    Convert page-wise PDF text into overlapping word chunks.
+
+    Each chunk keeps useful metadata:
+        chunk_id
+        page_number
+        start_word_index
+        end_word_index
+        text
+        num_words
+        num_characters
+
+    Parameters:
+        pages:
+            List of page dictionaries from extract_pdf_pagewise()
+
+        chunk_size:
+            Number of words in each chunk
+
+        overlap:
+            Number of words repeated between consecutive chunks
+
+        min_chunk_words:
+            Ignore very small chunks below this length
+    """
+
+    if overlap >= chunk_size:
+        raise ValueError("overlap must be smaller than chunk_size")
+
+    chunks = []
+    chunk_id = 0
+
+    for page in pages:
+        page_number = page["page_number"]
+        page_text = page["text"]
+
+        words = page_text.split()
+
+        start = 0
+
+        while start < len(words):
+            end = min(start + chunk_size, len(words))
+
+            chunk_words = words[start:end]
+            chunk_text = " ".join(chunk_words)
+            chunk_text = clean_text(chunk_text)
+
+            if len(chunk_words) >= min_chunk_words:
+                chunks.append({
+                    "chunk_id": chunk_id,
+                    "page_number": page_number,
+                    "start_word_index": start,
+                    "end_word_index": end,
+                    "text": chunk_text,
+                    "num_words": len(chunk_words),
+                    "num_characters": len(chunk_text)
+                })
+
+                chunk_id += 1
+
+            if end == len(words):
+                break
+
+            start = end - overlap
+
+    return chunks
+
+## Observation: Chunk Function
+
+This function does not destroy page information.
+
+Each chunk still knows:
+
+```text
+which page it came from
+where it starts
+where it ends
+
+This is useful for:
+
+source tracking
+debugging
+answer verification
+future RAG
+fine-tuning dataset preparation
+
+# ============================================================
+# Cell 38: Create Chunks from the Uploaded PDF
+# ============================================================
+
+chunks = chunk_pages_by_words(
+    pages=pages,
+    chunk_size=180,
+    overlap=40,
+    min_chunk_words=30
+)
+
+print("Total pages:", len(pages))
+print("Total chunks created:", len(chunks))
+
+print("\nFirst 3 chunks:")
+for chunk in chunks[:3]:
+    print("Chunk ID:", chunk["chunk_id"])
+    print("Page:", chunk["page_number"])
+    print("Words:", chunk["num_words"])
+    print("Characters:", chunk["num_characters"])
+    print("Preview:")
+    print(chunk["text"][:500])
+    print("-" * 100)
+
+## Observation: Number of Chunks
+
+A document with many pages can create many chunks.
+
+That is expected.
+
+The model will later answer the question on each chunk separately.
+
+Then we will rank all candidate answers.
+
+# ============================================================
+# Cell 39: Show Chunk Metadata in a DataFrame
+# ============================================================
+
+chunk_metadata_df = pd.DataFrame([
+    {
+        "chunk_id": chunk["chunk_id"],
+        "page_number": chunk["page_number"],
+        "start_word_index": chunk["start_word_index"],
+        "end_word_index": chunk["end_word_index"],
+        "num_words": chunk["num_words"],
+        "num_characters": chunk["num_characters"],
+        "preview": chunk["text"][:120]
+    }
+    for chunk in chunks
+])
+
+chunk_metadata_df.head(10)
+
+## Observation: Chunk Metadata Table
+
+This table shows the document structure after chunking.
+
+Each row is now a small context passage.
+
+This structure is very close to what a RAG system needs.
+
+Later, a RAG system will retrieve only the most relevant chunks instead of checking every chunk.
+
+# 5.1 Check Token Length of Chunks
+
+We chunked by words.
+
+But the model works with tokens.
+
+One word may become one token, multiple tokens, or subword tokens.
+
+So we should check whether chunks are small enough for the QnA model.
+
+# ============================================================
+# Cell 40: Check Token Lengths of Chunks
+# ============================================================
+
+def compute_chunk_token_lengths(chunks, tokenizer, sample_question="What is BERT?"):
+    """
+    Compute tokenized length of question + each chunk.
+
+    This helps us check whether chunks are too long for the model.
+    """
+
+    token_length_records = []
+
+    for chunk in chunks:
+        encoded = tokenizer(
+            sample_question,
+            chunk["text"],
+            truncation=False,
+            return_tensors="pt"
+        )
+
+        token_length_records.append({
+            "chunk_id": chunk["chunk_id"],
+            "page_number": chunk["page_number"],
+            "num_words": chunk["num_words"],
+            "token_length": encoded["input_ids"].shape[1]
+        })
+
+    return pd.DataFrame(token_length_records)
+
+
+token_lengths_df = compute_chunk_token_lengths(
+    chunks=chunks,
+    tokenizer=qa_tokenizer,
+    sample_question="What does BERT stand for?"
+)
+
+token_lengths_df.head()
+
+chunk_id  page_number  num_words  token_length
+0         0            1        180           368
+1         1            1        180           321
+2         2            1        180           313
+3         3            1        164           275
+4         4            2        180           306
+
+# ============================================================
+# Cell 41: Token Length Summary
+# ============================================================
+
+print("Token length summary:")
+print(token_lengths_df["token_length"].describe())
+
+max_allowed_length = 500
+
+too_long_chunks = token_lengths_df[
+    token_lengths_df["token_length"] > max_allowed_length
+]
+
+print("\nNumber of chunks longer than", max_allowed_length, "tokens:")
+print(len(too_long_chunks))
+
+if len(too_long_chunks) > 0:
+    print("\nSome chunks may still be truncated.")
+    print("Reduce chunk_size if needed.")
+else:
+    print("\nAll chunks fit within the chosen max_length.")
+
+Token length summary:
+count     78.000000
+mean     293.833333
+std       78.174699
+min       71.000000
+25%      275.750000
+50%      304.000000
+75%      347.750000
+max      432.000000
+Name: token_length, dtype: float64
+
+Number of chunks longer than 500 tokens:
+0
+
+All chunks fit within the chosen max_length.
+
+## Observation: Word Length vs Token Length
+
+We chunked using words because it is simple to explain.
+
+But the model sees tokens.
+
+So this check is important.
+
+If many chunks exceed the model limit, reduce:
+
+```python
+chunk_size
+
+For example:
+
+chunk_size = 120
+overlap = 30
+
+For the first classroom demo, keeping chunks around 150 to 200 words is usually manageable.
+
+## Teaching Note
+
+There is no universally perfect chunk size.
+
+Chunk size depends on:
+
+```text
+model input limit
+question length
+document style
+density of information
+need for context
+
+Small chunks reduce truncation.
+
+Large chunks provide more context.
+
+So chunking is a trade-off.
+
+# 5.3 Preview Chunks from a Specific Page
+
+For classroom teaching, it is useful to inspect chunks from one page.
+
+This helps students see that chunking is not random.
+
+It is controlled document segmentation.
+
+# ============================================================
+# Cell 43: Preview Chunks from a Specific Page
+# ============================================================
+
+page_number_to_inspect = 1
+
+page_chunks = [
+    chunk for chunk in chunks
+    if chunk["page_number"] == page_number_to_inspect
+]
+
+print("Page selected:", page_number_to_inspect)
+print("Number of chunks from this page:", len(page_chunks))
+print("-" * 100)
+
+for chunk in page_chunks[:3]:
+    print("Chunk ID:", chunk["chunk_id"])
+    print("Word range:", chunk["start_word_index"], "to", chunk["end_word_index"])
+    print("Text preview:")
+    print(chunk["text"][:700])
+    print("-" * 100)
+
+## Observation: Page-Level Chunk Preview
+
+Now we can see how one page becomes multiple smaller passages.
+
+This makes the next step intuitive:
+
+```text
+Ask the same question to every chunk.
+Keep the best answer.
+
+# 5.4 Why This Is Fine-Tuning Ready
+
+For future QnA fine-tuning, we need examples like:
+
+```text
+question
+context
+answer_text
+answer_start
+
+After chunking, each chunk can become a possible context.
+
+If a human annotator marks the correct answer inside a chunk, we can create training data.
+
+So our current structure:
+```text
+chunk_id
+page_number
+context text
+
+can later become:
+
+question
+context
+answer_text
+answer_start
+source page
+
+## Concept Check Questions: Chunking Long PDF Text
+
+### Q1. Regular Question
+
+Why do we need to chunk long PDF documents before applying a QnA model?
+
+### Q2. Practical Question
+
+Why do we use overlap between consecutive chunks?
+
+### Q3. Shape-Based Question
+
+If a chunk with a question becomes 300 tokens after tokenization, what will be the approximate shape of `input_ids` for one question-chunk pair?
+
+### Q4. Debugging Question
+
+If many chunks are still longer than the model limit, what should we change?
+
+### Q5. Fine-Tuning Readiness Question
+
+Why is it useful to store `chunk_id` and `page_number` for each chunk?
+
+### Q6. Interview-Type Question
+
+How is chunking related to Retrieval-Augmented Generation?
+
+## Instructor-Only Answers: Chunking Long PDF Text
+
+### Answer 1
+
+Transformer models have maximum input length limits.
+
+If the full PDF is passed directly, the tokenizer may truncate the document.
+
+Chunking ensures that smaller parts of the document can be processed without losing all later content.
+
+### Answer 2
+
+Overlap helps preserve information near chunk boundaries.
+
+Without overlap, an answer may be split between two chunks.
+
+With overlap, the full answer has a better chance of appearing inside at least one chunk.
+
+### Answer 3
+
+The shape will be approximately:
+
+```text
+[1, 300]
+
+because there is one question-chunk pair and 300 token positions.
+
+### Answer 4
+
+We should reduce the chunk size.
+
+For example:
+
+chunk_size = 120
+
+overlap = 30
+
+instead of:
+
+chunk_size = 180
+
+overlap = 40
+
+### Answer 5
+
+chunk_id and page_number help with source tracking.
+
+They allow us to verify where the answer came from.
+
+They also help later in building fine-tuning datasets and RAG systems.
+
+### Answer 6
+
+Chunking creates the searchable units used by RAG.
+
+In RAG, the system first retrieves relevant chunks and then sends only those chunks to a reader or generator model.
+
+## Bridge to Next Section
+
+We have now converted the full PDF into manageable chunks.
+
+Next, we will run QnA over every chunk.
+
+The flow will be:
+
+```text
+Question
+→ Chunk 0 → Candidate Answer 0
+→ Chunk 1 → Candidate Answer 1
+→ Chunk 2 → Candidate Answer 2
+→ ...
+→ Rank answers
+→ Return best answer with page number
+
+This will complete the first high-level document QnA project.
+
+# Section 6: Asking Questions Over PDF Chunks and Ranking Answers
+
+In the previous section, we converted the full PDF into smaller overlapping chunks.
+
+Now we will use those chunks for document question answering.
+
+The flow will be:
+
+```text
+Question
+→ Chunk 0 → Candidate Answer 0
+→ Chunk 1 → Candidate Answer 1
+→ Chunk 2 → Candidate Answer 2
+→ ...
+→ Rank Candidate Answers
+→ Return Best Answer with Page Number
+
+This completes the first version of our document QnA project.
+
+## Why We Ask the Question Over Every Chunk
+
+A long document cannot be passed directly to the model.
+
+So instead of:
+
+```text
+Question + Full PDF
+
+we do:
+
+Question + Chunk 0
+Question + Chunk 1
+Question + Chunk 2
+...
+
+Each chunk gives a possible answer.
+
+Then we rank all candidate answers.
+
+## Important Teaching Point
+
+This is still not full RAG.
+
+Current method:
+
+```text
+Run QnA over every chunk
+
+Future RAG method:
+
+Retrieve only relevant chunks first
+Then run QnA or generation
+
+So this section is a bridge between:
+
+Document QnA
+
+and
+
+Retrieval-Augmented Generation
+
+# ============================================================
+# Cell 44: Ask a Question Over All Chunks
+# ============================================================
+
+def answer_question_over_chunks(
+    question,
+    chunks,
+    tokenizer,
+    model,
+    device=device,
+    top_k=5,
+    max_length=384,
+    max_answer_length=40,
+    min_answer_length=1
+):
+    """
+    Run manual extractive QnA over every chunk.
+
+    Input:
+        question: user question
+        chunks: list of chunk dictionaries
+        tokenizer: Hugging Face tokenizer
+        model: Hugging Face QnA model
+
+    Output:
+        DataFrame containing ranked candidate answers.
+    """
+
+    candidate_answers = []
+
+    for chunk in chunks:
+        result = manual_extractive_qa(
+            question=question,
+            context=chunk["text"],
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_length=max_length,
+            max_answer_length=max_answer_length
+        )
+
+        answer_text = result["answer"].strip()
+
+        if len(answer_text) >= min_answer_length:
+            candidate_answers.append({
+                "question": question,
+                "answer": answer_text,
+                "confidence_score": result["confidence_score"],
+                "span_score": result["span_score"],
+                "chunk_id": chunk["chunk_id"],
+                "page_number": chunk["page_number"],
+                "start_word_index": chunk["start_word_index"],
+                "end_word_index": chunk["end_word_index"],
+                "context_preview": chunk["text"][:300]
+            })
+
+    ranked_answers = sorted(
+        candidate_answers,
+        key=lambda x: x["span_score"],
+        reverse=True
+    )
+
+    ranked_answers = ranked_answers[:top_k]
+
+    return pd.DataFrame(ranked_answers)
+
+## Observation: Function Design
+
+The function returns a ranked table.
+
+Each candidate answer keeps:
+
+```text
+answer
+confidence_score
+span_score
+chunk_id
+page_number
+context_preview
+
+This is important because a document QnA system should not only return an answer.
+
+It should also show where the answer came from.
+
+## 6.1 First Full-Document Chunk-Based Question
+
+Now let us ask a question from the full PDF.
+
+If you are using the BERT paper, start with:
+
+```text
+What does BERT stand for?
+
+# ============================================================
+# Cell 45: Ask First Question Over All PDF Chunks
+# ============================================================
+
+question = "What does BERT stand for?"
+
+top_answers_df = answer_question_over_chunks(
+    question=question,
+    chunks=chunks,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=5,
+    max_length=384,
+    max_answer_length=40
+)
+
+top_answers_df
+
+## Observation: Ranked Answers
+
+The table shows the top candidate answers.
+
+Important columns:
+
+```text
+answer
+
+The extracted answer span.
+
+span_score
+
+Ranking score based on start and end logits.
+
+page_number
+
+The page from which the answer came.
+
+context_preview
+
+A small portion of the chunk for verification.
+
+This makes the system more trustworthy than simply printing one answer.
+
+# ============================================================
+# Cell 46: Display Best Answer Cleanly
+# ============================================================
+
+if len(top_answers_df) > 0:
+    best_answer = top_answers_df.iloc[0]
+
+    print("Question:")
+    print(best_answer["question"])
+
+    print("\nBest Answer:")
+    print(best_answer["answer"])
+
+    print("\nPage Number:")
+    print(best_answer["page_number"])
+
+    print("\nChunk ID:")
+    print(best_answer["chunk_id"])
+
+    print("\nSpan Score:")
+    print(best_answer["span_score"])
+
+    print("\nConfidence Score:")
+    print(best_answer["confidence_score"])
+
+    print("\nContext Preview:")
+    print(best_answer["context_preview"])
+else:
+    print("No candidate answer found.")
+
+Question:
+What does BERT stand for?
+
+Best Answer:
+Bidirectional Encoder Representations from Transformers
+
+Page Number:
+1
+
+Chunk ID:
+0
+
+Span Score:
+20.123
+
+Confidence Score:
+0.8709
+
+Context Preview:
+Proceedings of NAACL-HLT 2019, pages 4171–4186 Minneapolis, Minnesota, June 2 - June 7, 2019. c⃝2019 Association for Computational Linguistics 4171 BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding Jacob Devlin Ming-Wei Chang Kenton Lee Kristina Toutanova Google AI Lan
+
+## Teaching Observation
+
+Now students can see the practical output of document QnA:
+
+```text
+Question
+→ Answer
+→ Source Page
+→ Source Chunk
+→ Supporting Context Preview
+
+This is much closer to a real AI system than a simple one-line model prediction.
+
+# 6.2 Ask Multiple Questions from the Same PDF
+
+Now we will ask several questions from the document.
+
+For the BERT paper, suitable questions are:
+
+```text
+What does BERT stand for?
+What is BERT designed to pre-train?
+What tasks can BERT be fine-tuned for?
+What is masked language modeling?
+What dataset is used for question answering?
+
+Some answers may be better than others depending on extraction quality and chunking.
+
+# ============================================================
+# Cell 47: Multiple Questions Over PDF Chunks
+# ============================================================
+
+document_questions = [
+    "What does BERT stand for?",
+    "What is BERT designed to pre-train?",
+    "What tasks can BERT be fine-tuned for?",
+    "What is masked language modeling?",
+    "What dataset is used for question answering?"
+]
+
+all_best_answers = []
+
+for question in document_questions:
+    answers_df = answer_question_over_chunks(
+        question=question,
+        chunks=chunks,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_k=3,
+        max_length=500,
+        max_answer_length=40
+    )
+
+    if len(answers_df) > 0:
+        best_answer = answers_df.iloc[0].to_dict()
+        all_best_answers.append(best_answer)
+
+best_answers_df = pd.DataFrame(all_best_answers)
+
+best_answers_df[
+    [
+        "question",
+        "answer",
+        "span_score",
+        "confidence_score",
+        "page_number",
+        "chunk_id",
+        "context_preview"
+    ]
+]
+
+## Observation: Multi-Question Document QnA
+
+We now have a basic document QnA system.
+
+For each question, the system:
+
+```text
+checks all chunks
+extracts candidate answers
+ranks them
+returns the best answer
+
+This is brute-force document QnA.
+
+It works for small documents.
+
+But it becomes inefficient for large document collections.
+
+# 6.3 Inspect Top-k Answers for One Question
+
+Sometimes the best-ranked answer may not be the correct one.
+
+So we should inspect the top few answers.
+
+This is useful for teaching students that model confidence and correctness are not the same.
+
+# ============================================================
+# Cell 48: Inspect Top-k Answers for One Question
+# ============================================================
+
+question_to_inspect = "What does BERT stand for?"
+
+top_k_answers = answer_question_over_chunks(
+    question=question_to_inspect,
+    chunks=chunks,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=10,
+    max_length=500,
+    max_answer_length=40
+)
+
+top_k_answers[
+    [
+        "answer",
+        "span_score",
+        "confidence_score",
+        "page_number",
+        "chunk_id",
+        "context_preview"
+    ]
+]
+
+## Observation: Why Top-k Inspection Matters
+
+A single best answer may sometimes be misleading.
+
+Inspecting top-k answers helps us check:
+
+```text
+Is the answer repeated across chunks?
+Does the page number make sense?
+Does the context preview support the answer?
+Are high-scoring answers actually meaningful?
+
+This is an important practical habit in document AI systems.
+
+# 6.4 Add a Simple Answer Quality Filter
+
+Sometimes the model extracts unhelpful answers such as:
+
+```text
+empty string
+very short punctuation
+special tokens
+irrelevant fragments
+
+We can add a simple filter.
+
+This is not perfect, but it improves the first project version.
+
+# ============================================================
+# Cell 49: Simple Answer Quality Filter
+# ============================================================
+
+def is_reasonable_answer(answer):
+    """
+    Simple heuristic filter for extracted answers.
+    """
+
+    answer = answer.strip()
+
+    if len(answer) == 0:
+        return False
+
+    if len(answer) < 2:
+        return False
+
+    if answer in [".", ",", ";", ":", "-", "–"]:
+        return False
+
+    if answer.lower() in ["[cls]", "[sep]", "[pad]"]:
+        return False
+
+    return True
+
+# ============================================================
+# Cell 50: Improved QnA Over Chunks with Basic Filtering
+# ============================================================
+
+def answer_question_over_chunks_filtered(
+    question,
+    chunks,
+    tokenizer,
+    model,
+    device=device,
+    top_k=5,
+    max_length=500,
+    max_answer_length=40
+):
+    """
+    Run QnA over chunks and filter unreasonable answers.
+    """
+
+    candidate_answers = []
+
+    for chunk in chunks:
+        result = manual_extractive_qa(
+            question=question,
+            context=chunk["text"],
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_length=max_length,
+            max_answer_length=max_answer_length
+        )
+
+        answer_text = result["answer"].strip()
+
+        if is_reasonable_answer(answer_text):
+            candidate_answers.append({
+                "question": question,
+                "answer": answer_text,
+                "confidence_score": result["confidence_score"],
+                "span_score": result["span_score"],
+                "chunk_id": chunk["chunk_id"],
+                "page_number": chunk["page_number"],
+                "context_preview": chunk["text"][:300]
+            })
+
+    ranked_answers = sorted(
+        candidate_answers,
+        key=lambda x: x["span_score"],
+        reverse=True
+    )
+
+    return pd.DataFrame(ranked_answers[:top_k])
+
+# ============================================================
+# Cell 51: Test Filtered Chunk-Based QnA
+# ============================================================
+
+filtered_answers_df = answer_question_over_chunks_filtered(
+    question="What is masked language modeling?",
+    chunks=chunks,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=5
+)
+
+filtered_answers_df
+
+## Observation: Filtering
+
+Filtering does not make the model smarter.
+
+It only removes obviously bad outputs.
+
+This is common in real systems:
+
+
+Model output
+→ Post-processing
+→ Cleaner final result
+
+Later, RAG improves the input context before the model answers.
+
+## Concept Check Questions: QnA Over PDF Chunks
+
+### Q1. Regular Question
+
+Why do we run QnA over chunks instead of the full PDF?
+
+### Q2. Practical Question
+
+Why do we keep the page number with each answer?
+
+### Q3. Ranking Question
+
+Why do we rank candidate answers?
+
+### Q4. Debugging Question
+
+If the best answer is wrong but another top-k answer is correct, what does this tell us?
+
+### Q5. System Design Question
+
+Why is brute-force QnA over every chunk not ideal for very large documents?
+
+### Q6. Interview-Type Question
+
+How does this chunk-based QnA system naturally lead to RAG?
+
+## Instructor-Only Answers: QnA Over PDF Chunks
+
+### Answer 1
+
+The full PDF may exceed the model input length.
+
+Chunking allows each smaller context passage to fit within the model limit.
+
+### Answer 2
+
+Page number provides source tracking.
+
+It helps verify where the answer came from and makes the system more trustworthy.
+
+### Answer 3
+
+Each chunk may produce a candidate answer.
+
+Ranking helps us select the most likely answer among all candidates.
+
+### Answer 4
+
+It means the model found the correct answer somewhere, but the ranking method failed to place it first.
+
+This suggests we may need better ranking, retrieval, or answer validation.
+
+### Answer 5
+
+For large documents or many PDFs, checking every chunk becomes slow and inefficient.
+
+A retrieval step is needed to select only the most relevant chunks first.
+
+### Answer 6
+
+RAG adds retrieval before answering.
+
+Instead of answering over every chunk, RAG first retrieves the most relevant chunks and then sends them to a reader or generator model.
+
+## Bridge to Next Section
+
+We now have a working document QnA system.
+
+The system can:
+
+```text
+read a PDF
+chunk the document
+ask questions over chunks
+rank candidate answers
+return answer with source page
+
+Next, we will perform a short failure-case analysis.
+
+We will intentionally ask questions that may not be clearly present in the document.
+
+This will help students understand the limitations of extractive QnA.
+
+# Section 7: Failure Case Analysis and Limitations of Extractive Document QnA
+
+In the previous section, we built a working document QnA system.
+
+The system can now:
+
+```text
+PDF
+→ page-wise extraction
+→ chunking
+→ QnA over chunks
+→ ranked candidate answers
+→ best answer with source page
+
+Now we will intentionally test failure cases.
+
+This is important because a real AI system should not only work on easy examples.
+
+We must also understand:
+```text
+When does it fail?
+Why does it fail?
+How can we improve it later?
+
+## Why Failure Analysis Is Important
+
+A document QnA system may fail because of:
+
+```text
+1. The answer is not present in the document.
+
+2. The answer is present but not inside the top-ranked chunk.
+
+3. PDF extraction produced noisy text.
+
+4. The chunk is too small and lacks enough context.
+
+5. The chunk is too large and important text gets truncated.
+
+6. The model extracts a span that looks plausible but is wrong.
+
+This is why confidence score should not be treated as correctness.
+
+## 7.1 Test a Question Whose Answer Should Be Present
+
+First, we test a normal question.
+
+For the BERT paper, this question should be answerable:
+
+```text
+What does BERT stand for?
+
+This will act as a baseline before testing difficult questions.
+
+# ============================================================
+# Cell 52: Baseline Answerable Question
+# ============================================================
+
+answerable_question = "What does BERT stand for?"
+
+answerable_results = answer_question_over_chunks_filtered(
+    question=answerable_question,
+    chunks=chunks,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=5,
+    max_length=500,
+    max_answer_length=40
+)
+
+answerable_results
+
+## Observation: Baseline Case
+
+For a good document and a direct question, the correct answer should appear in the top results.
+
+For example, we expect something close to:
+
+```text
+Bidirectional Encoder Representations from Transformers
+
+This confirms that the system is able to answer when the information is clearly present.
+
+# 7.2 Test a Question Whose Answer May Not Be Present
+
+Now we ask a question that may not be explicitly answered in the selected document or may not be easy to extract.
+
+Example:
+
+```text
+What is the author's favorite programming language?
+
+This is not a factual detail normally present in the BERT paper.
+
+The model may still return some answer because extractive QnA tries to find the best span from the context.
+
+# ============================================================
+# Cell 53: Unanswerable or Unsupported Question
+# ============================================================
+
+unsupported_question = "What is the author's favorite programming language?"
+
+unsupported_results = answer_question_over_chunks_filtered(
+    question=unsupported_question,
+    chunks=chunks,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=5,
+    max_length=384,
+    max_answer_length=40
+)
+
+unsupported_results
+
+## Observation: Unsupported Question
+
+If the answer is not present, the model may still extract something.
+
+This does not mean the answer is correct.
+
+It means:
+
+```text
+Among the available chunks, the model found some span that looked most relevant.
+
+This is a major limitation of extractive QnA.
+
+The model is not verifying truth.
+
+It is selecting a span.
+
+# 7.3 Compare Answerable and Unsupported Questions
+
+Let us place both cases side by side.
+
+This helps students compare confidence scores and answer quality.
+
+# ============================================================
+# Cell 54: Compare Answerable vs Unsupported Questions
+# ============================================================
+
+comparison_questions = [
+    "What does BERT stand for?",
+    "What is the author's favorite programming language?",
+    "Which city was BERT invented in?",
+    "What tasks can BERT be fine-tuned for?"
+]
+
+comparison_records = []
+
+for question in comparison_questions:
+    result_df = answer_question_over_chunks_filtered(
+        question=question,
+        chunks=chunks,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_k=1,
+        max_length=384,
+        max_answer_length=40
+    )
+
+    if len(result_df) > 0:
+        row = result_df.iloc[0].to_dict()
+        comparison_records.append(row)
+    else:
+        comparison_records.append({
+            "question": question,
+            "answer": None,
+            "confidence_score": None,
+            "span_score": None,
+            "page_number": None,
+            "chunk_id": None,
+            "context_preview": None
+        })
+
+failure_analysis_df = pd.DataFrame(comparison_records)
+
+failure_analysis_df[
+    [
+        "question",
+        "answer",
+        "span_score",
+        "confidence_score",
+        "page_number",
+        "chunk_id",
+        "context_preview"
+    ]
+]
+
+## Observation: Confidence Is Not Correctness
+
+A wrong answer can sometimes have a reasonable score.
+
+This happens because the model is forced to extract an answer span from the given context.
+
+So in document QnA systems, we should inspect:
+
+```text
+answer
+score
+source page
+context preview
+
+not only the answer text.
+
+# 7.4 Add a Minimum Score Threshold
+
+One simple practical improvement is to reject answers below a threshold.
+
+For example:
+
+```text
+If span_score is too low, return:
+"No reliable answer found."
+
+This does not fully solve the problem, but it improves system behavior.
+
+# ============================================================
+# Cell 55: Threshold-Based Final Answer Function
+# ============================================================
+
+def get_best_answer_with_threshold(
+    question,
+    chunks,
+    tokenizer,
+    model,
+    device=device,
+    span_score_threshold=5.0,
+    top_k=5,
+    max_length=500,
+    max_answer_length=40
+):
+    """
+    Return best answer only if its span score is above a threshold.
+
+    If the score is too low, return a safe fallback response.
+    """
+
+    answers_df = answer_question_over_chunks_filtered(
+        question=question,
+        chunks=chunks,
+        tokenizer=tokenizer,
+        model=model,
+        device=device,
+        top_k=top_k,
+        max_length=max_length,
+        max_answer_length=max_answer_length
+    )
+
+    if len(answers_df) == 0:
+        return {
+            "question": question,
+            "answer": "No reliable answer found.",
+            "status": "no_candidate_answer",
+            "span_score": None,
+            "confidence_score": None,
+            "page_number": None,
+            "chunk_id": None,
+            "context_preview": None
+        }
+
+    best_answer = answers_df.iloc[0].to_dict()
+
+    if best_answer["span_score"] < span_score_threshold:
+        return {
+            "question": question,
+            "answer": "No reliable answer found in the document.",
+            "status": "below_threshold",
+            "span_score": best_answer["span_score"],
+            "confidence_score": best_answer["confidence_score"],
+            "page_number": best_answer["page_number"],
+            "chunk_id": best_answer["chunk_id"],
+            "context_preview": best_answer["context_preview"]
+        }
+
+    return {
+        "question": question,
+        "answer": best_answer["answer"],
+        "status": "answered",
+        "span_score": best_answer["span_score"],
+        "confidence_score": best_answer["confidence_score"],
+        "page_number": best_answer["page_number"],
+        "chunk_id": best_answer["chunk_id"],
+        "context_preview": best_answer["context_preview"]
+    }
+
+## Teaching Note: Thresholds Are Heuristics
+
+A threshold is a practical rule.
+
+It is not a mathematical proof of correctness.
+
+If the threshold is too low:
+
+```text
+wrong answers may pass
+
+If the threshold is too high:
+```text
+correct answers may be rejected
+
+So threshold selection depends on the application.
+
+# ============================================================
+# Cell 56: Test Threshold-Based Answering
+# ============================================================
+
+threshold_test_questions = [
+    "What does BERT stand for?",
+    "What is the author's favorite programming language?",
+    "What tasks can BERT be fine-tuned for?"
+]
+
+threshold_results = []
+
+for question in threshold_test_questions:
+    result = get_best_answer_with_threshold(
+        question=question,
+        chunks=chunks,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        span_score_threshold=5.0,
+        top_k=5,
+        max_length=500,
+        max_answer_length=40
+    )
+
+    threshold_results.append(result)
+
+pd.DataFrame(threshold_results)
+
+## Observation: Threshold-Based Output
+
+Now the system can return either:
+
+```text
+answered
+
+or:
+
+No reliable answer found in the document.
+
+This makes the system safer than always forcing an answer.
+
+However, thresholding is still a basic heuristic.
+
+A stronger system would use retrieval, reranking, answer validation, or LLM-based reasoning with grounding.
+
+# 7.5 Inspect the Source Context Before Trusting the Answer
+
+For any important answer, we should inspect the source context.
+
+This is a simple but powerful habit.
+
+A good document QnA system should make verification easy.
+
+# ============================================================
+# Cell 57: Source Context Inspection Utility
+# ============================================================
+
+def show_answer_with_source(answer_record):
+    """
+    Print answer along with source metadata and context preview.
+    """
+
+    print("Question:")
+    print(answer_record.get("question"))
+
+    print("\nAnswer:")
+    print(answer_record.get("answer"))
+
+    print("\nStatus:")
+    print(answer_record.get("status", "not_available"))
+
+    print("\nPage Number:")
+    print(answer_record.get("page_number"))
+
+    print("\nChunk ID:")
+    print(answer_record.get("chunk_id"))
+
+    print("\nSpan Score:")
+    print(answer_record.get("span_score"))
+
+    print("\nConfidence Score:")
+    print(answer_record.get("confidence_score"))
+
+    print("\nContext Preview:")
+    print(answer_record.get("context_preview"))
+
+# ============================================================
+# Cell 58: Demonstrate Source Inspection
+# ============================================================
+
+sample_question = "What does BERT stand for?"
+
+sample_answer = get_best_answer_with_threshold(
+    question=sample_question,
+    chunks=chunks,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    span_score_threshold=5.0,
+    top_k=5
+)
+
+show_answer_with_source(sample_answer)
+
+## Observation: Source Tracking Builds Trust
+
+The answer alone is not enough.
+
+A useful document QnA system should show:
+
+```text
+answer
+source page
+source chunk
+context preview
+
+This allows humans to verify whether the answer is supported by the document.
+
+# 7.6 Main Failure Modes of Our Current System
+
+Our system is useful, but it is still simple.
+
+Main failure modes:
+
+```text
+1. Wrong answer from irrelevant chunk
+
+2. Correct answer appears in top-k but not rank 1
+
+3. Low-quality PDF extraction
+
+4. Chunk boundary cuts important context
+
+5. Word-based chunking ignores semantic meaning
+
+6. Model extracts answer even when answer is absent
+
+7. Confidence score does not guarantee correctness
+
+8. Brute-force chunk search becomes slow for large documents
+
+These limitations naturally motivate the next improvements.
+
+## How Future Lectures Will Improve This
+
+Current system:
+
+
+Run QnA over every chunk
+
+Improvement 1:
+
+Retrieve relevant chunks first
+
+Improvement 2:
+
+Use embeddings and FAISS for retrieval
+
+Improvement 3:
+
+Use reranking to improve answer selection
+
+Improvement 4:
+
+Fine-tune the QnA model on domain-specific data
+
+Improvement 5:
+
+Use LLM-based answer generation grounded in retrieved context
+
+## Concept Check Questions: Failure Case Analysis
+
+### Q1. Regular Question
+
+Why can an extractive QnA model return an answer even when the correct answer is not present?
+
+### Q2. Practical Question
+
+Why should we inspect the context preview along with the answer?
+
+### Q3. Debugging Question
+
+If the correct answer appears in top-k results but not at rank 1, what part of the system needs improvement?
+
+### Q4. Threshold Question
+
+What is the benefit of using a minimum score threshold?
+
+### Q5. System Design Question
+
+Why is brute-force QnA over all chunks not scalable?
+
+### Q6. Interview-Type Question
+
+Why is source grounding important in document QnA systems?
+
+## Instructor-Only Answers: Failure Case Analysis
+
+### Answer 1
+
+Because extractive QnA models are trained to select the best span from the provided context.
+
+If the correct answer is absent, the model may still choose the most plausible span.
+
+### Answer 2
+
+The context preview helps verify whether the answer is actually supported by the document.
+
+This is important because the model can extract plausible but incorrect spans.
+
+### Answer 3
+
+The ranking mechanism needs improvement.
+
+Possible improvements include better span scoring, retrieval, reranking, or answer validation.
+
+### Answer 4
+
+A minimum threshold helps avoid returning weak or unreliable answers.
+
+If the best score is too low, the system can safely say that no reliable answer was found.
+
+### Answer 5
+
+For large PDFs or many documents, running QnA over every chunk is slow and inefficient.
+
+A retrieval system is needed to shortlist relevant chunks first.
+
+### Answer 6
+
+Source grounding allows users to verify the answer.
+
+In real systems, especially legal, medical, academic, or enterprise document QnA, unsupported answers can be dangerous.
+
+## Bridge to Next Section
+
+We have now tested both successful and failure cases.
+
+The current system is complete as a first document QnA project.
+
+Next, we will close the lecture by connecting this project to:
+
+```text
+1. Fine-tuning BERT-style QnA models
+
+2. RAG using embeddings and FAISS
+
+3. LLM-based document question answering
+
+This will help students see how this simple project becomes an industry-level NLP system.
+
+# Section 8: Final Project Summary, Fine-Tuning Bridge, and RAG Roadmap
+
+We have now completed the first version of a document question answering system.
+
+The system can:
+
+```text
+1. Upload a PDF
+2. Extract text page-wise
+3. Clean extracted text
+4. Split long document into chunks
+5. Ask questions over all chunks
+6. Rank candidate answers
+7. Return answer with page number and source preview
+
+This is a complete mini-project.
+
+But more importantly, it is the foundation for:
+```text
+Fine-tuning
+RAG
+LLM-based document QnA
+
+## 8.1 Final System Workflow
+
+The final system flow is:
+
+```text
+PDF Document
+        ↓
+Page-wise Text Extraction
+        ↓
+Text Cleaning
+        ↓
+Overlapping Chunk Creation
+        ↓
+Question
+        ↓
+Manual Extractive QnA on Each Chunk
+        ↓
+Candidate Answers
+        ↓
+Ranking
+        ↓
+Best Answer + Source Page + Context Preview
+
+This is the first practical document AI pipeline we have built using pretrained Transformers.
+
+# ============================================================
+# Cell 59: Final End-to-End Document QnA Function
+# ============================================================
+
+def document_qa_system(
+    question,
+    chunks,
+    tokenizer,
+    model,
+    device=device,
+    span_score_threshold=5.0,
+    top_k=5,
+    max_length=500,
+    max_answer_length=60
+):
+    """
+    Final document QnA system.
+
+    Input:
+        question: user question
+        chunks: document chunks with metadata
+        tokenizer: QnA tokenizer
+        model: QnA model
+
+    Output:
+        final answer record with source information
+    """
+
+    final_answer = get_best_answer_with_threshold(
+        question=question,
+        chunks=chunks,
+        tokenizer=tokenizer,
+        model=model,
+        device=device,
+        span_score_threshold=span_score_threshold,
+        top_k=top_k,
+        max_length=max_length,
+        max_answer_length=max_answer_length
+    )
+
+    return final_answer
+
+# ============================================================
+# Cell 60: Test Final Document QnA System
+# ============================================================
+
+final_question = "Is BERT Encoder or Decoder only model?"
+
+final_answer = document_qa_system(
+    question=final_question,
+    chunks=chunks,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    span_score_threshold=5.0,
+    top_k=5
+)
+
+show_answer_with_source(final_answer)
+
+Question:
+Is BERT Encoder or Decoder only model?
+
+Answer:
+BERT SQuAD
+
+Status:
+answered
+
+Page Number:
+5
+
+Chunk ID:
+23
+
+Span Score:
+13.815
+
+Confidence Score:
+0.7672
+
+Context Preview:
+during ﬁne-tuning are classiﬁcation layer weights W ∈ RK×H, where K is the number of labels. We com- pute a standard classiﬁcation loss with C and W, i.e., log(softmax(CW T )). 7For example, the BERT SQuAD model can be trained in around 30 minutes on a single Cloud TPU to achieve a Dev F1 score of 9
+
+## Observation: Final System Output
+
+The final system gives:
+
+```text
+question
+answer
+status
+span score
+confidence score
+page number
+chunk ID
+context preview"
+
+This is important because document QnA should not only answer.
+
+It should also provide evidence.
+
+# 8.2 What Students Should Realize
+
+This project connects the theory of Transformer Encoder to a practical NLP system.
+
+Earlier, we learned:
+
+
+Transformer Encoder
+→ contextual token representations
+
+In this project, we used:
+
+Pretrained Transformer QnA Model
+→ start position prediction
+→ end position prediction
+→ answer span extraction
+
+The key realization is:
+
+A Transformer model becomes useful for different tasks by changing the task head.
+
+For classification:
+
+Transformer Encoder → Classification Head
+
+For extractive QnA:
+
+Transformer Encoder → Start Head + End Head
+
+# 8.3 How This Becomes a Fine-Tuning Project
+
+Today we used a model that was already fine-tuned for QnA.
+
+Later, we can fine-tune a similar model on our own domain-specific QnA data.
+
+For fine-tuning, each training example should contain:
+
+```text
+question
+context
+answer_text
+answer_start
+
+Example:
+
+question:
+
+What does BERT stand for?
+
+context:
+
+BERT stands for Bidirectional Encoder Representations from Transformers.
+
+answer_text:
+
+Bidirectional Encoder Representations from Transformers
+
+answer_start:
+16
+
+The model learns to predict the correct answer start and end positions.
+
+## Fine-Tuning Data Structure
+
+A QnA fine-tuning dataset usually looks like this:
+
+```text
+{
+    "id": "example_001",
+    "question": "What does BERT stand for?",
+    "context": "BERT stands for Bidirectional Encoder Representations from Transformers.",
+    "answers": {
+        "text": ["Bidirectional Encoder Representations from Transformers"],
+        "answer_start": [16]
+    }
+}
+
+The difficult part is not only training the model.
+
+The difficult part is preparing correct answer spans.
+
+# ============================================================
+# Cell 61: Example Fine-Tuning Ready Record
+# ============================================================
+
+fine_tuning_example = {
+    "id": "example_001",
+    "question": "What does BERT stand for?",
+    "context": "BERT stands for Bidirectional Encoder Representations from Transformers.",
+    "answers": {
+        "text": ["Bidirectional Encoder Representations from Transformers"],
+        "answer_start": [16]
+    }
+}
+
+fine_tuning_example
+
+{'id': 'example_001',
+ 'question': 'What does BERT stand for?',
+ 'context': 'BERT stands for Bidirectional Encoder Representations from Transformers.',
+ 'answers': {'text': ['Bidirectional Encoder Representations from Transformers'],
+  'answer_start': [16]}}
+
+## Observation: Why Answer Start Matters
+
+For fine-tuning, the model must know exactly where the answer begins in the context.
+
+The answer is not only text.
+
+It is text with position.
+
+That position is later converted into token start and token end labels.
+
+So the fine-tuning flow becomes:
+
+```text
+answer_start character position
+        ↓
+tokenizer offset mapping
+        ↓
+start token position
+        ↓
+end token position
+        ↓
+training labels
+
+# 8.4 How This Becomes a RAG Project
+
+Our current system checks every chunk.
+
+Current approach:
+
+```text
+Question
+→ Run QnA on Chunk 0
+→ Run QnA on Chunk 1
+→ Run QnA on Chunk 2
+→ ...
+→ Rank answers
+
+This works for a small PDF.
+
+But for many documents, this becomes slow.
+
+RAG improves this by adding retrieval first.
+
+## RAG Workflow
+
+A RAG system follows this structure:
+
+```text
+PDF Documents
+        ↓
+Text Extraction
+        ↓
+Chunking
+        ↓
+Embedding Generation
+        ↓
+Vector Database
+        ↓
+User Question
+        ↓
+Retrieve Top-k Relevant Chunks
+        ↓
+QnA Model or LLM
+        ↓
+Grounded Answer
+
+The major improvement is:
+
+Do not read every chunk.
+Retrieve the most relevant chunks first.
+
+## Current System vs RAG System
+
+| Aspect | Current Document QnA | RAG |
+|---|---|---|
+| Chunk handling | Checks every chunk | Retrieves relevant chunks |
+| Speed | Slower for large documents | Faster for large collections |
+| Intelligence | Depends on QnA model ranking | Depends on retrieval + answering |
+| Best use case | Small PDFs | Large PDFs / many documents |
+| Next step | Add retrieval | Add generation or fine-tuning |
+
+# 8.5 How This Becomes an LLM-Based Document QnA System
+
+Our current model is extractive.
+
+It selects an answer span from the context.
+
+LLM-based document QnA is generative.
+
+It can produce a full natural-language answer.
+
+Current extractive answer:
+
+```text
+Bidirectional Encoder Representations from Transformers
+
+LLM-based answer:
+```text
+BERT stands for Bidirectional Encoder Representations from Transformers.
+It is an encoder-based Transformer model designed for deep bidirectional language understanding.
+
+But LLM generation introduces a new risk:
+```text
+hallucination
+
+So the LLM should answer using retrieved context.
+
+## Extractive QnA vs LLM-Based QnA
+
+| Feature | Extractive QnA | LLM-Based QnA |
+|---|---|---|
+| Output style | Span from context | Generated explanation |
+| Hallucination risk | Lower | Higher |
+| Flexibility | Limited | High |
+| Needs context grounding | Yes | Strongly yes |
+| Good for | Fact extraction | Explanation and synthesis |
+
+# 8.6 Recommended Next Lecture Path
+
+The most natural next class is:
+
+```text
+Manual RAG Pipeline
+
+because we already have:
+
+PDF text
+chunks
+chunk metadata
+questions
+answers
+
+Next, we only need to add:
+
+chunk embeddings
+similarity search
+retrieval
+
+So the next project becomes:
+
+Document QnA with Retrieval
+
+## Next Class Roadmap: Manual RAG
+
+The next lecture can follow this flow:
+
+```text
+1. Use the same PDF chunks
+
+2. Convert each chunk into an embedding
+
+3. Store chunk embeddings in FAISS
+
+4. Convert user question into an embedding
+
+5. Retrieve top-k most similar chunks
+
+6. Run QnA only on retrieved chunks
+
+7. Compare:
+   brute-force chunk QnA
+   vs
+   retrieval-first QnA
+```
+This will clearly show why RAG is needed.
+
+## Later Class Roadmap: Fine-Tuning
+
+After RAG, we can return to fine-tuning.
+
+Fine-tuning lecture flow:
+
+```text
+1. Create small custom QnA dataset
+
+2. Store examples with:
+   question
+   context
+   answer_text
+   answer_start
+
+3. Tokenize with offset mapping
+
+4. Convert answer character position to token positions
+
+5. Train using Trainer
+
+6. Compare pretrained model vs fine-tuned model
+```
+This will be easier after students understand QnA inference clearly.
+
+# 8.7 Final Project Summary
+
+This project:
+
+```text
+Document Reading and Extractive Question Answering using Hugging Face Transformers
+```
+
+Final system:
+
+PDF
+→ text extraction
+→ cleaning
+→ page-wise storage
+→ chunking
+→ QnA over chunks
+→ answer ranking
+→ source tracking
+
+Core Transformer idea:
+
+Contextual token representations are used to predict answer start and end positions.
+
+Industry connection:
+
+This is the foundation of document AI, enterprise search, research paper QnA, policy document QnA, and RAG systems.
+
+## Concept Check Questions: Final Project Summary and Future Roadmap
+
+### Q1. Regular Question
+
+What is the final document QnA pipeline built in this lecture?
+
+### Q2. Architecture-Based Question
+
+What does the QnA head predict?
+
+### Q3. Fine-Tuning Question
+
+What fields are required to fine-tune an extractive QnA model?
+
+### Q4. RAG Question
+
+Why is brute-force QnA over all chunks not enough for large-scale systems?
+
+### Q5. LLM Question
+
+How is LLM-based document QnA different from extractive QnA?
+
+### Q6. Interview-Type Question
+
+Why is source tracking important in document QnA systems?
+
+## Instructor-Only Answers: Final Project Summary and Future Roadmap
+
+### Answer 1
+
+The final pipeline is:
+
+```text
+PDF
+→ text extraction
+→ cleaning
+→ chunking
+→ QnA over chunks
+→ answer ranking
+→ source page and context preview
+````
+### Answer 2
+
+The QnA head predicts:
+```text
+start position
+end position
+````
+These positions define the answer span in the tokenized context.
+
+### Answer 3
+
+The required fields are:
+```text
+question
+context
+answer_text
+answer_start
+````
+These are used to create start and end token labels for training.
+
+### Answer 4
+
+Because checking every chunk is slow and inefficient for large PDFs or many documents.
+
+RAG improves this by retrieving only relevant chunks before answering.
+
+### Answer 5
+
+Extractive QnA copies an answer span from the context.
+
+LLM-based QnA generates a natural-language answer, usually using retrieved context as grounding.
+
+### Answer 6
+
+Source tracking allows users to verify the answer.
+
+It improves trust, debugging, and accountability in document AI systems.
+
+# Limitations / Teaching Caution
+
+This project is strong as a first document QnA system, but it has limitations.
+
+## 1. PDF Extraction Limitation
+
+PDF text extraction may be noisy.
+
+Tables, formulas, headers, footers, and references may not extract cleanly.
+
+## 2. Scanned PDF Limitation
+
+Scanned PDFs are image-based.
+
+They require OCR before text-based QnA can work.
+
+## 3. Chunking Limitation
+
+Word-based chunking is simple but not semantically perfect.
+
+A better system may use sentence-based, section-based, or semantic chunking.
+
+## 4. Ranking Limitation
+
+Ranking by span score is basic.
+
+Correct answers may appear in top-k but not at rank 1.
+
+## 5. Extractive Limitation
+
+The model can only extract text from context.
+
+It cannot synthesize long explanations like an LLM.
+
+## 6. Confidence Limitation
+
+Confidence score is not correctness.
+
+Human verification through source context is still important.
+
+## 7. Scalability Limitation
+
+Running QnA over every chunk is not scalable.
+
+RAG solves this by adding retrieval before answering.
+
+# Final Realization
+
+We started from Transformer Encoder theory.
+
+Then we used a pretrained QnA model to build a real document question answering system.
+
+The main realization is:
+
+```text
+Transformer representations are not only theoretical tensors.
+They become practical systems when connected to task heads, documents, chunking, and source tracking.

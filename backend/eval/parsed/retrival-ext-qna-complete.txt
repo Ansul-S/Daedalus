@@ -1,0 +1,6099 @@
+# From Extractive PDF QnA to Retrieval-Based Document QnA using Embeddings, FAISS, and BERT Reader
+
+In the previous notebook, we already built a complete **Extractive PDF QnA system** using a BERT-style reader model.
+
+That system covered:
+
+- PDF reading
+- Page-wise text extraction
+- Text chunking with overlap
+- Manual extractive QnA using `start_logits` and `end_logits`
+- Answer span extraction
+- Chunk-wise QnA
+- Answer ranking
+- Source tracking
+- Failure case analysis
+
+In this new notebook, we will not spend too much time reteaching those parts.
+
+We will quickly rebuild the required pipeline because this is a fresh Colab notebook.
+
+The main focus of this notebook is to move from:
+
+$$
+\text{Brute-force Extractive PDF QnA}
+$$
+
+to
+
+$$
+\text{Retrieval-Based Document QnA}
+$$
+
+The final goal is to build this architecture:
+
+$$
+\text{Question}
+\rightarrow
+\text{Retriever}
+\rightarrow
+\text{Top-k Relevant Chunks}
+\rightarrow
+\text{BERT Reader}
+\rightarrow
+\text{Final Answer}
+$$
+
+## How This Notebook Will Be Taught
+
+This notebook has two different pacing styles.
+
+### Part A: Fast Rebuild Mode
+
+For the parts that students already know from the previous notebook, we will move quickly.
+
+These include:
+
+- Library installation
+- Imports
+- PDF upload
+- PDF reading
+- Page-wise text extraction
+- Chunk creation
+- Basic BERT-style extractive QnA reader
+- Brute-force QnA recap
+
+For these repeated sections, we will mostly use:
+
+```text
+Section Heading → Code Cell
+```
+We will avoid long explanations, concept checks, and detailed observation cells in this part.
+
+The purpose is only to recreate the required working components in the fresh notebook.
+
+### Part B: Deep Teaching Mode
+
+Once we reach the new ideas, we will slow down and teach properly.
+
+These include:
+```text
+Why brute-force QnA is not scalable
+Retriever vs Reader architecture
+Text embeddings
+Semantic search
+Cosine similarity
+Top-k retrieval
+FAISS
+FAISS index creation
+FAISS search
+Mapping retrieved results back to chunk metadata
+Combining FAISS retriever with BERT reader
+Debugging retrieval failure vs reader failure
+```
+
+## Main Story of This Masterclass
+
+The previous system worked like this:
+
+```text
+Question → Every Chunk → BERT Reader → Best Answer
+```
+
+This is called a brute-force approach because every chunk is checked.
+
+This works for small PDFs.
+
+But for large documents, it becomes inefficient.
+
+So we now improve the system:
+```text
+Question → Search Relevant Chunks → BERT Reader → Best Answer
+```
+This gives us a more scalable document QnA pipeline.
+
+The search component is called the Retriever.
+
+The answer extraction component is called the Reader.
+
+## Important Distinctions
+
+Throughout this notebook, we will keep these ideas separate:
+
+### Retriever
+
+The retriever finds relevant chunks.
+
+It answers:
+
+> Which parts of the document are likely to contain the answer?
+
+---
+
+### Reader
+
+The reader extracts the answer from the retrieved chunks.
+
+It answers:
+
+> Where exactly is the answer span inside this chunk?
+
+---
+
+### Embedding Model
+
+The embedding model converts text into numerical vectors.
+
+$$
+\text{Text} \rightarrow \text{Embedding Vector}
+$$
+
+---
+
+### FAISS
+
+FAISS is a fast vector similarity search library.
+
+FAISS is not a QnA model.
+
+FAISS does not generate answers.
+
+FAISS only helps us search relevant chunks efficiently.
+
+## Learning Objectives
+
+By the end of this notebook, students should be able to:
+
+1. Rebuild the basic PDF QnA pipeline in a fresh Colab notebook.
+
+2. Explain why brute-force QnA over all chunks is not scalable.
+
+3. Distinguish clearly between:
+
+   - Retriever
+   - Reader
+   - Embedding model
+   - FAISS index
+   - BERT-style QnA model
+
+4. Convert document chunks into embeddings.
+
+5. Convert a user question into an embedding.
+
+6. Use cosine similarity for manual semantic search.
+
+7. Retrieve top-k relevant chunks.
+
+8. Build and search a FAISS index.
+
+9. Map FAISS results back to original chunk metadata.
+
+10. Combine FAISS retriever with a BERT-style extractive reader.
+
+11. Build a reusable function:
+```python
+retrieve_then_answer()
+```
+12. Compare brute-force QnA with retrieval-based QnA.
+13. Debug whether a wrong answer is caused by:
+```text
+Retrieval failure
+Reader failure
+Poor chunking
+Ambiguous question
+Missing information in the document
+```
+
+## Masterclass Roadmap
+
+This notebook will flow as one continuous project.
+
+We will not divide it rigidly into Class 1, Class 2, Class 3, and Class 4.
+
+---
+
+## Stage 1: Fast Rebuild of PDF Processing Pipeline
+
+We will quickly recreate:
+
+- Install required libraries
+- Import packages
+- Upload PDF
+- Read PDF using PyMuPDF
+- Extract page-wise text
+- Create overlapping chunks
+- Store metadata such as page number and chunk ID
+
+This stage will be code-focused because students have already seen this process.
+
+---
+
+## Stage 2: Fast Rebuild of Extractive QnA Reader
+
+We will quickly recreate:
+
+- `AutoTokenizer`
+- `AutoModelForQuestionAnswering`
+- Manual answer extraction using `start_logits` and `end_logits`
+- Reusable reader function
+
+This gives us the reader component for the final pipeline.
+
+---
+
+## Stage 3: Fast Recap of Brute-force Chunk-wise QnA
+
+We will briefly rebuild:
+
+```text
+Question → All Chunks → Reader → Ranked Answers
+```
+This will remind students what the previous system did.
+
+Then we will use this system to expose the scalability problem.
+
+## Stage 4: Need for Retrieval
+
+Now the real new learning begins.
+
+We will ask:
+```text
+Why should the reader process every chunk when most chunks are irrelevant?
+
+This creates the need for a retriever.
+```
+## Stage 5: Text Embeddings and Semantic Search
+
+We will convert text into vectors.
+```text
+Chunk → Chunk Embedding
+Question → Question Embedding
+
+Then we will compare vectors using cosine similarity.
+```
+## Stage 6: Manual Top-k Retrieval
+
+We will manually retrieve the most relevant chunks using similarity scores.
+
+This will help students understand semantic search before introducing FAISS.
+
+## Stage 7: FAISS-Based Retrieval
+
+We will introduce FAISS as an efficient vector search tool.
+
+We will build a FAISS index and search relevant chunks faster.
+
+## Stage 8: Retriever + Reader Pipeline
+
+We will combine:
+```text
+FAISS Retriever + BERT Reader
+
+The final function will be:
+
+retrieve_then_answer()
+```
+## Stage 9: Comparison and Failure Analysis
+
+We will compare:
+
+Brute-force QnA vs Retrieval-Based QnA
+
+Then we will debug:
+```text
+Retrieval failure
+Reader failure
+Chunking failure
+Missing answer cases
+```
+---
+## Final System Architecture
+
+By the end of this notebook, our system will look like this:
+
+```text
+PDF Document
+     ↓
+Page-wise Text Extraction
+     ↓
+Chunking with Metadata
+     ↓
+Chunk Embeddings
+     ↓
+FAISS Index
+     ↓
+User Question
+     ↓
+Question Embedding
+     ↓
+Top-k Chunk Retrieval
+     ↓
+BERT-style Extractive Reader
+     ↓
+Final Answer with Source Tracking
+```
+This is the foundation of many real-world document QnA systems.
+
+It also prepares us for understanding RAG systems later.
+
+## Bridge to Next Section
+
+Now we will start the fresh Colab notebook setup.
+
+Since students already know the previous PDF QnA pipeline, the next few sections will be fast and code-focused.
+
+We will first install the required libraries and import all packages needed for:
+
+- PDF reading
+- Text processing
+- Hugging Face models
+- Embeddings
+- FAISS search
+- BERT-style extractive QnA
+
+# Section 1: Fresh Colab Setup and Required Imports
+
+This is a fresh notebook.
+
+So we first install and import all required libraries for:
+
+- PDF reading
+- Hugging Face extractive QnA reader
+- Text embeddings
+- Vector similarity search
+- FAISS-based retrieval
+
+# Install required libraries
+# PyMuPDF -> PDF reading
+# transformers -> BERT-style QnA reader
+# sentence-transformers -> embedding model
+# faiss-cpu -> efficient vector similarity search
+
+!pip install -q pymupdf transformers accelerate sentence-transformers faiss-cpu
+
+[2K   [90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m25.7/25.7 MB[0m [31m53.8 MB/s[0m eta [36m0:00:00[0m
+[2K   [90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m18.5/18.5 MB[0m [31m71.9 MB/s[0m eta [36m0:00:00[0m
+[?25h
+
+# Core Python libraries
+import os
+import re
+import time
+import random
+from typing import List, Dict, Tuple, Any
+
+# Numerical and data handling
+import numpy as np
+import pandas as pd
+
+# PDF reading
+import fitz  # PyMuPDF
+
+# PyTorch
+import torch
+
+# Hugging Face models
+from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+
+# Sentence embedding model
+from sentence_transformers import SentenceTransformer
+
+# FAISS for vector search
+import faiss
+
+# Colab file upload utility
+from google.colab import files
+
+# Device configuration
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+print("Device available:", device)
+
+if device == "cuda":
+    print("GPU name:", torch.cuda.get_device_name(0))
+else:
+    print("Running on CPU")
+
+Device available: cuda
+GPU name: Tesla T4
+
+# Reproducibility helper
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+set_seed(42)
+
+print("Seed fixed for reproducibility.")
+
+Seed fixed for reproducibility.
+
+In the next section, we will upload a PDF and extract page-wise text from it.
+
+Since students already know this process from the previous notebook, we will keep the PDF reading section code-focused.
+
+# Section 2: Upload PDF and Extract Page-wise Text
+
+We will now upload a PDF and extract text page by page.
+
+Since this process was already covered in the previous notebook, we will keep this section code-focused.
+
+# Upload PDF file from local system
+
+uploaded = files.upload()
+
+pdf_path = list(uploaded.keys())[0]
+
+print("Uploaded PDF:", pdf_path)
+
+<IPython.core.display.HTML object>
+Saving Bert_Model.pdf to Bert_Model.pdf
+Uploaded PDF: Bert_Model.pdf
+
+# Open PDF using PyMuPDF
+
+doc = fitz.open(pdf_path)
+
+print("Number of pages in PDF:", len(doc))
+
+Number of pages in PDF: 16
+
+# Extract text page-wise
+
+def extract_text_pagewise(pdf_path: str) -> List[Dict[str, Any]]:
+    """
+    Extracts text from a PDF page by page.
+
+    Returns:
+        A list of dictionaries.
+        Each dictionary contains:
+        - page_number
+        - text
+        - character_count
+        - word_count
+    """
+
+    document = fitz.open(pdf_path)
+    pages = []
+
+    for page_idx, page in enumerate(document):
+        text = page.get_text()
+
+        page_data = {
+            "page_number": page_idx + 1,
+            "text": text,
+            "character_count": len(text),
+            "word_count": len(text.split())
+        }
+
+        pages.append(page_data)
+
+    document.close()
+
+    return pages
+
+
+pages_data = extract_text_pagewise(pdf_path)
+
+print("Total pages extracted:", len(pages_data))
+
+Total pages extracted: 16
+
+# Preview extracted text from first few pages
+
+for page in pages_data[:3]:
+    print("=" * 80)
+    print("Page Number:", page["page_number"])
+    print("Characters:", page["character_count"])
+    print("Words:", page["word_count"])
+    print("-" * 80)
+    print(page["text"][:1000])
+    print()
+
+# Create a compact dataframe summary of extracted pages
+
+page_summary_df = pd.DataFrame([
+    {
+        "page_number": page["page_number"],
+        "character_count": page["character_count"],
+        "word_count": page["word_count"]
+    }
+    for page in pages_data
+])
+
+page_summary_df.head()
+
+page_number  character_count  word_count
+0            1             4062         584
+1            2             4532         669
+2            3             3707         583
+3            4             4854         811
+4            5             3853         621
+
+# Check pages with very little or no extracted text
+
+low_text_pages = page_summary_df[page_summary_df["word_count"] < 20]
+
+low_text_pages
+
+Empty DataFrame
+Columns: [page_number, character_count, word_count]
+Index: []
+
+If some pages have very low word count, possible reasons may include:
+
+- The page contains images or scanned content
+- The PDF has tables or diagrams with limited extractable text
+- Text extraction is not clean for that page
+
+For this notebook, we will continue with text-based PDFs where PyMuPDF can extract readable text.
+
+Next, we will clean the extracted text and create overlapping chunks with metadata.
+
+# Section 3: Clean Text and Create Overlapping Chunks with Metadata
+
+Now we will clean the extracted PDF text and create overlapping chunks.
+
+Since students already know this process from the previous notebook, we will keep this section code-focused.
+
+Each chunk will store:
+
+- Chunk ID
+- Page number
+- Chunk text
+- Word count
+- Character count
+- Context preview
+
+This metadata will later help us track the source of retrieved answers.
+
+import unicodedata
+def clean_text(text: str) -> str:
+    """
+    Improved PDF text cleaning.
+
+    Handles:
+    - Unicode normalization
+    - Common PDF ligatures
+    - Hyphenated line breaks
+    - Extra newlines
+    - Extra spaces
+    - Broken spacing around punctuation
+    """
+
+    if text is None:
+        return ""
+
+    # Unicode normalization
+    text = unicodedata.normalize("NFKC", text)
+
+    # Fix common PDF ligatures
+    ligature_map = {
+        "ﬁ": "fi",
+        "ﬂ": "fl",
+        "ﬀ": "ff",
+        "ﬃ": "ffi",
+        "ﬄ": "ffl"
+    }
+
+    for bad, good in ligature_map.items():
+        text = text.replace(bad, good)
+
+    # Fix hyphenated words broken across lines:
+    # Example: "trans-\nformer" -> "transformer"
+    text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
+
+    # Replace remaining newlines, carriage returns, and tabs with spaces
+    text = re.sub(r"[\n\r\t]+", " ", text)
+
+    # Remove repeated spaces
+    text = re.sub(r"\s+", " ", text)
+
+    # Fix spaces before punctuation
+    text = re.sub(r"\s+([.,;:!?%)\]])", r"\1", text)
+
+    # Fix spaces after opening brackets
+    text = re.sub(r"([(\[])\s+", r"\1", text)
+
+    text = text.strip()
+
+    return text
+
+# Clean page-wise extracted text
+
+cleaned_pages_data = []
+
+for page in pages_data:
+    cleaned = clean_text(page["text"])
+
+    cleaned_pages_data.append({
+        "page_number": page["page_number"],
+        "text": cleaned,
+        "character_count": len(cleaned),
+        "word_count": len(cleaned.split())
+    })
+
+print("Total cleaned pages:", len(cleaned_pages_data))
+
+Total cleaned pages: 16
+
+# Preview cleaned text from first two pages
+
+for page in cleaned_pages_data[:2]:
+    print("=" * 80)
+    print("Page Number:", page["page_number"])
+    print("Words:", page["word_count"])
+    print("-" * 80)
+    print(page["text"][:1000])
+    print()
+
+def create_overlapping_chunks_from_pages(
+    pages: List[Dict[str, Any]],
+    chunk_size: int = 180,
+    overlap: int = 40
+) -> List[Dict[str, Any]]:
+    """
+    Creates overlapping word-based chunks from page-wise PDF text.
+
+    Args:
+        pages:
+            List of dictionaries containing page_number and text.
+
+        chunk_size:
+            Number of words in each chunk.
+
+        overlap:
+            Number of words repeated between consecutive chunks.
+
+    Returns:
+        List of chunk dictionaries with metadata.
+    """
+
+    if overlap >= chunk_size:
+        raise ValueError("overlap must be smaller than chunk_size.")
+
+    chunks = []
+    global_chunk_id = 0
+
+    for page in pages:
+        page_number = page["page_number"]
+        text = page["text"]
+        words = text.split()
+
+        if len(words) == 0:
+            continue
+
+        start = 0
+
+        while start < len(words):
+            end = start + chunk_size
+            chunk_words = words[start:end]
+            chunk_text = " ".join(chunk_words)
+
+            if len(chunk_words) > 0:
+                chunk_data = {
+                    "chunk_id": global_chunk_id,
+                    "page_number": page_number,
+                    "chunk_text": chunk_text,
+                    "word_count": len(chunk_words),
+                    "character_count": len(chunk_text),
+                    "preview": chunk_text[:300]
+                }
+
+                chunks.append(chunk_data)
+                global_chunk_id += 1
+
+            start += chunk_size - overlap
+
+    return chunks
+
+# Create chunks
+
+chunks_data = create_overlapping_chunks_from_pages(
+    pages=cleaned_pages_data,
+    chunk_size=180,
+    overlap=40
+)
+
+print("Total chunks created:", len(chunks_data))
+
+Total chunks created: 78
+
+# Convert chunks into dataframe for easy inspection
+
+chunks_df = pd.DataFrame(chunks_data)
+
+chunks_df.head()
+
+# Check chunk distribution page-wise
+
+chunk_distribution_df = (
+    chunks_df
+    .groupby("page_number")
+    .agg(
+        number_of_chunks=("chunk_id", "count"),
+        avg_words_per_chunk=("word_count", "mean")
+    )
+    .reset_index()
+)
+
+chunk_distribution_df.head(10)
+
+# Preview a few chunks
+
+for chunk in chunks_data[:3]:
+    print("=" * 80)
+    print("Chunk ID:", chunk["chunk_id"])
+    print("Page Number:", chunk["page_number"])
+    print("Words:", chunk["word_count"])
+    print("-" * 80)
+    print(chunk["chunk_text"][:1000])
+    print()
+
+# Simple safety checks
+
+assert len(chunks_data) > 0, "No chunks were created. Check PDF text extraction."
+
+required_keys = {
+    "chunk_id",
+    "page_number",
+    "chunk_text",
+    "word_count",
+    "character_count",
+    "preview"
+}
+
+for chunk in chunks_data[:5]:
+    assert required_keys.issubset(chunk.keys()), "Some metadata keys are missing."
+
+print("Chunking completed successfully.")
+
+Chunking completed successfully.
+
+Next, we will rebuild the BERT-style extractive QnA reader with a more robust answer-span selection method.
+
+# Section 4: Robust BERT-Style Extractive QnA Reader
+
+Now we will rebuild the BERT-style extractive reader.
+
+This time, we will avoid the naive mistake of selecting start and end tokens independently.
+
+A weak method is:
+
+```python
+start_index = argmax(start_logits)
+end_index = argmax(end_logits)
+```
+This can create invalid or poor spans.
+
+A better method is:
+```text
+Search multiple start candidates
+Search multiple end candidates
+Keep only valid spans
+Apply answer-length checks
+Rank spans using start_logit + end_logit
+Extract answer text using offset mapping
+```
+This reader will later be used after retrieval.
+
+from typing import Optional
+# Load tokenizer and BERT-style extractive QnA model
+
+reader_model_name = "distilbert-base-cased-distilled-squad"
+
+qa_tokenizer = AutoTokenizer.from_pretrained(reader_model_name)
+qa_model = AutoModelForQuestionAnswering.from_pretrained(reader_model_name)
+
+qa_model = qa_model.to(device)
+qa_model.eval()
+
+print("Reader model loaded successfully:", reader_model_name)
+
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+config.json:   0%|          | 0.00/473 [00:00<?, ?B/s]
+tokenizer_config.json:   0%|          | 0.00/49.0 [00:00<?, ?B/s]
+vocab.txt:   0%|          | 0.00/213k [00:00<?, ?B/s]
+tokenizer.json:   0%|          | 0.00/436k [00:00<?, ?B/s]
+model.safetensors:   0%|          | 0.00/261M [00:00<?, ?B/s]
+Loading weights:   0%|          | 0/102 [00:00<?, ?it/s]
+Reader model loaded successfully: distilbert-base-cased-distilled-squad
+
+def clean_answer_for_display(answer: str) -> str:
+    """
+    Cleans final extracted answer for readable display.
+
+    Handles:
+    - Special tokens
+    - WordPiece artifacts
+    - Extra spaces
+    - Broken punctuation spacing
+    """
+
+    if answer is None:
+        return ""
+
+    answer = str(answer)
+
+    # Remove common special tokens if they appear accidentally
+    special_tokens = [
+        "[CLS]", "[SEP]", "[PAD]", "[UNK]", "[MASK]",
+        "<s>", "</s>", "<pad>", "<unk>"
+    ]
+
+    for token in special_tokens:
+        answer = answer.replace(token, "")
+
+    # Remove WordPiece continuation markers
+    # Example: "transform ##er" -> "transformer"
+    answer = answer.replace(" ##", "")
+    answer = answer.replace("##", "")
+
+    # Unicode normalization
+    answer = unicodedata.normalize("NFKC", answer)
+
+    # Remove repeated spaces
+    answer = re.sub(r"\s+", " ", answer)
+
+    # Fix spaces before punctuation
+    answer = re.sub(r"\s+([.,;:!?%)\]])", r"\1", answer)
+
+    # Fix spaces after opening brackets
+    answer = re.sub(r"([(\[])\s+", r"\1", answer)
+
+    # Trim boundary spaces and punctuation
+    answer = answer.strip()
+    answer = answer.strip(" ,.;:-")
+
+    return answer
+
+def normalize_extracted_answer(answer: str) -> str:
+    """
+    Cleaning used immediately after answer extraction.
+    """
+
+    return clean_answer_for_display(answer)
+
+def manual_extractive_qa(
+    question: str,
+    context: str,
+    tokenizer,
+    model,
+    device: str = "cpu",
+    max_length: int = 500,
+    doc_stride: int = 128,
+    n_best_size: int = 20,
+    max_answer_tokens: int = 40,
+    min_answer_chars: int = 2,
+    max_answer_chars: int = 400,
+    min_span_score: Optional[float] = None
+) -> Dict[str, Any]:
+    """
+    Robust manual extractive QnA using a BERT-style reader.
+
+    Improvements:
+    - Does not independently choose argmax start and argmax end.
+    - Searches multiple start/end candidates.
+    - Ensures end_index >= start_index.
+    - Limits maximum answer length.
+    - Rejects very short or very long answers.
+    - Uses raw span score: start_logit + end_logit.
+    - Uses offset mapping to extract answer text from original context.
+    - Handles long context using overflow windows.
+    """
+
+    if context is None or len(context.strip()) == 0:
+        return {
+            "answer": "",
+            "raw_answer": "",
+            "span_score": float("-inf"),
+            "confidence": 0.0,
+            "status": "empty_context",
+            "reason": "Context is empty.",
+            "start_token": None,
+            "end_token": None,
+            "start_char": None,
+            "end_char": None,
+            "context": context
+        }
+
+    encoded = tokenizer(
+        question,
+        context,
+        return_tensors="pt",
+        truncation="only_second",
+        max_length=max_length,
+        stride=doc_stride,
+        return_overflowing_tokens=True,
+        return_offsets_mapping=True,
+        padding="max_length"
+    )
+
+    offset_mapping = encoded.pop("offset_mapping")
+
+    model_inputs = {
+        key: value.to(device)
+        for key, value in encoded.items()
+        if key in ["input_ids", "attention_mask", "token_type_ids"]
+    }
+
+    with torch.no_grad():
+        outputs = model(**model_inputs)
+
+    start_logits_all = outputs.start_logits.detach().cpu()
+    end_logits_all = outputs.end_logits.detach().cpu()
+
+    all_valid_spans = []
+
+    for feature_idx in range(start_logits_all.shape[0]):
+
+        start_logits = start_logits_all[feature_idx]
+        end_logits = end_logits_all[feature_idx]
+        offsets = offset_mapping[feature_idx]
+
+        sequence_ids = encoded.sequence_ids(feature_idx)
+
+        # Only context tokens should be considered.
+        # Question tokens, CLS, SEP, and padding should not become answer tokens.
+        context_token_indices = [
+            idx for idx, seq_id in enumerate(sequence_ids)
+            if seq_id == 1
+        ]
+
+        if len(context_token_indices) == 0:
+            continue
+
+        valid_token_mask = torch.full(start_logits.shape, False)
+
+        for idx in context_token_indices:
+            valid_token_mask[idx] = True
+
+        masked_start_logits = start_logits.clone()
+        masked_end_logits = end_logits.clone()
+
+        masked_start_logits[~valid_token_mask] = float("-inf")
+        masked_end_logits[~valid_token_mask] = float("-inf")
+
+        top_start_indices = torch.topk(
+            masked_start_logits,
+            k=min(n_best_size, len(context_token_indices))
+        ).indices.tolist()
+
+        top_end_indices = torch.topk(
+            masked_end_logits,
+            k=min(n_best_size, len(context_token_indices))
+        ).indices.tolist()
+
+        for start_idx in top_start_indices:
+            for end_idx in top_end_indices:
+
+                # Invalid span: end before start
+                if end_idx < start_idx:
+                    continue
+
+                answer_token_length = end_idx - start_idx + 1
+
+                # Reject very long spans
+                if answer_token_length > max_answer_tokens:
+                    continue
+
+                start_char = offsets[start_idx][0].item()
+                end_char = offsets[end_idx][1].item()
+
+                # Invalid offset
+                if end_char <= start_char:
+                    continue
+
+                raw_answer_text = context[start_char:end_char]
+                clean_answer_text = normalize_extracted_answer(raw_answer_text)
+
+                # Reject empty answers
+                if len(clean_answer_text) == 0:
+                    continue
+
+                # Reject too short / too long answers
+                if len(clean_answer_text) < min_answer_chars:
+                    continue
+
+                if len(clean_answer_text) > max_answer_chars:
+                    continue
+
+                span_score = (
+                    start_logits[start_idx].item()
+                    +
+                    end_logits[end_idx].item()
+                )
+
+                # Optional score threshold
+                if min_span_score is not None and span_score < min_span_score:
+                    continue
+
+                all_valid_spans.append({
+                    "answer": clean_answer_text,
+                    "raw_answer": raw_answer_text,
+                    "span_score": span_score,
+                    "feature_idx": feature_idx,
+                    "start_token": start_idx,
+                    "end_token": end_idx,
+                    "start_char": start_char,
+                    "end_char": end_char,
+                    "answer_token_length": answer_token_length,
+                    "answer_char_length": len(clean_answer_text)
+                })
+
+    if len(all_valid_spans) == 0:
+        return {
+            "answer": "",
+            "raw_answer": "",
+            "span_score": float("-inf"),
+            "confidence": 0.0,
+            "status": "no_valid_span",
+            "reason": "No valid answer span passed the checks.",
+            "start_token": None,
+            "end_token": None,
+            "start_char": None,
+            "end_char": None,
+            "context": context
+        }
+
+    # Sort by raw span score
+    all_valid_spans = sorted(
+        all_valid_spans,
+        key=lambda x: x["span_score"],
+        reverse=True
+    )
+
+    best_span = all_valid_spans[0]
+
+    # Confidence is local to this context.
+    # It is useful for debugging but not perfect for ranking across chunks.
+    span_scores = torch.tensor([span["span_score"] for span in all_valid_spans])
+    span_confidences = torch.softmax(span_scores, dim=0)
+    best_confidence = span_confidences[0].item()
+
+    return {
+        "answer": best_span["answer"],
+        "raw_answer": best_span["raw_answer"],
+        "span_score": best_span["span_score"],
+        "confidence": best_confidence,
+        "status": "valid_answer",
+        "reason": "Valid answer span found.",
+        "start_token": best_span["start_token"],
+        "end_token": best_span["end_token"],
+        "start_char": best_span["start_char"],
+        "end_char": best_span["end_char"],
+        "answer_token_length": best_span["answer_token_length"],
+        "answer_char_length": best_span["answer_char_length"],
+        "context": context,
+        "n_valid_spans_found": len(all_valid_spans),
+        "top_candidate_spans": all_valid_spans[:5]
+    }
+
+def display_qa_result(result: Dict[str, Any]):
+    """
+    Clean display for a single reader output.
+    """
+
+    raw_answer = result.get("raw_answer", result.get("answer", ""))
+    clean_answer = clean_answer_for_display(result.get("answer", ""))
+
+    print("Status:", result.get("status"))
+    print("Answer:", clean_answer)
+    print("Span Score:", round(result.get("span_score", float("-inf")), 4))
+    print("Confidence:", round(result.get("confidence", 0.0), 6))
+    print("Start Token:", result.get("start_token"))
+    print("End Token:", result.get("end_token"))
+    print("Start Char:", result.get("start_char"))
+    print("End Char:", result.get("end_char"))
+    print("Reason:", result.get("reason"))
+
+    if raw_answer != clean_answer and raw_answer != "":
+        print("\nRaw Extracted Answer:")
+        print(raw_answer)
+
+# Quick test on one chunk
+
+sample_question = "What is the document about?"
+sample_context = chunks_data[0]["chunk_text"]
+
+sample_result = manual_extractive_qa(
+    question=sample_question,
+    context=sample_context,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    max_answer_tokens=35,
+    min_answer_chars=3,
+    max_answer_chars=300,
+    min_span_score=None
+)
+
+display_qa_result(sample_result)
+
+Status: valid_answer
+Answer: Association for Computational Linguistics 4171 BERT: Pre-training of Deep Bidirectional Transformers for Language
+Span Score: 0.3959
+Confidence: 0.36273
+Start Token: 38
+End Token: 65
+Start Char: 101
+End Char: 214
+Reason: Valid answer span found.
+
+Next, we will rebuild brute-force QnA over all chunks using this improved reader.
+
+This will give us a stronger baseline before moving to retrieval.
+
+# Section 5: Improved Brute-force QnA Over All Chunks
+
+Now we will quickly rebuild the brute-force chunk-wise QnA system.
+
+The flow is:
+
+```text
+Question → All Chunks → BERT Reader → Ranked Answers
+```
+This time, the ranking is stronger because:
+```text
+Invalid spans are rejected
+Very short or very long answers are filtered
+Special-token noise is cleaned
+Candidate spans are ranked using:
+                    span score = start logit + end logit
+```
+This is still a brute-force method, but now it is a better baseline.
+
+def qa_on_single_chunk(
+    question: str,
+    chunk: Dict[str, Any],
+    tokenizer,
+    model,
+    device: str = "cpu",
+    max_answer_tokens: int = 40,
+    min_answer_chars: int = 2,
+    max_answer_chars: int = 500,
+    min_span_score: Optional[float] = None
+) -> Dict[str, Any]:
+    """
+    Runs extractive QnA on a single chunk and attaches source metadata.
+    """
+
+    qa_result = manual_extractive_qa(
+        question=question,
+        context=chunk["chunk_text"],
+        tokenizer=tokenizer,
+        model=model,
+        device=device,
+        max_answer_tokens=max_answer_tokens,
+        min_answer_chars=min_answer_chars,
+        max_answer_chars=max_answer_chars,
+        min_span_score=min_span_score
+    )
+
+    raw_answer = qa_result.get("raw_answer", qa_result.get("answer", ""))
+    clean_answer = clean_answer_for_display(qa_result.get("answer", ""))
+
+    return {
+        "question": question,
+        "answer": clean_answer,
+        "raw_answer": raw_answer,
+        "span_score": qa_result["span_score"],
+        "confidence": qa_result["confidence"],
+        "status": qa_result["status"],
+        "reason": qa_result["reason"],
+        "chunk_id": chunk["chunk_id"],
+        "page_number": chunk["page_number"],
+        "context_preview": clean_text(chunk["preview"]),
+        "chunk_text": chunk["chunk_text"],
+        "start_token": qa_result.get("start_token"),
+        "end_token": qa_result.get("end_token"),
+        "start_char": qa_result.get("start_char"),
+        "end_char": qa_result.get("end_char"),
+        "answer_token_length": qa_result.get("answer_token_length"),
+        "answer_char_length": len(clean_answer),
+        "n_valid_spans_found": qa_result.get("n_valid_spans_found", 0)
+    }
+
+def brute_force_qa_over_chunks(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    tokenizer,
+    model,
+    device: str = "cpu",
+    top_n: int = 5,
+    max_answer_tokens: int = 40,
+    min_answer_chars: int = 2,
+    max_answer_chars: int = 400,
+    min_span_score: Optional[float] = None,
+    keep_invalid: bool = False,
+    show_progress: bool = True
+) -> List[Dict[str, Any]]:
+    """
+    Runs extractive QnA on all chunks and ranks answers.
+
+    Ranking is based on:
+
+        span_score = start_logit + end_logit
+
+    This is better than ranking only by local softmax confidence because
+    confidence is normalized within one chunk and may not be comparable
+    across different chunks.
+    """
+
+    results = []
+
+    for idx, chunk in enumerate(chunks):
+
+        if show_progress and (idx + 1) % 20 == 0:
+            print(f"Processed {idx + 1}/{len(chunks)} chunks...")
+
+        result = qa_on_single_chunk(
+            question=question,
+            chunk=chunk,
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_answer_tokens=max_answer_tokens,
+            min_answer_chars=min_answer_chars,
+            max_answer_chars=max_answer_chars,
+            min_span_score=min_span_score
+        )
+
+        if keep_invalid:
+            results.append(result)
+        else:
+            if result["status"] == "valid_answer":
+                results.append(result)
+
+    ranked_results = sorted(
+        results,
+        key=lambda x: x["span_score"],
+        reverse=True
+    )
+
+    return ranked_results[:top_n]
+
+def display_ranked_answers(results: List[Dict[str, Any]]):
+    """
+    Displays ranked QnA results with clean answer formatting and debugging information.
+    """
+
+    if len(results) == 0:
+        print("No valid answers found.")
+        return
+
+    for rank, result in enumerate(results, start=1):
+
+        raw_answer = result.get("raw_answer", "")
+        clean_answer = clean_answer_for_display(result.get("answer", ""))
+        clean_preview = clean_text(result.get("context_preview", ""))
+
+        print("=" * 100)
+        print(f"Rank: {rank}")
+        print("Answer:", clean_answer)
+        print("Span Score:", round(result["span_score"], 4))
+        print("Confidence:", round(result["confidence"], 6))
+        print("Status:", result["status"])
+        print("Page Number:", result["page_number"])
+        print("Chunk ID:", result["chunk_id"])
+        print("Answer Token Length:", result.get("answer_token_length"))
+        print("Answer Character Length:", result.get("answer_char_length"))
+        print("-" * 100)
+        print("Context Preview:")
+        print(clean_preview)
+
+        if raw_answer != clean_answer and raw_answer != "":
+            print("-" * 100)
+            print("Raw Extracted Answer:")
+            print(raw_answer)
+
+        print()
+
+# Test improved brute-force QnA
+
+question = "What is the main idea of this document?"
+
+brute_force_results = brute_force_qa_over_chunks(
+    question=question,
+    chunks=chunks_data,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_n=5,
+    max_answer_tokens=40,
+    min_answer_chars=3,
+    max_answer_chars=400,
+    min_span_score=None,
+    keep_invalid=False,
+    show_progress=True
+)
+
+display_ranked_answers(brute_force_results)
+
+# Measure improved brute-force QnA time
+
+question = "What problem is discussed in the document?"
+
+start_time = time.time()
+
+brute_force_results = brute_force_qa_over_chunks(
+    question=question,
+    chunks=chunks_data,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_n=5,
+    max_answer_tokens=35,
+    min_answer_chars=3,
+    max_answer_chars=300,
+    min_span_score=None,
+    keep_invalid=False,
+    show_progress=True
+)
+
+end_time = time.time()
+
+print("Total chunks checked:", len(chunks_data))
+print("Time taken:", round(end_time - start_time, 2), "seconds")
+print()
+
+display_ranked_answers(brute_force_results)
+
+# Test multiple questions using improved brute-force QnA
+
+test_questions = [
+    "What is the main contribution of the document?",
+    "What method or model is discussed?",
+    "What are the limitations mentioned?",
+    "What results or findings are reported?"
+]
+
+all_brute_force_outputs = {}
+
+for q in test_questions:
+    print("\n" + "#" * 100)
+    print("Question:", q)
+    print("#" * 100)
+
+    results = brute_force_qa_over_chunks(
+        question=q,
+        chunks=chunks_data,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_n=3,
+        max_answer_tokens=35,
+        min_answer_chars=3,
+        max_answer_chars=300,
+        min_span_score=None,
+        keep_invalid=False,
+        show_progress=False
+    )
+
+    all_brute_force_outputs[q] = results
+
+    display_ranked_answers(results)
+
+# Create compact dataframe of brute-force results for inspection
+
+brute_force_rows = []
+
+for q, results in all_brute_force_outputs.items():
+    for rank, result in enumerate(results, start=1):
+        brute_force_rows.append({
+            "question": q,
+            "rank": rank,
+            "answer": result["answer"],
+            "span_score": result["span_score"],
+            "confidence": result["confidence"],
+            "page_number": result["page_number"],
+            "chunk_id": result["chunk_id"],
+            "status": result["status"]
+        })
+
+brute_force_summary_df = pd.DataFrame(brute_force_rows)
+
+brute_force_summary_df
+
+# optional debugging cell
+def brute_force_debug_table(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    tokenizer,
+    model,
+    device: str = "cpu",
+    max_answer_tokens: int = 35,
+    min_answer_chars: int = 2,
+    max_answer_chars: int = 300
+) -> pd.DataFrame:
+    """
+    Returns a dataframe of all chunk-level QnA outputs for debugging.
+    """
+
+    rows = []
+
+    for chunk in chunks:
+        result = qa_on_single_chunk(
+            question=question,
+            chunk=chunk,
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_answer_tokens=max_answer_tokens,
+            min_answer_chars=min_answer_chars,
+            max_answer_chars=max_answer_chars,
+            min_span_score=None
+        )
+
+        rows.append({
+            "chunk_id": result["chunk_id"],
+            "page_number": result["page_number"],
+            "answer": result["answer"],
+            "raw_answer": result["raw_answer"],
+            "span_score": result["span_score"],
+            "confidence": result["confidence"],
+            "status": result["status"],
+            "answer_char_length": result.get("answer_char_length"),
+            "context_preview": result["context_preview"]
+        })
+
+    debug_df = pd.DataFrame(rows)
+
+    debug_df = debug_df.sort_values(
+        by="span_score",
+        ascending=False
+    ).reset_index(drop=True)
+
+    return debug_df
+
+debug_df = brute_force_debug_table(
+    question="What is the main idea of this document?",
+    chunks=chunks_data,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    max_answer_tokens=35,
+    min_answer_chars=3,
+    max_answer_chars=300
+)
+
+debug_df.head(10)
+
+This completes the fast rebuild of the brute-force QnA baseline.
+
+Even after improving the answer-span selection, this approach still has a core limitation:
+
+```text
+The reader is forced to check every chunk.
+```
+For a small PDF, this may be acceptable.
+
+But for a large PDF or a collection of documents, this becomes expensive.
+
+Now we will move to the real new idea:
+```
+Can we search for the relevant chunks first,
+and then send only those chunks to the reader?
+```
+This creates the need for retrieval.
+
+---
+
+## Important Teaching Note
+
+This revised baseline is much better than the earlier naive version, but it still has one limitation:
+
+A BERT-style extractive reader usually tries to extract **some answer span** from the given context, even if the context is not actually relevant.
+
+That is why brute-force ranking can still sometimes produce strange answers.
+
+This is not only a coding issue.
+
+It is also an architectural issue.
+
+That is exactly why the next step is:
+
+```text
+Retriever first, Reader second.
+
+# Section 6: Why Brute-force QnA Is Not Scalable
+
+Until now, our system follows this flow:
+
+```text
+Question → Every Chunk → BERT Reader → Ranked Answers
+```
+This is called a brute-force QnA approach.
+
+It works because the reader checks every possible chunk.
+
+But this approach has a serious problem:
+```
+Most chunks are not relevant to the question.
+```
+Still, the reader model is forced to process all of them.
+
+For a small PDF, this may look fine.
+
+For a large PDF, a book, multiple research papers, or thousands of documents, this becomes slow and expensive.
+
+## The Core Problem
+
+Suppose a PDF is divided into `N` chunks.
+
+In brute-force QnA, for one question, the reader model must run on every chunk.
+
+So the total number of reader calls is:
+
+$$
+N
+$$
+
+If one reader call takes approximately:
+
+$$
+T_{\text{reader}}
+$$
+
+seconds, then total brute-force time is approximately:
+
+$$
+T_{\text{brute}} = N \times T_{\text{reader}}
+$$
+
+This means the time grows linearly with the number of chunks.
+
+If the document becomes 10 times larger, the brute-force QnA time also becomes roughly 10 times larger.
+
+## Why This Is Wasteful
+
+For a given question, usually only a few chunks contain useful information.
+
+Example:
+
+```text
+Question:
+"What are the limitations of the proposed method?"
+```
+Maybe only 2 or 3 chunks discuss limitations.
+
+But brute-force QnA still sends every chunk to the reader:
+```
+Chunk 1  → Reader
+Chunk 2  → Reader
+Chunk 3  → Reader
+...
+Chunk N  → Reader
+```
+This creates two problems:
+
+1. Speed problem
+
+- The system becomes slow as the number of chunks increases.
+
+2. Ranking problem
+
+- Since the reader is forced to extract answers from irrelevant chunks, some irrelevant chunks may still produce high-scoring but misleading answers.
+
+## Mathematical Framing
+
+The brute-force system has this cost:
+
+$$
+T_{\text{brute}} = N \times T_{\text{reader}}
+$$
+
+Where:
+
+- $N$ = number of chunks
+- $T_{\text{reader}}$ = time taken by the BERT-style reader on one chunk
+
+But if we first retrieve only the top-k relevant chunks, the cost becomes approximately:
+
+$$
+T_{\text{retrieval-based}} = T_{\text{retrieve}} + k \times T_{\text{reader}}
+$$
+
+Where:
+
+- $T_{\text{retrieve}}$ = time needed to search relevant chunks
+- $k$ = number of retrieved chunks
+- Usually, $k \ll N$
+
+So the goal is to move from:
+
+$$
+N \times T_{\text{reader}}
+$$
+
+to:
+
+$$
+T_{\text{retrieve}} + k \times T_{\text{reader}}
+$$
+
+This is the motivation for retrieval-based QnA.
+
+# Let us first inspect how many chunks we currently have.
+
+num_chunks = len(chunks_data)
+
+print("Number of chunks in current PDF:", num_chunks)
+
+Number of chunks in current PDF: 78
+
+def estimate_reader_time_per_chunk(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    tokenizer,
+    model,
+    device: str = "cpu",
+    sample_size: int = 5
+) -> float:
+    """
+    Estimates average reader time per chunk using a small sample.
+
+    We do not run on all chunks here because the purpose is only
+    to estimate the scaling behavior.
+    """
+
+    sample_size = min(sample_size, len(chunks))
+
+    sampled_chunks = chunks[:sample_size]
+
+    start_time = time.time()
+
+    for chunk in sampled_chunks:
+        _ = qa_on_single_chunk(
+            question=question,
+            chunk=chunk,
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_answer_tokens=35,
+            min_answer_chars=3,
+            max_answer_chars=300,
+            min_span_score=None
+        )
+
+    end_time = time.time()
+
+    avg_time = (end_time - start_time) / sample_size
+
+    return avg_time
+
+# Estimate average reader time per chunk
+
+scaling_question = "What is the main idea of this document?"
+
+avg_reader_time = estimate_reader_time_per_chunk(
+    question=scaling_question,
+    chunks=chunks_data,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    sample_size=5
+)
+
+print("Estimated average reader time per chunk:", round(avg_reader_time, 4), "seconds")
+
+Estimated average reader time per chunk: 0.022 seconds
+
+# Estimate brute-force QnA time as number of chunks increases
+
+hypothetical_chunk_counts = [10, 50, 100, 500, 1000, 5000, 10000]
+
+scaling_rows = []
+
+for n in hypothetical_chunk_counts:
+    estimated_time = n * avg_reader_time
+
+    scaling_rows.append({
+        "number_of_chunks": n,
+        "estimated_brute_force_time_seconds": estimated_time,
+        "estimated_brute_force_time_minutes": estimated_time / 60
+    })
+
+scaling_df = pd.DataFrame(scaling_rows)
+
+scaling_df
+
+# Compare brute-force reader calls with retrieval-based reader calls
+
+top_k_values = [3, 5, 10]
+
+comparison_rows = []
+
+for n in hypothetical_chunk_counts:
+    for k in top_k_values:
+        brute_force_reader_calls = n
+        retrieval_based_reader_calls = k
+
+        reduction_factor = brute_force_reader_calls / retrieval_based_reader_calls
+
+        comparison_rows.append({
+            "number_of_chunks": n,
+            "top_k_retrieved_chunks": k,
+            "brute_force_reader_calls": brute_force_reader_calls,
+            "retrieval_based_reader_calls": retrieval_based_reader_calls,
+            "reader_call_reduction_factor": reduction_factor
+        })
+
+retrieval_comparison_df = pd.DataFrame(comparison_rows)
+
+retrieval_comparison_df.head(15)
+
+# Focus on large document cases
+
+retrieval_comparison_df[
+    retrieval_comparison_df["number_of_chunks"].isin([1000, 5000, 10000])
+]
+
+## Observation / Interpretation
+
+From the scaling table, we can see the main issue.
+
+In brute-force QnA:
+
+```text
+Number of reader calls = Number of chunks
+```
+So if we have:
+```
+10,000 chunks
+```
+then the BERT-style reader runs:
+```
+10,000 times for one question
+```
+But in retrieval-based QnA, if we retrieve only the top 5 chunks, then the reader runs only:
+```
+5 times for one question
+```
+So the reader workload drops from:
+```
+10000
+```
+to:
+```
+5
+```
+This is not just a small improvement.
+
+It is an architectural improvement.
+
+The reader should not be responsible for searching the document.
+
+The reader should only read the most relevant chunks.
+
+## Important Realization
+
+The brute-force system mixes two different jobs:
+
+### Job 1: Search
+
+Find which chunks are relevant.
+
+### Job 2: Reading
+
+Extract the answer from the relevant chunk.
+
+In the brute-force system, the reader is indirectly doing both jobs.
+
+That is not ideal.
+
+So we separate the system into two components:
+
+```text
+Retriever → Reader
+```
+The retriever searches.
+
+The reader extracts.
+
+## New Architecture
+
+The improved flow is:
+
+```text
+Question
+   ↓
+Retriever
+   ↓
+Top-k Relevant Chunks
+   ↓
+BERT-style Reader
+   ↓
+Final Answer
+```
+In mathematical form:
+
+$$Retriever(q,D)→{c1, c2 ,…,ck}$$
+
+where:
+
+$q$ is the question
+$D$ is the document collection
+$c_1, c_2, \dots, c_k$ are the top-k retrieved chunks
+
+Then the reader works only on these retrieved chunks:
+
+$$Reader(q, ci)→Answer Span$$
+
+This is the foundation of retrieval-based document QnA.
+
+## Concept Check
+
+1. Why does brute-force QnA become slow for large documents?
+
+2. In brute-force QnA, how many chunks are passed to the reader?
+
+3. Why can irrelevant chunks still produce misleading answers?
+
+4. What is the role of the retriever?
+
+5. What is the role of the reader?
+
+6. Why is this architecture better?
+
+```text
+Retriever → Reader
+```
+
+## Instructor-Only Answers
+
+1. Brute-force QnA becomes slow because the reader model must process every chunk. If the number of chunks increases, the number of reader calls also increases.
+
+2. All chunks are passed to the reader.
+
+3. A BERT-style extractive reader tries to find an answer span inside the given context. If the context is irrelevant, the model may still extract a span that looks confident but is actually misleading.
+
+4. The retriever finds the chunks that are most relevant to the question.
+
+5. The reader extracts the exact answer span from the retrieved chunks.
+
+6. The architecture is better because the expensive reader model is applied only to a small number of relevant chunks instead of all chunks.
+
+## Bridge to Next Section
+
+Now we know why retrieval is needed.
+
+But the next question is:
+
+> How does a machine decide whether a chunk is relevant to a question?
+
+Keyword matching is not enough.
+
+For example:
+
+```text
+Question:
+"What are the disadvantages of the method?"
+```
+A relevant chunk may use the word:
+```
+limitations
+```
+instead of:
+```
+disadvantages
+```
+So we need semantic search.
+
+To perform semantic search, we convert both questions and chunks into numerical vectors called embeddings.
+
+In the next section, we will introduce text embeddings.
+
+# Section 7: Text Embeddings and Semantic Meaning
+
+Now we begin the core new idea of this notebook:
+
+```text
+Before answering, first search.
+```
+But to search intelligently, the machine should not depend only on exact keyword matching.
+
+For example:
+```
+Question:
+"What are the disadvantages of the method?"
+```
+A relevant chunk may say:
+```
+"The limitations of the proposed approach are..."
+```
+The words are different:
+```
+disadvantages ≠ limitations
+```
+But the meaning is similar.
+
+So we need a way to represent text based on meaning.
+
+That representation is called a text embedding.
+
+## Theory / Intuition
+
+A text embedding converts a piece of text into a numerical vector.
+
+```text
+Text → Embedding Vector
+```
+For example:
+
+"Transformer models use attention"
+
+may become a vector like:
+```
+[0.12, -0.44, 0.89, ..., 0.31]
+```
+The exact numbers are not directly interpretable by humans.
+
+But the useful idea is:
+```
+Texts with similar meaning should have embeddings close to each other.
+```
+
+So if two sentences are semantically similar, their vectors should point in similar directions.
+
+This allows us to search by meaning, not only by exact words.
+
+## Mathematical Framing
+
+Let a text embedding model be represented as:
+
+$$
+E(\cdot)
+$$
+
+If we have a chunk:
+
+$$
+c_i
+$$
+
+then its embedding is:
+
+$$
+\mathbf{v}_i = E(c_i)
+$$
+
+If we have a question:
+
+$$
+q
+$$
+
+then its embedding is:
+
+$$
+\mathbf{v}_q = E(q)
+$$
+
+Now the problem becomes:
+
+> Which chunk vector is closest to the question vector?
+
+So retrieval becomes a vector similarity problem:
+
+$$
+\text{Similarity}(\mathbf{v}_q, \mathbf{v}_i)
+$$
+
+The chunk with higher similarity to the question is considered more relevant.
+
+## Loading an Embedding Model
+
+For this notebook, we will use a Sentence Transformer model.
+
+The embedding model is different from the QnA reader.
+
+### Reader Model
+
+```text
+Question + Context → Answer Span
+```
+### Embedding Model
+```
+Text → Vector
+```
+The embedding model does not extract answers.
+
+It only converts text into numerical vectors so that we can compare meanings.
+
+# Load a sentence embedding model
+
+embedding_model_name = "sentence-transformers/all-MiniLM-L6-v2"
+
+embedding_model = SentenceTransformer(
+    embedding_model_name,
+    device=device
+)
+
+print("Embedding model loaded successfully:", embedding_model_name)
+
+modules.json:   0%|          | 0.00/349 [00:00<?, ?B/s]
+config_sentence_transformers.json:   0%|          | 0.00/116 [00:00<?, ?B/s]
+README.md:   0%|          | 0.00/10.5k [00:00<?, ?B/s]
+sentence_bert_config.json:   0%|          | 0.00/53.0 [00:00<?, ?B/s]
+config.json:   0%|          | 0.00/612 [00:00<?, ?B/s]
+model.safetensors:   0%|          | 0.00/90.9M [00:00<?, ?B/s]
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]
+tokenizer_config.json:   0%|          | 0.00/350 [00:00<?, ?B/s]
+vocab.txt:   0%|          | 0.00/232k [00:00<?, ?B/s]
+tokenizer.json:   0%|          | 0.00/466k [00:00<?, ?B/s]
+special_tokens_map.json:   0%|          | 0.00/112 [00:00<?, ?B/s]
+config.json:   0%|          | 0.00/190 [00:00<?, ?B/s]
+Embedding model loaded successfully: sentence-transformers/all-MiniLM-L6-v2
+
+# Let us test embeddings on a few sentences
+
+sample_sentences = [
+    "The model has several limitations.",
+    "The method has some disadvantages.",
+    "The cat is sleeping on the sofa.",
+    "The results show strong performance."
+]
+
+sample_embeddings = embedding_model.encode(
+    sample_sentences,
+    convert_to_numpy=True
+)
+
+print("Number of sentences:", len(sample_sentences))
+print("Embedding shape:", sample_embeddings.shape)
+
+Number of sentences: 4
+Embedding shape: (4, 384)
+
+## Observation / Interpretation
+
+The output shape tells us:
+
+```text
+(number of texts, embedding dimension)
+```
+For example, if the shape is:
+```
+(4, 384)
+```
+it means:
+```
+We embedded 4 sentences
+Each sentence became a 384-dimensional vector
+```
+So each sentence is now represented as a point in a high-dimensional vector space.
+
+# Display first few values of one embedding vector
+
+sentence_index = 0
+
+print("Sentence:")
+print(sample_sentences[sentence_index])
+
+print("\nFirst 10 embedding values:")
+print(sample_embeddings[sentence_index][:10])
+
+Sentence:
+The model has several limitations.
+
+First 10 embedding values:
+[ 0.01429604 -0.06442102  0.00585941 -0.01249957  0.02099606  0.01488962
+ -0.1789561   0.05105584 -0.01091906 -0.00965533]
+
+## Why Embeddings Help Retrieval
+
+Suppose we ask:
+
+```text
+"What are the disadvantages of the method?"
+```
+A keyword-based system may search for the exact word:
+```
+disadvantages
+```
+But if the document uses:
+```
+limitations
+```
+then keyword search may miss the relevant chunk.
+
+Embeddings help because they capture semantic closeness.
+
+So the question:
+```
+"What are the disadvantages of the method?"
+```
+can still be close to a chunk saying:
+```
+"The limitations of the proposed approach are..."
+```
+This is the foundation of semantic search.
+
+## Concept Check
+
+1. What is a text embedding?
+
+2. Why are embeddings useful for document search?
+
+3. Is an embedding model the same as a QnA reader model?
+
+4. What does it mean when two embeddings are close to each other?
+
+5. Why can embeddings work better than exact keyword matching?
+
+## Instructor-Only Answers
+
+1. A text embedding is a numerical vector representation of text.
+
+2. Embeddings are useful because they allow us to compare text based on meaning rather than only exact words.
+
+3. No. An embedding model converts text into vectors. A QnA reader extracts an answer span from a given context.
+
+4. If two embeddings are close, it usually means the corresponding texts are semantically similar.
+
+5. Embeddings can capture related meanings. For example, "limitations" and "disadvantages" may be close in embedding space even though the exact words are different.
+
+## Bridge to Next Section
+
+Now we know how text can be converted into vectors.
+
+But we still need a way to compare two vectors.
+
+The next question is:
+
+> How do we measure whether the question embedding is close to a chunk embedding?
+
+For that, we will use **cosine similarity**.
+
+In the next section, we will manually compute cosine similarity and use it to compare meanings.
+
+# Section 8: Cosine Similarity for Comparing Text Embeddings
+
+In the previous section, we learned that an embedding model converts text into vectors.
+
+Now we need one important tool:
+
+**How do we compare two vectors?**
+
+For retrieval, we want to compare:
+
+- Question embedding
+- Chunk embedding
+
+The goal is to find which chunk is closest in meaning to the question.
+
+For this, we will use **cosine similarity**.
+
+## Theory / Intuition
+
+Suppose two vectors point in almost the same direction.
+
+That usually means they are similar.
+
+Suppose two vectors point in very different directions.
+
+That usually means they are less similar.
+
+Cosine similarity measures the angle between two vectors.
+
+Important intuition:
+
+- Same direction means high similarity
+- Different direction means low similarity
+- Opposite direction means negative similarity
+
+In semantic search, we usually care about direction more than raw vector length.
+
+That is why cosine similarity is commonly used with text embeddings.
+
+## Mathematical Framing
+
+Let the question embedding be:
+
+$$
+\mathbf{v}_q
+$$
+
+Let the embedding of chunk $i$ be:
+
+$$
+\mathbf{v}_i
+$$
+
+The cosine similarity between them is:
+
+$$
+\cos(\theta)
+=
+\frac{
+\mathbf{v}_q \cdot \mathbf{v}_i
+}{
+\|\mathbf{v}_q\| \|\mathbf{v}_i\|
+}
+$$
+
+Where:
+
+- $\mathbf{v}_q \cdot \mathbf{v}_i$ is the dot product
+- $\|\mathbf{v}_q\|$ is the length of the question vector
+- $\|\mathbf{v}_i\|$ is the length of the chunk vector
+
+Higher cosine similarity means the question and chunk are more semantically related.
+
+def cosine_similarity_np(vec_a: np.ndarray, vec_b: np.ndarray, eps: float = 1e-10) -> float:
+    """
+    Computes cosine similarity between two vectors using NumPy.
+
+    Args:
+        vec_a:
+            First vector.
+        vec_b:
+            Second vector.
+        eps:
+            Small value to avoid division by zero.
+
+    Returns:
+        Cosine similarity score.
+    """
+
+    vec_a = np.asarray(vec_a)
+    vec_b = np.asarray(vec_b)
+
+    numerator = np.dot(vec_a, vec_b)
+    denominator = np.linalg.norm(vec_a) * np.linalg.norm(vec_b)
+
+    similarity = numerator / (denominator + eps)
+
+    return float(similarity)
+
+# Test cosine similarity on simple vectors
+
+vec_1 = np.array([1, 0])
+vec_2 = np.array([1, 0])
+vec_3 = np.array([0, 1])
+vec_4 = np.array([-1, 0])
+
+print("Similarity between same direction vectors:", cosine_similarity_np(vec_1, vec_2))
+print("Similarity between perpendicular vectors:", cosine_similarity_np(vec_1, vec_3))
+print("Similarity between opposite direction vectors:", cosine_similarity_np(vec_1, vec_4))
+
+Similarity between same direction vectors: 0.9999999999
+Similarity between perpendicular vectors: 0.0
+Similarity between opposite direction vectors: -0.9999999999
+
+## Observation / Interpretation
+
+For simple 2D vectors:
+
+- Similarity close to $1$ means same direction
+- Similarity close to $0$ means unrelated direction
+- Similarity close to $-1$ means opposite direction
+
+For text embeddings, we usually interpret higher cosine similarity as stronger semantic similarity.
+
+However, we should not treat cosine similarity as perfect understanding.
+
+It is a useful retrieval signal, not a final answer.
+
+## Semantic Similarity Example
+
+Now let us compare a question with multiple candidate sentences.
+
+We will check whether embeddings understand that:
+
+$$
+\text{disadvantages}
+$$
+
+and
+
+$$
+\text{limitations}
+$$
+
+are semantically related.
+
+query = "What are the disadvantages of the method?"
+
+candidate_texts = [
+    "The limitations of the proposed approach are discussed in this section.",
+    "The model achieves strong performance on several benchmark datasets.",
+    "The cat is sleeping on the sofa.",
+    "The method has some weaknesses when applied to noisy data.",
+    "The paper introduces a new training strategy."
+]
+
+query_embedding = embedding_model.encode(
+    query,
+    convert_to_numpy=True
+)
+
+candidate_embeddings = embedding_model.encode(
+    candidate_texts,
+    convert_to_numpy=True
+)
+
+print("Query embedding shape:", query_embedding.shape)
+print("Candidate embeddings shape:", candidate_embeddings.shape)
+
+Query embedding shape: (384,)
+Candidate embeddings shape: (5, 384)
+
+similarity_rows = []
+
+for text, emb in zip(candidate_texts, candidate_embeddings):
+    similarity = cosine_similarity_np(query_embedding, emb)
+
+    similarity_rows.append({
+        "query": query,
+        "candidate_text": text,
+        "cosine_similarity": similarity
+    })
+
+similarity_df = pd.DataFrame(similarity_rows)
+
+similarity_df = similarity_df.sort_values(
+    by="cosine_similarity",
+    ascending=False
+).reset_index(drop=True)
+
+similarity_df
+
+## Observation / Interpretation
+
+The most relevant sentences should receive higher cosine similarity scores.
+
+Notice the important idea:
+
+A sentence can be relevant even if it does not repeat the exact same words from the question.
+
+For example:
+
+- Question uses: disadvantages
+- Sentence uses: limitations
+- Sentence uses: weaknesses
+
+A keyword system may miss this.
+
+But an embedding-based system can still detect semantic closeness.
+
+This is why embeddings are useful for retrieval-based QnA.
+
+## Vector Search View
+
+Now we can think of each chunk as a vector.
+
+Suppose we have document chunks:
+
+$$
+c_1, c_2, c_3, \dots, c_N
+$$
+
+Their embeddings are:
+
+$$
+\mathbf{v}_1, \mathbf{v}_2, \mathbf{v}_3, \dots, \mathbf{v}_N
+$$
+
+For a question $q$, we compute:
+
+$$
+\mathbf{v}_q = E(q)
+$$
+
+Then we calculate:
+
+$$
+\text{score}_i =
+\cos(\mathbf{v}_q, \mathbf{v}_i)
+$$
+
+Finally, we rank chunks by:
+
+$$
+\text{score}_i
+$$
+
+The highest-scoring chunks are the most relevant chunks.
+
+# Let us compute cosine similarity between one question and the first few PDF chunks.
+
+question = "What is the main idea of this document?"
+
+question_embedding = embedding_model.encode(
+    question,
+    convert_to_numpy=True
+)
+
+sample_chunks = chunks_data[:10]
+
+sample_chunk_texts = [
+    chunk["chunk_text"]
+    for chunk in sample_chunks
+]
+
+sample_chunk_embeddings = embedding_model.encode(
+    sample_chunk_texts,
+    convert_to_numpy=True
+)
+
+sample_similarity_rows = []
+
+for chunk, chunk_embedding in zip(sample_chunks, sample_chunk_embeddings):
+    similarity = cosine_similarity_np(question_embedding, chunk_embedding)
+
+    sample_similarity_rows.append({
+        "chunk_id": chunk["chunk_id"],
+        "page_number": chunk["page_number"],
+        "cosine_similarity": similarity,
+        "preview": chunk["preview"]
+    })
+
+sample_similarity_df = pd.DataFrame(sample_similarity_rows)
+
+sample_similarity_df = sample_similarity_df.sort_values(
+    by="cosine_similarity",
+    ascending=False
+).reset_index(drop=True)
+
+sample_similarity_df
+
+## Observation / Interpretation
+
+Now we are no longer asking the BERT reader to process every chunk.
+
+At this stage, we are only comparing vectors.
+
+This is much cheaper than running extractive QnA on every chunk.
+
+However, in this section we tested only a few chunks.
+
+In the next section, we will compute embeddings for all chunks and retrieve the top-k most relevant chunks.
+
+## Important Distinction
+
+Cosine similarity does not extract the answer.
+
+It only tells us:
+
+> Which chunk is likely to be relevant to the question?
+
+So cosine similarity belongs to the **retriever** side.
+
+The BERT-style QnA model belongs to the **reader** side.
+
+The retriever finds the room.
+
+The reader finds the exact sentence or phrase inside the room.
+
+## Concept Check
+
+1. What does cosine similarity measure?
+
+2. Why do we use cosine similarity with embeddings?
+
+3. If two text embeddings have high cosine similarity, what does it usually mean?
+
+4. Does cosine similarity extract the final answer?
+
+5. In Retriever + Reader architecture, cosine similarity belongs to which part?
+
+## Instructor-Only Answers
+
+1. Cosine similarity measures the directional similarity between two vectors.
+
+2. We use it because embeddings represent meaning as vectors, and cosine similarity helps compare how close two meanings are.
+
+3. It usually means the two texts are semantically related.
+
+4. No. Cosine similarity only gives a relevance score. It does not extract the answer.
+
+5. Cosine similarity belongs to the retriever part because it helps find relevant chunks.
+
+## Bridge to Next Section
+
+Now we know how to compare a question embedding with chunk embeddings.
+
+The next step is to use this idea for actual retrieval.
+
+We will build a function that:
+
+1. Takes a question
+2. Converts the question into an embedding
+3. Compares it with all chunk embeddings
+4. Ranks chunks by cosine similarity
+5. Returns the top-k most relevant chunks
+
+This will give us our first manual semantic retriever.
+
+# Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity
+
+Now we will build our first retriever.
+
+This retriever will not use FAISS yet.
+
+It will work manually using:
+
+```text
+Chunk Embeddings + Question Embedding + Cosine Similarity
+```
+The flow is:
+```
+PDF Chunks
+   ↓
+Chunk Embeddings
+   ↓
+User Question
+   ↓
+Question Embedding
+   ↓
+Cosine Similarity with Every Chunk
+   ↓
+Top-k Relevant Chunks
+```
+This is our first retrieval-based step.
+
+## Theory / Intuition
+
+In brute-force QnA, we sent every chunk to the BERT reader.
+
+But now we will first ask:
+```
+Which chunks are most relevant to the question?
+```
+To answer this, we will convert every chunk into an embedding vector.
+
+Then, for a given question, we will also create a question embedding.
+
+Finally, we will compare the question embedding with every chunk embedding using cosine similarity.
+
+The chunks with the highest similarity scores will be selected as the retrieved chunks.
+
+## Mathematical Framing
+
+Let the document be divided into chunks:
+
+$$
+c_1, c_2, c_3, \dots, c_N
+$$
+
+Each chunk is converted into an embedding:
+
+$$
+\mathbf{v}_i = E(c_i)
+$$
+
+The question is also converted into an embedding:
+
+$$
+\mathbf{v}_q = E(q)
+$$
+
+Now we compute similarity between the question and every chunk:
+
+$$
+s_i = \cos(\mathbf{v}_q, \mathbf{v}_i)
+$$
+
+Then we rank the chunks:
+
+$$
+s_{i_1} \geq s_{i_2} \geq s_{i_3} \geq \dots
+$$
+
+The top-k chunks are returned:
+
+$$
+\{c_{i_1}, c_{i_2}, \dots, c_{i_k}\}
+$$
+
+These are the chunks that will later be sent to the reader.
+
+## Step 1: Create Embeddings for All Chunks
+
+We will now create embeddings for every chunk in the PDF.
+
+This is usually done once after chunking.
+
+After this step, each chunk will have a vector representation.
+
+# Extract chunk texts
+
+chunk_texts = [
+    chunk["chunk_text"]
+    for chunk in chunks_data
+]
+
+print("Total chunks to embed:", len(chunk_texts))
+
+Total chunks to embed: 78
+
+# Create embeddings for all chunks
+
+start_time = time.time()
+
+chunk_embeddings = embedding_model.encode(
+    chunk_texts,
+    convert_to_numpy=True,
+    show_progress_bar=True
+)
+
+end_time = time.time()
+
+print("Chunk embeddings created successfully.")
+print("Chunk embeddings shape:", chunk_embeddings.shape)
+print("Time taken:", round(end_time - start_time, 2), "seconds")
+
+Batches:   0%|          | 0/3 [00:00<?, ?it/s]
+Chunk embeddings created successfully.
+Chunk embeddings shape: (78, 384)
+Time taken: 0.32 seconds
+
+# Safety checks
+
+assert len(chunk_embeddings) == len(chunks_data), "Number of embeddings must match number of chunks."
+
+print("Number of chunks:", len(chunks_data))
+print("Number of chunk embeddings:", len(chunk_embeddings))
+print("Embedding dimension:", chunk_embeddings.shape[1])
+
+Number of chunks: 78
+Number of chunk embeddings: 78
+Embedding dimension: 384
+
+## Observation / Interpretation
+
+The shape of `chunk_embeddings` is:
+
+```text
+(number_of_chunks, embedding_dimension)
+```
+For example:
+```
+(120, 384)
+```
+means:
+
+- There are 120 chunks
+- Each chunk is represented using a 384-dimensional vector
+
+Now our PDF chunks are no longer only text.
+
+They are searchable vectors.
+
+## Step 2: Build Manual Top-k Retriever
+
+Now we will build a function that takes a question and returns the most relevant chunks.
+
+The function will:
+
+1. Convert the question into an embedding
+2. Compare it with all chunk embeddings
+3. Compute cosine similarity scores
+4. Sort chunks by similarity
+5. Return the top-k chunks with metadata
+
+def manual_semantic_retrieve(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    chunk_embeddings: np.ndarray,
+    embedding_model,
+    top_k: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves top-k relevant chunks using manual cosine similarity.
+
+    Args:
+        question:
+            User question.
+
+        chunks:
+            List of chunk dictionaries with metadata.
+
+        chunk_embeddings:
+            NumPy array of chunk embeddings.
+
+        embedding_model:
+            SentenceTransformer embedding model.
+
+        top_k:
+            Number of relevant chunks to retrieve.
+
+    Returns:
+        List of retrieved chunk dictionaries with similarity scores.
+    """
+
+    if len(chunks) == 0:
+        return []
+
+    if len(chunks) != len(chunk_embeddings):
+        raise ValueError("chunks and chunk_embeddings must have the same length.")
+
+    top_k = min(top_k, len(chunks))
+
+    # Embed the question
+    question_embedding = embedding_model.encode(
+        question,
+        convert_to_numpy=True
+    )
+
+    # Compute cosine similarity with every chunk
+    similarity_scores = []
+
+    for idx, chunk_embedding in enumerate(chunk_embeddings):
+        similarity = cosine_similarity_np(
+            question_embedding,
+            chunk_embedding
+        )
+
+        similarity_scores.append({
+            "chunk_index": idx,
+            "cosine_similarity": similarity
+        })
+
+    # Sort by similarity score
+    similarity_scores = sorted(
+        similarity_scores,
+        key=lambda x: x["cosine_similarity"],
+        reverse=True
+    )
+
+    # Select top-k chunks
+    top_results = []
+
+    for item in similarity_scores[:top_k]:
+        chunk_index = item["chunk_index"]
+        chunk = chunks[chunk_index]
+
+        retrieved_chunk = {
+            "question": question,
+            "rank": len(top_results) + 1,
+            "chunk_index": chunk_index,
+            "chunk_id": chunk["chunk_id"],
+            "page_number": chunk["page_number"],
+            "chunk_text": chunk["chunk_text"],
+            "preview": clean_text(chunk["preview"]),
+            "word_count": chunk["word_count"],
+            "cosine_similarity": item["cosine_similarity"]
+        }
+
+        top_results.append(retrieved_chunk)
+
+    return top_results
+
+def display_retrieved_chunks(retrieved_chunks: List[Dict[str, Any]]):
+    """
+    Displays retrieved chunks in a readable format.
+    """
+
+    if len(retrieved_chunks) == 0:
+        print("No chunks retrieved.")
+        return
+
+    for item in retrieved_chunks:
+        print("=" * 100)
+        print("Rank:", item["rank"])
+        print("Cosine Similarity:", round(item["cosine_similarity"], 4))
+        print("Page Number:", item["page_number"])
+        print("Chunk ID:", item["chunk_id"])
+        print("Word Count:", item["word_count"])
+        print("-" * 100)
+        print("Preview:")
+        print(item["preview"])
+        print()
+
+## Step 3: Test Manual Semantic Retrieval
+
+Now we will ask a question and retrieve the most relevant chunks.
+
+At this stage, we are not extracting the final answer.
+
+We are only searching for relevant chunks.
+
+retrieval_question = "What full form of BERT?"
+
+retrieved_chunks = manual_semantic_retrieve(
+    question=retrieval_question,
+    chunks=chunks_data,
+    chunk_embeddings=chunk_embeddings,
+    embedding_model=embedding_model,
+    top_k=5
+)
+
+display_retrieved_chunks(retrieved_chunks)
+
+## Observation / Interpretation
+
+The retrieved chunks are ranked by cosine similarity.
+
+A higher cosine similarity means the chunk is more semantically related to the question.
+
+At this point, the system has not used the BERT reader.
+
+So the output is not an answer yet.
+
+The output is:
+
+```text
+Most relevant chunks
+```
+This is the retriever's job.
+
+## Step 4: Compare Retrieval for Multiple Questions
+
+Now we will test whether different questions retrieve different chunks.
+
+This is important because the retriever should adapt to the question.
+
+A question about limitations should retrieve limitation-related chunks.
+
+A question about results should retrieve result-related chunks.
+
+A question about method should retrieve method-related chunks.
+
+retrieval_test_questions = [
+    "What is the main contribution of the document?",
+    "What method or model is discussed?",
+    "What are the limitations mentioned?",
+    "What results or findings are reported?"
+]
+
+for q in retrieval_test_questions:
+    print("\n" + "#" * 100)
+    print("Question:", q)
+    print("#" * 100)
+
+    retrieved_chunks = manual_semantic_retrieve(
+        question=q,
+        chunks=chunks_data,
+        chunk_embeddings=chunk_embeddings,
+        embedding_model=embedding_model,
+        top_k=3
+    )
+
+    display_retrieved_chunks(retrieved_chunks)
+
+## Step 5: Create a Retrieval Summary Table
+
+For easier inspection, we will create a compact dataframe of retrieved chunks.
+
+This is useful during debugging because we can quickly check:
+
+- Which chunk was retrieved?
+- From which page?
+- What was the similarity score?
+- Does the preview look relevant?
+
+def retrieval_summary_table(
+    question: str,
+    retrieved_chunks: List[Dict[str, Any]]
+) -> pd.DataFrame:
+    """
+    Creates a compact dataframe for retrieved chunks.
+    """
+
+    rows = []
+
+    for item in retrieved_chunks:
+        rows.append({
+            "question": question,
+            "rank": item["rank"],
+            "cosine_similarity": item["cosine_similarity"],
+            "page_number": item["page_number"],
+            "chunk_id": item["chunk_id"],
+            "preview": item["preview"]
+        })
+
+    return pd.DataFrame(rows)
+
+retrieval_question = "What are the limitations mentioned?"
+
+retrieved_chunks = manual_semantic_retrieve(
+    question=retrieval_question,
+    chunks=chunks_data,
+    chunk_embeddings=chunk_embeddings,
+    embedding_model=embedding_model,
+    top_k=5
+)
+
+retrieval_df = retrieval_summary_table(
+    question=retrieval_question,
+    retrieved_chunks=retrieved_chunks
+)
+
+retrieval_df
+
+## Important Teaching Distinction
+
+Manual semantic retrieval gives us:
+
+```text
+Question → Top-k Relevant Chunks
+```
+It does not give:
+```
+Question → Final Answer
+```
+So after retrieval, we still need the BERT-style reader.
+
+The retriever reduces the search space.
+
+The reader extracts the answer span.
+
+## Concept Check
+
+1. What is the input to the manual semantic retriever?
+
+2. What is the output of the manual semantic retriever?
+
+3. Why do we create embeddings for all chunks before asking questions?
+
+4. Why is the question also converted into an embedding?
+
+5. Does the retriever extract the final answer?
+
+6. Why do we retrieve top-k chunks instead of only the top-1 chunk?
+
+## Instructor-Only Answers
+
+1. The input is a question, document chunks, chunk embeddings, and an embedding model.
+
+2. The output is a ranked list of relevant chunks with cosine similarity scores and metadata.
+
+3. We create chunk embeddings first so that the document becomes searchable in vector form.
+
+4. The question is converted into an embedding so that it can be compared with chunk embeddings.
+
+5. No. The retriever only finds relevant chunks. It does not extract the final answer.
+
+6. We retrieve top-k chunks because the top-1 chunk may not always contain the exact answer. Keeping multiple relevant chunks improves the chance that the reader receives the correct context.
+
+## Bridge to Next Section
+
+We have now built our first semantic retriever.
+
+The current flow is:
+
+```text
+Question → Question Embedding → Compare with Chunk Embeddings → Top-k Chunks
+```
+But this is still a manual search.
+
+For every question, we loop through all chunk embeddings and compute cosine similarity one by one.
+
+This is fine for a small PDF.
+
+But for large documents or many documents, manual search becomes inefficient.
+
+The next question is:
+```
+Can we make vector search faster and more scalable?
+```
+
+This is where FAISS will enter.
+
+But before jumping into FAISS, we will first combine our manual retriever with the BERT reader.
+
+That will help students clearly see the complete Retriever + Reader idea before optimizing retrieval.
+
+# Section 10: Combine Manual Retriever with BERT Reader
+
+Now we will build our first complete **Retriever + Reader** pipeline.
+
+Until now, we have built two separate components:
+
+### 1. Retriever
+
+The retriever finds relevant chunks.
+
+```text
+Question → Top-k Relevant Chunks
+```
+### 2. Reader
+
+The reader extracts an answer span from a given chunk.
+
+Question + Chunk → Answer Span
+
+Now we will combine both.
+
+The new flow is:
+```
+Question
+   ↓
+Manual Semantic Retriever
+   ↓
+Top-k Relevant Chunks
+   ↓
+BERT-style Reader
+   ↓
+Ranked Answers
+   ↓
+Final Answer
+```
+This is the first working version of retrieval-based document QnA.
+
+## Theory / Intuition
+
+In brute-force QnA, the reader checked every chunk:
+
+```text
+Question → All Chunks → Reader
+```
+But now we first retrieve only the most relevant chunks:
+```
+Question → Top-k Chunks → Reader
+```
+This means the reader does not waste time on the entire document.
+
+Instead, the reader focuses only on the chunks that are likely to contain the answer.
+
+This gives us a cleaner architecture:
+```
+Retriever searches.
+Reader extracts.
+```
+
+## Mathematical Framing
+
+Let the question be:
+
+$$
+q
+$$
+
+Let the document chunks be:
+
+$$
+c_1, c_2, c_3, \dots, c_N
+$$
+
+The retriever returns the top-k relevant chunks:
+
+$$
+R(q) = \{c_{i_1}, c_{i_2}, \dots, c_{i_k}\}
+$$
+
+Then the reader is applied only on these retrieved chunks:
+
+$$
+\text{Reader}(q, c_{i_j}) \rightarrow a_j
+$$
+
+where:
+
+- $c_{i_j}$ is a retrieved chunk
+- $a_j$ is the answer span extracted from that chunk
+
+Finally, we rank the answer candidates and select the best one:
+
+$$
+a^* = \arg\max_j \text{Score}(a_j)
+$$
+
+## Version 1: Simple and Explainable `retrieve_then_answer()`
+
+First, we will build a simple version.
+
+This version will:
+
+1. Retrieve top-k relevant chunks using cosine similarity.
+2. Run the BERT-style reader on each retrieved chunk.
+3. Rank answers using reader span score.
+4. Return the best answer and source metadata.
+
+This version is easy to understand and is useful for teaching the basic Retriever + Reader architecture.
+
+def retrieve_then_answer_simple(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    chunk_embeddings: np.ndarray,
+    embedding_model,
+    tokenizer,
+    model,
+    device: str = "cpu",
+    top_k: int = 5,
+    max_answer_tokens: int = 40,
+    min_answer_chars: int = 10,
+    max_answer_chars: int = 400
+) -> Dict[str, Any]:
+    """
+    Simple Retriever + Reader pipeline.
+
+    Steps:
+    1. Retrieve top-k chunks using manual semantic retrieval.
+    2. Run extractive QnA reader on each retrieved chunk.
+    3. Rank answer candidates using reader span_score.
+    4. Return best answer with source metadata.
+    """
+
+    # Step 1: Retrieve top-k chunks
+    retrieved_chunks = manual_semantic_retrieve(
+        question=question,
+        chunks=chunks,
+        chunk_embeddings=chunk_embeddings,
+        embedding_model=embedding_model,
+        top_k=top_k
+    )
+
+    answer_candidates = []
+
+    # Step 2: Run reader on each retrieved chunk
+    for retrieved_chunk in retrieved_chunks:
+
+        chunk_for_reader = {
+            "chunk_id": retrieved_chunk["chunk_id"],
+            "page_number": retrieved_chunk["page_number"],
+            "chunk_text": retrieved_chunk["chunk_text"],
+            "preview": retrieved_chunk["preview"],
+            "word_count": retrieved_chunk["word_count"],
+            "character_count": len(retrieved_chunk["chunk_text"])
+        }
+
+        reader_result = qa_on_single_chunk(
+            question=question,
+            chunk=chunk_for_reader,
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_answer_tokens=max_answer_tokens,
+            min_answer_chars=min_answer_chars,
+            max_answer_chars=max_answer_chars,
+            min_span_score=None
+        )
+
+        candidate = {
+            "question": question,
+            "answer": reader_result["answer"],
+            "raw_answer": reader_result["raw_answer"],
+            "reader_span_score": reader_result["span_score"],
+            "reader_confidence": reader_result["confidence"],
+            "reader_status": reader_result["status"],
+            "retrieval_rank": retrieved_chunk["rank"],
+            "retrieval_score": retrieved_chunk["cosine_similarity"],
+            "chunk_id": retrieved_chunk["chunk_id"],
+            "page_number": retrieved_chunk["page_number"],
+            "context_preview": retrieved_chunk["preview"],
+            "chunk_text": retrieved_chunk["chunk_text"]
+        }
+
+        answer_candidates.append(candidate)
+
+    # Step 3: Keep only valid reader outputs
+    valid_candidates = [
+        candidate
+        for candidate in answer_candidates
+        if candidate["reader_status"] == "valid_answer"
+    ]
+
+    if len(valid_candidates) == 0:
+        return {
+            "question": question,
+            "answer": "",
+            "status": "no_valid_answer",
+            "reason": "Retriever returned chunks, but reader could not extract a valid answer.",
+            "best_candidate": None,
+            "all_candidates": answer_candidates,
+            "retrieved_chunks": retrieved_chunks
+        }
+
+    # Step 4: Rank by reader span score
+    valid_candidates = sorted(
+        valid_candidates,
+        key=lambda x: x["reader_span_score"],
+        reverse=True
+    )
+
+    best_candidate = valid_candidates[0]
+
+    return {
+        "question": question,
+        "answer": best_candidate["answer"],
+        "status": "valid_answer",
+        "reason": "Answer extracted from retrieved chunks.",
+        "best_candidate": best_candidate,
+        "all_candidates": valid_candidates,
+        "retrieved_chunks": retrieved_chunks
+    }
+
+def display_retrieve_then_answer_output(output: Dict[str, Any]):
+    """
+    Displays the final output of retrieve_then_answer function.
+    """
+
+    print("=" * 100)
+    print("Question:")
+    print(output["question"])
+    print("=" * 100)
+
+    print("Status:", output["status"])
+    print("Reason:", output["reason"])
+    print()
+
+    print("Final Answer:")
+    print(output["answer"])
+    print()
+
+    best_candidate = output.get("best_candidate")
+
+    if best_candidate is not None:
+        print("-" * 100)
+        print("Best Source")
+        print("Page Number:", best_candidate["page_number"])
+        print("Chunk ID:", best_candidate["chunk_id"])
+        print("Retrieval Rank:", best_candidate["retrieval_rank"])
+        print("Retrieval Score:", round(best_candidate["retrieval_score"], 4))
+        print("Reader Span Score:", round(best_candidate["reader_span_score"], 4))
+        print("Reader Confidence:", round(best_candidate["reader_confidence"], 6))
+        print("-" * 100)
+        print("Context Preview:")
+        print(best_candidate["context_preview"])
+
+# Test simple Retriever + Reader pipeline
+
+question = "What is the main idea of this document?"
+
+simple_output = retrieve_then_answer_simple(
+    question=question,
+    chunks=chunks_data,
+    chunk_embeddings=chunk_embeddings,
+    embedding_model=embedding_model,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=5
+)
+
+display_retrieve_then_answer_output(simple_output)
+
+# Inspect all answer candidates from retrieved chunks
+
+simple_candidates_df = pd.DataFrame([
+    {
+        "retrieval_rank": candidate["retrieval_rank"],
+        "retrieval_score": candidate["retrieval_score"],
+        "reader_span_score": candidate["reader_span_score"],
+        "reader_confidence": candidate["reader_confidence"],
+        "answer": candidate["answer"],
+        "page_number": candidate["page_number"],
+        "chunk_id": candidate["chunk_id"],
+        "reader_status": candidate["reader_status"]
+    }
+    for candidate in simple_output["all_candidates"]
+])
+
+simple_candidates_df
+
+## Observation / Interpretation
+
+The simple pipeline now gives us a complete retrieval-based QnA system.
+
+The flow is:
+
+```text
+Question → Retrieve Top-k Chunks → Reader Extracts Answer → Final Answer
+```
+This is already better than brute-force QnA because the reader is applied only to a few retrieved chunks.
+
+However, this simple version still has one limitation:
+```
+It ranks final answers only using the reader span score.
+```
+But in retrieval-based QnA, we should also care about how relevant the chunk was.
+
+A candidate answer from a highly relevant chunk should usually be trusted more than a candidate answer from a weakly retrieved chunk.
+
+So now we will build a better version.
+
+## Version 2: Better `retrieve_then_answer()` with Combined Scoring
+
+In the simple version, final ranking used only:
+
+$$
+\text{reader span score}
+$$
+
+But a more practical system should consider both:
+
+$$
+\text{retrieval score}
+$$
+
+and
+
+$$
+\text{reader score}
+$$
+
+So we will create a combined score:
+
+$$
+\text{final score}
+=
+\alpha \cdot \text{normalized retrieval score}
++
+(1-\alpha) \cdot \text{normalized reader score}
+$$
+
+where:
+
+- $\alpha$ controls how much importance we give to retrieval.
+- $1-\alpha$ controls how much importance we give to the reader.
+
+This is still a simple scoring strategy, but it is closer to how real systems think about multiple signals.
+
+def min_max_normalize(values: List[float], eps: float = 1e-10) -> List[float]:
+    """
+    Min-max normalizes a list of values into the range [0, 1].
+    """
+
+    if len(values) == 0:
+        return []
+
+    values = np.array(values, dtype=np.float32)
+
+    min_value = np.min(values)
+    max_value = np.max(values)
+
+    normalized = (values - min_value) / (max_value - min_value + eps)
+
+    return normalized.tolist()
+
+def retrieve_then_answer(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    chunk_embeddings: np.ndarray,
+    embedding_model,
+    tokenizer,
+    model,
+    device: str = "cpu",
+    top_k: int = 5,
+    alpha: float = 0.40,
+    max_answer_tokens: int = 40,
+    min_answer_chars: int = 10,
+    max_answer_chars: int = 400,
+    min_retrieval_score: Optional[float] = None,
+    return_debug: bool = True
+) -> Dict[str, Any]:
+    """
+    Better Retriever + Reader pipeline.
+
+    Improvements over the simple version:
+    - Uses both retrieval score and reader score.
+    - Normalizes scores before combining.
+    - Allows optional retrieval threshold.
+    - Preserves metadata for debugging.
+    - Returns retrieved chunks and answer candidates.
+    """
+
+    if not (0 <= alpha <= 1):
+        raise ValueError("alpha must be between 0 and 1.")
+
+    # Step 1: Retrieve top-k chunks
+    retrieved_chunks = manual_semantic_retrieve(
+        question=question,
+        chunks=chunks,
+        chunk_embeddings=chunk_embeddings,
+        embedding_model=embedding_model,
+        top_k=top_k
+    )
+
+    # Optional retrieval threshold
+    if min_retrieval_score is not None:
+        retrieved_chunks = [
+            item for item in retrieved_chunks
+            if item["cosine_similarity"] >= min_retrieval_score
+        ]
+
+    if len(retrieved_chunks) == 0:
+        return {
+            "question": question,
+            "answer": "",
+            "status": "retrieval_failed",
+            "reason": "No chunks passed the retrieval threshold.",
+            "best_candidate": None,
+            "all_candidates": [],
+            "retrieved_chunks": []
+        }
+
+    answer_candidates = []
+
+    # Step 2: Run reader on retrieved chunks
+    for retrieved_chunk in retrieved_chunks:
+
+        chunk_for_reader = {
+            "chunk_id": retrieved_chunk["chunk_id"],
+            "page_number": retrieved_chunk["page_number"],
+            "chunk_text": retrieved_chunk["chunk_text"],
+            "preview": retrieved_chunk["preview"],
+            "word_count": retrieved_chunk["word_count"],
+            "character_count": len(retrieved_chunk["chunk_text"])
+        }
+
+        reader_result = qa_on_single_chunk(
+            question=question,
+            chunk=chunk_for_reader,
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_answer_tokens=max_answer_tokens,
+            min_answer_chars=min_answer_chars,
+            max_answer_chars=max_answer_chars,
+            min_span_score=None
+        )
+
+        candidate = {
+            "question": question,
+            "answer": reader_result["answer"],
+            "raw_answer": reader_result["raw_answer"],
+            "reader_span_score": reader_result["span_score"],
+            "reader_confidence": reader_result["confidence"],
+            "reader_status": reader_result["status"],
+            "retrieval_rank": retrieved_chunk["rank"],
+            "retrieval_score": retrieved_chunk["cosine_similarity"],
+            "chunk_id": retrieved_chunk["chunk_id"],
+            "page_number": retrieved_chunk["page_number"],
+            "context_preview": retrieved_chunk["preview"],
+            "chunk_text": retrieved_chunk["chunk_text"]
+        }
+
+        answer_candidates.append(candidate)
+
+    # Step 3: Keep only valid reader outputs
+    valid_candidates = [
+        candidate
+        for candidate in answer_candidates
+        if candidate["reader_status"] == "valid_answer"
+    ]
+
+    if len(valid_candidates) == 0:
+        return {
+            "question": question,
+            "answer": "",
+            "status": "reader_failed",
+            "reason": "Chunks were retrieved, but reader could not extract a valid answer.",
+            "best_candidate": None,
+            "all_candidates": answer_candidates if return_debug else [],
+            "retrieved_chunks": retrieved_chunks
+        }
+
+    # Step 4: Normalize retrieval and reader scores
+    retrieval_scores = [
+        candidate["retrieval_score"]
+        for candidate in valid_candidates
+    ]
+
+    reader_scores = [
+        candidate["reader_span_score"]
+        for candidate in valid_candidates
+    ]
+
+    normalized_retrieval_scores = min_max_normalize(retrieval_scores)
+    normalized_reader_scores = min_max_normalize(reader_scores)
+
+    # Step 5: Combine scores
+    for idx, candidate in enumerate(valid_candidates):
+        candidate["normalized_retrieval_score"] = normalized_retrieval_scores[idx]
+        candidate["normalized_reader_score"] = normalized_reader_scores[idx]
+
+        candidate["final_score"] = (
+            alpha * candidate["normalized_retrieval_score"]
+            +
+            (1 - alpha) * candidate["normalized_reader_score"]
+        )
+
+    # Step 6: Rank using final score
+    valid_candidates = sorted(
+        valid_candidates,
+        key=lambda x: x["final_score"],
+        reverse=True
+    )
+
+    best_candidate = valid_candidates[0]
+
+    return {
+        "question": question,
+        "answer": best_candidate["answer"],
+        "status": "valid_answer",
+        "reason": "Answer selected using combined retrieval + reader scoring.",
+        "best_candidate": best_candidate,
+        "all_candidates": valid_candidates if return_debug else [],
+        "retrieved_chunks": retrieved_chunks
+    }
+
+def display_retrieve_then_answer_output_v2(output: Dict[str, Any]):
+    """
+    Displays output of improved retrieve_then_answer function.
+    """
+
+    print("=" * 100)
+    print("Question:")
+    print(output["question"])
+    print("=" * 100)
+
+    print("Status:", output["status"])
+    print("Reason:", output["reason"])
+    print()
+
+    print("Final Answer:")
+    print(output["answer"])
+    print()
+
+    best_candidate = output.get("best_candidate")
+
+    if best_candidate is not None:
+        print("-" * 100)
+        print("Best Source")
+        print("Page Number:", best_candidate["page_number"])
+        print("Chunk ID:", best_candidate["chunk_id"])
+        print("Retrieval Rank:", best_candidate["retrieval_rank"])
+        print("Retrieval Score:", round(best_candidate["retrieval_score"], 4))
+        print("Reader Span Score:", round(best_candidate["reader_span_score"], 4))
+        print("Normalized Retrieval Score:", round(best_candidate["normalized_retrieval_score"], 4))
+        print("Normalized Reader Score:", round(best_candidate["normalized_reader_score"], 4))
+        print("Final Score:", round(best_candidate["final_score"], 4))
+        print("-" * 100)
+        print("Context Preview:")
+        print(best_candidate["context_preview"])
+
+# Test improved Retriever + Reader pipeline
+
+question = "What is the main idea of this document?"
+
+improved_output = retrieve_then_answer(
+    question=question,
+    chunks=chunks_data,
+    chunk_embeddings=chunk_embeddings,
+    embedding_model=embedding_model,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=5,
+    alpha=0.40,
+    min_retrieval_score=None,
+    return_debug=True
+)
+
+display_retrieve_then_answer_output_v2(improved_output)
+
+# Inspect final candidate ranking
+
+improved_candidates_df = pd.DataFrame([
+    {
+        "retrieval_rank": candidate["retrieval_rank"],
+        "retrieval_score": candidate["retrieval_score"],
+        "reader_span_score": candidate["reader_span_score"],
+        "normalized_retrieval_score": candidate["normalized_retrieval_score"],
+        "normalized_reader_score": candidate["normalized_reader_score"],
+        "final_score": candidate["final_score"],
+        "answer": candidate["answer"],
+        "page_number": candidate["page_number"],
+        "chunk_id": candidate["chunk_id"]
+    }
+    for candidate in improved_output["all_candidates"]
+])
+
+improved_candidates_df
+
+## What Changed and Why?
+
+In the simple version, we ranked answers using only:
+
+$$
+\text{reader span score}
+$$
+
+In the improved version, we used:
+
+$$
+\text{final score}
+=
+\alpha \cdot \text{retrieval score}
++
+(1-\alpha) \cdot \text{reader score}
+$$
+
+after normalizing both scores.
+
+This is better because:
+
+1. The retriever tells us whether the chunk is relevant to the question.
+
+2. The reader tells us whether it found a strong answer span inside that chunk.
+
+3. Combining both signals reduces the chance of selecting an answer from a weakly relevant chunk.
+
+4. The output is easier to debug because we can inspect:
+   - Retrieval rank
+   - Retrieval score
+   - Reader span score
+   - Final score
+   - Page number
+   - Chunk ID
+   - Context preview
+
+This does not make the system perfect, but it makes it more practical and interpretable.
+
+## Modern AI Systems Connection
+
+This Retriever + Reader idea is the foundation of many modern document QnA and RAG systems.
+
+In modern RAG systems, the retriever often finds relevant chunks and then a generator model writes the final response.
+
+A simplified RAG flow is:
+
+```text
+Question
+   ↓
+Retriever
+   ↓
+Relevant Chunks
+   ↓
+LLM / Generator
+   ↓
+Final Response
+```
+Our current system is slightly different:
+```
+Question
+   ↓
+Retriever
+   ↓
+Relevant Chunks
+   ↓
+BERT Reader
+   ↓
+Extracted Answer Span
+```
+So our current system is not generative RAG yet.
+It is a retrieval-based extractive QnA system.
+
+But the core idea is the same:
+```
+Retrieve useful context before answering.
+```
+In more advanced systems, retrieval may be improved using:
+```
+Better chunking strategies
+Metadata filtering
+Hybrid search
+Reranking
+Query rewriting
+Multi-step agentic retrieval
+```
+We will not go deep into those yet.
+
+For now, our focus is:
+```
+Embeddings → Semantic Retrieval → Reader-based Answer Extraction
+```
+
+## Compare Simple and Improved Pipelines
+
+Now let us compare both versions on multiple questions.
+
+comparison_questions = [
+    "What is the main contribution of the document?",
+    "What method or model is discussed?",
+    "What are the limitations mentioned?",
+    "What results or findings are reported?"
+]
+
+comparison_rows = []
+
+for q in comparison_questions:
+
+    simple_output = retrieve_then_answer_simple(
+        question=q,
+        chunks=chunks_data,
+        chunk_embeddings=chunk_embeddings,
+        embedding_model=embedding_model,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_k=5
+    )
+
+    improved_output = retrieve_then_answer(
+        question=q,
+        chunks=chunks_data,
+        chunk_embeddings=chunk_embeddings,
+        embedding_model=embedding_model,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_k=5,
+        alpha=0.40,
+        return_debug=True
+    )
+
+    simple_best = simple_output.get("best_candidate")
+    improved_best = improved_output.get("best_candidate")
+
+    comparison_rows.append({
+        "question": q,
+        "simple_answer": simple_output["answer"],
+        "simple_page": None if simple_best is None else simple_best["page_number"],
+        "simple_chunk_id": None if simple_best is None else simple_best["chunk_id"],
+        "improved_answer": improved_output["answer"],
+        "improved_page": None if improved_best is None else improved_best["page_number"],
+        "improved_chunk_id": None if improved_best is None else improved_best["chunk_id"],
+        "improved_final_score": None if improved_best is None else improved_best["final_score"]
+    })
+
+comparison_df = pd.DataFrame(comparison_rows)
+
+comparison_df
+
+## Observation / Interpretation
+
+The simple version is good for understanding the architecture.
+
+The improved version is better for practical use because it considers two signals:
+
+```text
+Was the chunk relevant?
++
+Was the extracted answer strong?
+```
+This is a very important design habit.
+
+In real AI systems, we rarely trust only one signal.
+
+We usually combine multiple signals and then debug the system using intermediate outputs.
+
+## Concept Check
+
+1. What are the two main stages in the Retriever + Reader pipeline?
+
+2. Why should we not send every chunk to the reader?
+
+3. In the simple version, how were answers ranked?
+
+4. In the improved version, what two scores were combined?
+
+5. Why do we normalize scores before combining them?
+
+6. Is this system generative RAG?
+
+7. What is the main difference between our current system and a generative RAG system?
+
+## Bridge to Next Section
+
+We now have a complete retrieval-based QnA system.
+
+But there is still one limitation.
+
+Our manual retriever compares the question embedding with every chunk embedding one by one.
+
+The retrieval step currently does this:
+
+```text
+Question Embedding → Compare with all chunk embeddings → Sort → Top-k
+```
+This is explainable, but not ideal for very large-scale search.
+
+For large documents, many PDFs, or production systems, we need faster vector search.
+
+That is why we now introduce FAISS.
+
+FAISS will help us search through embeddings efficiently.
+
+In the next section, we will understand what FAISS is and why it is useful.
+
+# Section 11: FAISS Introduction and First Vector Index
+
+Until now, our manual retriever worked like this:
+
+```text
+Question Embedding
+   ↓
+Compare with every chunk embedding one by one
+   ↓
+Sort similarity scores
+   ↓
+Return top-k chunks
+```
+This is easy to understand.
+
+But for large-scale document search, this is not ideal.
+
+If we have:
+```
+10,000 chunks
+100,000 chunks
+1 million chunks
+```
+then comparing one question with every chunk one by one becomes expensive.
+
+This is where FAISS helps.
+
+FAISS stands for:
+```
+Facebook AI Similarity Search
+```
+FAISS is a library for fast vector similarity search.
+
+Important:
+```
+FAISS is not a QnA model.
+FAISS does not generate answers.
+FAISS does not extract answer spans.
+FAISS only searches vectors efficiently.
+
+## Theory / Intuition
+
+In our current system, every chunk has already been converted into an embedding vector.
+
+So the document is no longer only text.
+
+It is now a collection of vectors:
+
+$$
+\mathbf{v}_1, \mathbf{v}_2, \mathbf{v}_3, \dots, \mathbf{v}_N
+$$
+
+For a question, we create a question vector:
+
+$$
+\mathbf{v}_q
+$$
+
+The retrieval problem is:
+
+> Find the chunk vectors closest to the question vector.
+
+FAISS helps us organize the chunk vectors in a searchable index.
+
+Instead of manually looping through all vectors each time, we ask FAISS:
+
+```text
+Given this question vector, return the nearest chunk vectors.
+
+## Mathematical Framing
+
+In manual retrieval, we computed:
+
+$$
+s_i = \cos(\mathbf{v}_q, \mathbf{v}_i)
+$$
+
+for every chunk $i$.
+
+Then we sorted:
+
+$$
+s_1, s_2, s_3, \dots, s_N
+$$
+
+FAISS changes the engineering approach.
+
+Instead of manually scanning vectors every time, we first build an index:
+
+$$
+\text{Index} = \text{FAISS}(\mathbf{v}_1, \mathbf{v}_2, \dots, \mathbf{v}_N)
+$$
+
+Then for a question vector:
+
+$$
+\mathbf{v}_q
+$$
+
+we search the index:
+
+$$
+\text{FAISS Search}(\mathbf{v}_q, k)
+\rightarrow
+\text{Top-k Vector Indices}
+$$
+
+These returned indices are then mapped back to the original chunks.
+
+## Version 1: Simple and Explainable FAISS Index
+
+First, we will build the simplest FAISS index.
+
+We will use:
+
+```python
+faiss.IndexFlatL2
+```
+This searches vectors using L2 distance.
+
+L2 distance means Euclidean distance: $$d(x,y)=∥x−y∥^2$$
+Smaller L2 distance means the vectors are closer.
+
+This version is useful for understanding how FAISS indexing and searching work.
+
+# FAISS expects vectors in float32 format
+
+chunk_embeddings_l2 = chunk_embeddings.astype("float32")
+
+print("Chunk embeddings dtype:", chunk_embeddings_l2.dtype)
+print("Chunk embeddings shape:", chunk_embeddings_l2.shape)
+
+Chunk embeddings dtype: float32
+Chunk embeddings shape: (78, 384)
+
+# Get embedding dimension
+
+embedding_dim = chunk_embeddings_l2.shape[1]
+
+print("Embedding dimension:", embedding_dim)
+
+Embedding dimension: 384
+
+# Build a simple FAISS L2 index
+
+faiss_l2_index = faiss.IndexFlatL2(embedding_dim)
+
+print("Is index trained?", faiss_l2_index.is_trained)
+print("Number of vectors before adding:", faiss_l2_index.ntotal)
+
+Is index trained? True
+Number of vectors before adding: 0
+
+# Add chunk embeddings to FAISS index
+
+faiss_l2_index.add(chunk_embeddings_l2)
+
+print("Number of vectors after adding:", faiss_l2_index.ntotal)
+
+Number of vectors after adding: 78
+
+def faiss_l2_search(
+    question: str,
+    index,
+    embedding_model,
+    top_k: int = 5
+):
+    """
+    Searches a FAISS L2 index using a question embedding.
+
+    Returns:
+        distances:
+            L2 distances. Smaller is better.
+
+        indices:
+            Chunk indices returned by FAISS.
+    """
+
+    question_embedding = embedding_model.encode(
+        [question],
+        convert_to_numpy=True
+    ).astype("float32")
+
+    distances, indices = index.search(
+        question_embedding,
+        top_k
+    )
+
+    return distances[0], indices[0]
+
+# Test simple FAISS L2 search
+
+question = "What is the main idea of this document?"
+
+distances, indices = faiss_l2_search(
+    question=question,
+    index=faiss_l2_index,
+    embedding_model=embedding_model,
+    top_k=5
+)
+
+print("Returned distances:", distances)
+print("Returned indices:", indices)
+
+Returned distances: [1.5268836 1.5459087 1.5588921 1.5683744 1.5714995]
+Returned indices: [51 57 71 53 54]
+
+def display_faiss_l2_results(
+    question: str,
+    distances: np.ndarray,
+    indices: np.ndarray,
+    chunks: List[Dict[str, Any]]
+):
+    """
+    Displays FAISS L2 search results mapped back to chunk metadata.
+    """
+
+    print("=" * 100)
+    print("Question:")
+    print(question)
+    print("=" * 100)
+
+    for rank, (distance, idx) in enumerate(zip(distances, indices), start=1):
+
+        if idx == -1:
+            continue
+
+        chunk = chunks[idx]
+
+        print("-" * 100)
+        print("Rank:", rank)
+        print("FAISS Returned Index:", idx)
+        print("L2 Distance:", round(float(distance), 4))
+        print("Page Number:", chunk["page_number"])
+        print("Chunk ID:", chunk["chunk_id"])
+        print("Word Count:", chunk["word_count"])
+        print("Preview:")
+        print(clean_text(chunk["preview"]))
+        print()
+
+display_faiss_l2_results(
+    question=question,
+    distances=distances,
+    indices=indices,
+    chunks=chunks_data
+)
+
+## Observation / Interpretation
+
+FAISS returned two things:
+
+```text
+Distances
+Indices
+```
+### Distances
+
+For L2 search:
+```
+Smaller distance means closer vector.
+```
+### Indices
+
+The returned indices tell us which vectors were nearest.
+
+But FAISS only knows vectors.
+
+It does not know:
+```
+Page number
+Chunk ID
+Chunk text
+Context preview
+```
+So we must map FAISS indices back to our original chunks_data.
+
+That is why metadata tracking is very important
+
+## Version 2: Better FAISS Index using Cosine Similarity
+
+Our manual retriever used cosine similarity.
+
+So it is better to make FAISS behave like cosine similarity search.
+
+FAISS has a very common practical trick:
+
+```text
+Normalize vectors to unit length
++
+Use inner product search
+```
+If vectors are normalized, then inner product becomes equivalent to cosine similarity.
+
+For normalized vectors:
+
+∥x∥=1
+
+and
+
+∥y∥=1
+
+So cosine similarity becomes:
+$$
+cos(θ)=x.y/∥x∥∥y∥ ​= x⋅y
+$$
+Therefore:
+
+Cosine Similarity = Inner Product
+
+for normalized vectors.
+
+def normalize_embeddings_for_faiss(embeddings: np.ndarray) -> np.ndarray:
+    """
+    Converts embeddings to float32 and normalizes them to unit length.
+
+    This allows FAISS inner product search to behave like cosine similarity.
+    """
+
+    embeddings = embeddings.astype("float32")
+
+    faiss.normalize_L2(embeddings)
+
+    return embeddings
+
+# Normalize chunk embeddings for cosine-style FAISS search
+
+chunk_embeddings_normalized = normalize_embeddings_for_faiss(
+    chunk_embeddings.copy()
+)
+
+print("Normalized chunk embeddings shape:", chunk_embeddings_normalized.shape)
+print("Normalized chunk embeddings dtype:", chunk_embeddings_normalized.dtype)
+
+Normalized chunk embeddings shape: (78, 384)
+Normalized chunk embeddings dtype: float32
+
+# Verify that vectors are approximately unit length
+
+vector_norms = np.linalg.norm(chunk_embeddings_normalized, axis=1)
+
+print("Minimum norm:", round(vector_norms.min(), 4))
+print("Maximum norm:", round(vector_norms.max(), 4))
+print("Average norm:", round(vector_norms.mean(), 4))
+
+Minimum norm: 1.0
+Maximum norm: 1.0
+Average norm: 1.0
+
+# Build FAISS inner product index
+
+embedding_dim = chunk_embeddings_normalized.shape[1]
+
+faiss_cosine_index = faiss.IndexFlatIP(embedding_dim)
+
+faiss_cosine_index.add(chunk_embeddings_normalized)
+
+print("FAISS cosine-style index created.")
+print("Number of vectors in index:", faiss_cosine_index.ntotal)
+
+FAISS cosine-style index created.
+Number of vectors in index: 78
+
+def faiss_cosine_search(
+    question: str,
+    index,
+    embedding_model,
+    top_k: int = 5
+):
+    """
+    Searches a FAISS index using cosine similarity.
+
+    Internally:
+    - Question is embedded.
+    - Question embedding is normalized.
+    - FAISS inner product search is applied.
+
+    Returns:
+        scores:
+            Cosine similarity scores. Higher is better.
+
+        indices:
+            Chunk indices returned by FAISS.
+    """
+
+    question_embedding = embedding_model.encode(
+        [question],
+        convert_to_numpy=True
+    ).astype("float32")
+
+    faiss.normalize_L2(question_embedding)
+
+    scores, indices = index.search(
+        question_embedding,
+        top_k
+    )
+
+    return scores[0], indices[0]
+
+# Test FAISS cosine-style search
+
+question = "What is the main idea of this document?"
+
+scores, indices = faiss_cosine_search(
+    question=question,
+    index=faiss_cosine_index,
+    embedding_model=embedding_model,
+    top_k=5
+)
+
+print("Returned cosine scores:", scores)
+print("Returned indices:", indices)
+
+Returned cosine scores: [0.2365582  0.22704564 0.22055387 0.21581274 0.21425024]
+Returned indices: [51 57 71 53 54]
+
+def display_faiss_cosine_results(
+    question: str,
+    scores: np.ndarray,
+    indices: np.ndarray,
+    chunks: List[Dict[str, Any]]
+):
+    """
+    Displays FAISS cosine-style search results mapped back to chunk metadata.
+    """
+
+    print("=" * 100)
+    print("Question:")
+    print(question)
+    print("=" * 100)
+
+    for rank, (score, idx) in enumerate(zip(scores, indices), start=1):
+
+        if idx == -1:
+            continue
+
+        chunk = chunks[idx]
+
+        print("-" * 100)
+        print("Rank:", rank)
+        print("FAISS Returned Index:", idx)
+        print("Cosine Similarity Score:", round(float(score), 4))
+        print("Page Number:", chunk["page_number"])
+        print("Chunk ID:", chunk["chunk_id"])
+        print("Word Count:", chunk["word_count"])
+        print("Preview:")
+        print(clean_text(chunk["preview"]))
+        print()
+
+display_faiss_cosine_results(
+    question=question,
+    scores=scores,
+    indices=indices,
+    chunks=chunks_data
+)
+
+## What Changed and Why?
+
+In Version 1, we used:
+
+```python
+faiss.IndexFlatL2
+```
+after normalizing all embeddings.
+
+This makes FAISS inner product search behave like cosine similarity search.
+
+So the better version is:
+```
+Normalize embeddings
+↓
+Use IndexFlatIP
+↓
+Interpret returned scores as cosine similarity
+```
+This is more aligned with semantic search using sentence embeddings.
+
+## Important Difference: L2 Distance vs Cosine Similarity
+
+For L2 distance:
+
+```text
+Smaller score is better.
+```
+For cosine similarity:
+```
+Higher score is better.
+```
+So while debugging FAISS results, always check which index type you are using.
+
+###L2 Index
+```
+faiss.IndexFlatL2
+```
+returns distances.
+
+### Inner Product Index
+```
+faiss.IndexFlatIP
+```
+returns similarity scores.
+
+When vectors are normalized, inner product behaves like cosine similarity.
+
+## Modern AI Systems Connection
+
+In modern RAG and agentic document systems, vector databases usually work on the same broad idea:
+
+```text
+Convert text to embeddings
+↓
+Store embeddings in an index/database
+↓
+Search nearest vectors for a query
+↓
+Return relevant chunks
+```
+FAISS is one way to perform this vector search locally.
+
+In production systems, similar ideas may appear inside:
+```
+Vector databases
+Document search engines
+RAG pipelines
+Agent memory systems
+Long-term knowledge stores
+Semantic search tools
+```
+At a higher level, these systems are doing the same thing:
+
+- Find relevant context before answering or acting.
+
+We are learning this idea using FAISS because it is practical, fast, and easy to use in a notebook.
+
+## Concept Check
+
+1. What is FAISS used for?
+
+2. Is FAISS a QnA model?
+
+3. What does FAISS return after search?
+
+4. Why do we need to map FAISS indices back to `chunks_data`?
+
+5. In L2 search, does a smaller or larger distance mean more relevant?
+
+6. In cosine-style FAISS search using normalized vectors and inner product, does a smaller or larger score mean more relevant?
+
+7. Why do we normalize vectors before using `IndexFlatIP` for cosine-style search?
+
+## Bridge to Next Section
+
+Now we have built a FAISS index.
+
+But we still need to wrap this into a clean retriever function.
+
+The next section will build:
+
+```python
+faiss_semantic_retrieve()
+```
+This function will:
+
+- Take a user question
+- Convert it into an embedding
+- Normalize the question embedding
+- Search the FAISS index
+- Retrieve the top-k chunks
+- Map FAISS indices back to chunk metadata
+
+After that, we will replace the manual retriever with a FAISS retriever inside our Retriever + Reader pipeline.
+
+# Section 12: Build a Clean FAISS Semantic Retriever
+
+In the previous section, we built a FAISS index.
+
+Now we will wrap the FAISS search logic into a reusable retriever function.
+
+The goal is to build:
+
+```python
+faiss_semantic_retrieve()
+```
+This function will:
+
+- Take a user question
+- Convert it into an embedding
+- Normalize the question embedding
+- Search the FAISS index
+- Retrieve the top-k chunks
+- Map FAISS indices back to chunk metadata
+
+Important reminder:
+```
+FAISS only returns vector indices and scores.
+```
+It does not know:
+```
+Page number
+Chunk ID
+Chunk text
+Context preview
+```
+So metadata mapping is our responsibility.
+
+## Version 1: Simple FAISS Semantic Retriever
+
+First, we will create a simple version.
+
+This version is easy to understand.
+
+The flow is:
+
+```text
+Question
+   ↓
+Question Embedding
+   ↓
+Normalize Question Embedding
+   ↓
+FAISS Search
+   ↓
+Top-k Indices
+   ↓
+Map Indices Back to Chunks
+   ↓
+Retrieved Chunks
+```
+This gives us the same kind of output as our manual semantic retriever, but now the search is handled by FAISS.
+
+def faiss_semantic_retrieve_simple(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    faiss_index,
+    embedding_model,
+    top_k: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Simple FAISS-based semantic retriever.
+
+    Assumption:
+        The FAISS index was built using normalized chunk embeddings
+        and faiss.IndexFlatIP.
+
+    Therefore:
+        Returned scores behave like cosine similarity scores.
+
+    Args:
+        question:
+            User question.
+
+        chunks:
+            Original chunk metadata list.
+
+        faiss_index:
+            FAISS index containing chunk embeddings.
+
+        embedding_model:
+            SentenceTransformer embedding model.
+
+        top_k:
+            Number of chunks to retrieve.
+
+    Returns:
+        List of retrieved chunks with metadata and FAISS similarity score.
+    """
+
+    top_k = min(top_k, len(chunks))
+
+    # Step 1: Embed the question
+    question_embedding = embedding_model.encode(
+        [question],
+        convert_to_numpy=True
+    ).astype("float32")
+
+    # Step 2: Normalize question embedding for cosine-style search
+    faiss.normalize_L2(question_embedding)
+
+    # Step 3: Search FAISS index
+    scores, indices = faiss_index.search(
+        question_embedding,
+        top_k
+    )
+
+    scores = scores[0]
+    indices = indices[0]
+
+    # Step 4: Map FAISS indices back to chunk metadata
+    retrieved_chunks = []
+
+    for rank, (score, idx) in enumerate(zip(scores, indices), start=1):
+
+        if idx == -1:
+            continue
+
+        chunk = chunks[idx]
+
+        retrieved_chunk = {
+            "question": question,
+            "rank": rank,
+            "faiss_index": int(idx),
+            "chunk_id": chunk["chunk_id"],
+            "page_number": chunk["page_number"],
+            "chunk_text": chunk["chunk_text"],
+            "preview": clean_text(chunk["preview"]),
+            "word_count": chunk["word_count"],
+            "retrieval_score": float(score)
+        }
+
+        retrieved_chunks.append(retrieved_chunk)
+
+    return retrieved_chunks
+
+def display_faiss_retrieved_chunks(retrieved_chunks: List[Dict[str, Any]]):
+    """
+    Displays FAISS retrieved chunks in readable format.
+    """
+
+    if len(retrieved_chunks) == 0:
+        print("No chunks retrieved.")
+        return
+
+    for item in retrieved_chunks:
+        print("=" * 100)
+        print("Rank:", item["rank"])
+        print("FAISS Index:", item["faiss_index"])
+        print("Retrieval Score:", round(item["retrieval_score"], 4))
+        print("Page Number:", item["page_number"])
+        print("Chunk ID:", item["chunk_id"])
+        print("Word Count:", item["word_count"])
+        print("-" * 100)
+        print("Preview:")
+        print(item["preview"])
+        print()
+
+# Test simple FAISS retriever
+
+faiss_question = "What is the main idea of this document?"
+
+faiss_retrieved_chunks_simple = faiss_semantic_retrieve_simple(
+    question=faiss_question,
+    chunks=chunks_data,
+    faiss_index=faiss_cosine_index,
+    embedding_model=embedding_model,
+    top_k=5
+)
+
+display_faiss_retrieved_chunks(faiss_retrieved_chunks_simple)
+
+## Observation / Interpretation
+
+The simple FAISS retriever returns:
+
+- Rank
+- FAISS index
+- Retrieval score
+- Page number
+- Chunk ID
+- Chunk preview
+
+The important point is:
+
+```text
+FAISS index position is not the same idea as chunk ID.
+```
+In our current notebook, they may look similar because we added chunks in order.
+
+But conceptually they are different.
+
+### FAISS Index
+
+- Position of the vector inside FAISS.
+
+### Chunk ID
+
+- Our own metadata ID assigned during chunking.
+
+In real systems, this distinction is very important.
+
+## Version 2: Better FAISS Retriever
+
+The simple version works, but for a more practical system we should add:
+
+1. Input validation
+2. Index-size checks
+3. Optional minimum retrieval score
+4. Cleaner debugging output
+5. Metadata-safe result creation
+
+This helps avoid silent errors.
+
+For example, if the number of chunks and vectors in FAISS do not match, the retriever may map a returned vector index to the wrong chunk.
+
+That would create a serious source-tracking error.
+
+def faiss_semantic_retrieve(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    faiss_index,
+    embedding_model,
+    top_k: int = 5,
+    min_retrieval_score: Optional[float] = None,
+    return_embeddings: bool = False
+) -> List[Dict[str, Any]]:
+    """
+    Better FAISS-based semantic retriever.
+
+    Improvements over simple version:
+    - Validates question.
+    - Validates chunk/index size.
+    - Supports minimum retrieval score threshold.
+    - Preserves clean metadata.
+    - Optionally returns question embedding for debugging.
+
+    Assumption:
+        faiss_index is an IndexFlatIP index built using normalized embeddings.
+
+    Therefore:
+        Returned scores behave like cosine similarity scores.
+    """
+
+    if question is None or len(question.strip()) == 0:
+        raise ValueError("Question cannot be empty.")
+
+    if len(chunks) == 0:
+        return []
+
+    if faiss_index.ntotal != len(chunks):
+        raise ValueError(
+            f"FAISS index contains {faiss_index.ntotal} vectors, "
+            f"but chunks list contains {len(chunks)} chunks. "
+            "They must match for correct metadata mapping."
+        )
+
+    top_k = min(top_k, len(chunks))
+
+    # Step 1: Embed the question
+    question_embedding = embedding_model.encode(
+        [question],
+        convert_to_numpy=True
+    ).astype("float32")
+
+    # Step 2: Normalize for cosine-style FAISS search
+    faiss.normalize_L2(question_embedding)
+
+    # Step 3: Search FAISS index
+    scores, indices = faiss_index.search(
+        question_embedding,
+        top_k
+    )
+
+    scores = scores[0]
+    indices = indices[0]
+
+    # Step 4: Map results back to chunks
+    retrieved_chunks = []
+
+    for rank, (score, idx) in enumerate(zip(scores, indices), start=1):
+
+        if idx == -1:
+            continue
+
+        score = float(score)
+
+        if min_retrieval_score is not None and score < min_retrieval_score:
+            continue
+
+        chunk = chunks[int(idx)]
+
+        retrieved_chunk = {
+            "question": question,
+            "rank": len(retrieved_chunks) + 1,
+            "faiss_index": int(idx),
+            "chunk_id": chunk["chunk_id"],
+            "page_number": chunk["page_number"],
+            "chunk_text": chunk["chunk_text"],
+            "preview": clean_text(chunk["preview"]),
+            "word_count": chunk["word_count"],
+            "retrieval_score": score
+        }
+
+        if return_embeddings:
+            retrieved_chunk["question_embedding"] = question_embedding
+
+        retrieved_chunks.append(retrieved_chunk)
+
+    return retrieved_chunks
+
+# Test improved FAISS retriever
+
+faiss_question = "What are the limitations mentioned?"
+
+faiss_retrieved_chunks = faiss_semantic_retrieve(
+    question=faiss_question,
+    chunks=chunks_data,
+    faiss_index=faiss_cosine_index,
+    embedding_model=embedding_model,
+    top_k=5,
+    min_retrieval_score=None
+)
+
+display_faiss_retrieved_chunks(faiss_retrieved_chunks)
+
+## What Changed and Why?
+
+In the simple version, we directly searched FAISS and mapped results back to chunks.
+
+In the better version, we added practical checks.
+
+### 1. Empty question check
+
+If the question is empty, retrieval should not run.
+
+### 2. FAISS index size check
+
+We check:
+
+```python
+faiss_index.ntotal == len(chunks)
+```
+This is very important.
+
+If the number of vectors in FAISS and the number of chunks do not match, then FAISS may return an index that maps to the wrong chunk.
+
+That means the answer source may become incorrect.
+
+### 3. Retrieval threshold
+
+The optional min_retrieval_score allows us to reject weakly related chunks.
+
+For example:
+
+min_retrieval_score=0.25
+
+means:
+```
+Only keep chunks with similarity score at least 0.25.
+```
+### 4. Cleaner metadata
+
+Each retrieved chunk contains enough source information for later debugging:
+```
+Rank
+FAISS index
+Chunk ID
+Page number
+Retrieval score
+Preview
+Full chunk text
+```
+
+## Compare Manual Retriever and FAISS Retriever
+
+Now we will compare:
+
+```text
+Manual Cosine Retriever
+```
+with:
+```
+FAISS Cosine Retriever
+```
+For our current index type:
+```
+faiss.IndexFlatIP
+```
+with normalized embeddings, FAISS should return results very close to manual cosine retrieval.
+
+This comparison is useful because it confirms that FAISS is not changing the retrieval idea.
+
+It is mainly improving the search mechanism.
+
+def compare_manual_and_faiss_retrieval(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    chunk_embeddings: np.ndarray,
+    faiss_index,
+    embedding_model,
+    top_k: int = 5
+) -> pd.DataFrame:
+    """
+    Compares manual cosine retrieval with FAISS cosine-style retrieval.
+    """
+
+    manual_results = manual_semantic_retrieve(
+        question=question,
+        chunks=chunks,
+        chunk_embeddings=chunk_embeddings,
+        embedding_model=embedding_model,
+        top_k=top_k
+    )
+
+    faiss_results = faiss_semantic_retrieve(
+        question=question,
+        chunks=chunks,
+        faiss_index=faiss_index,
+        embedding_model=embedding_model,
+        top_k=top_k
+    )
+
+    rows = []
+
+    for rank in range(top_k):
+
+        manual_item = manual_results[rank] if rank < len(manual_results) else None
+        faiss_item = faiss_results[rank] if rank < len(faiss_results) else None
+
+        rows.append({
+            "rank": rank + 1,
+
+            "manual_chunk_id": None if manual_item is None else manual_item["chunk_id"],
+            "manual_page": None if manual_item is None else manual_item["page_number"],
+            "manual_score": None if manual_item is None else manual_item["cosine_similarity"],
+
+            "faiss_chunk_id": None if faiss_item is None else faiss_item["chunk_id"],
+            "faiss_page": None if faiss_item is None else faiss_item["page_number"],
+            "faiss_score": None if faiss_item is None else faiss_item["retrieval_score"],
+
+            "same_chunk": (
+                None
+                if manual_item is None or faiss_item is None
+                else manual_item["chunk_id"] == faiss_item["chunk_id"]
+            )
+        })
+
+    return pd.DataFrame(rows)
+
+comparison_question = "What method or model is discussed?"
+
+retriever_comparison_df = compare_manual_and_faiss_retrieval(
+    question=comparison_question,
+    chunks=chunks_data,
+    chunk_embeddings=chunk_embeddings,
+    faiss_index=faiss_cosine_index,
+    embedding_model=embedding_model,
+    top_k=5
+)
+
+retriever_comparison_df
+
+## Observation / Interpretation
+
+If the manual retriever and FAISS retriever return similar chunks, that is expected.
+
+Both are doing cosine-style semantic retrieval.
+
+The difference is:
+
+### Manual Retriever
+
+```text
+Compute similarity with every chunk using Python loop
+```
+### FAISS Retriever
+```
+Use FAISS index to perform vector search
+```
+For small PDFs, the speed difference may not look dramatic.
+
+But for large-scale search, FAISS becomes much more useful.
+
+## Retrieval Timing Comparison
+
+Now let us compare retrieval time.
+
+This is not a perfect benchmark because our PDF may be small.
+
+But it helps students see the engineering direction:
+
+```text
+Manual search is explainable.
+FAISS search is more scalable.
+```
+
+def time_manual_retrieval(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    chunk_embeddings: np.ndarray,
+    embedding_model,
+    top_k: int = 5,
+    repeat: int = 5
+) -> float:
+    """
+    Measures average manual retrieval time.
+    """
+
+    times = []
+
+    for _ in range(repeat):
+        start_time = time.time()
+
+        _ = manual_semantic_retrieve(
+            question=question,
+            chunks=chunks,
+            chunk_embeddings=chunk_embeddings,
+            embedding_model=embedding_model,
+            top_k=top_k
+        )
+
+        end_time = time.time()
+
+        times.append(end_time - start_time)
+
+    return sum(times) / len(times)
+
+def time_faiss_retrieval(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    faiss_index,
+    embedding_model,
+    top_k: int = 5,
+    repeat: int = 5
+) -> float:
+    """
+    Measures average FAISS retrieval time.
+    """
+
+    times = []
+
+    for _ in range(repeat):
+        start_time = time.time()
+
+        _ = faiss_semantic_retrieve(
+            question=question,
+            chunks=chunks,
+            faiss_index=faiss_index,
+            embedding_model=embedding_model,
+            top_k=top_k
+        )
+
+        end_time = time.time()
+
+        times.append(end_time - start_time)
+
+    return sum(times) / len(times)
+
+timing_question = "What are the limitations mentioned?"
+
+manual_avg_time = time_manual_retrieval(
+    question=timing_question,
+    chunks=chunks_data,
+    chunk_embeddings=chunk_embeddings,
+    embedding_model=embedding_model,
+    top_k=5,
+    repeat=5
+)
+
+faiss_avg_time = time_faiss_retrieval(
+    question=timing_question,
+    chunks=chunks_data,
+    faiss_index=faiss_cosine_index,
+    embedding_model=embedding_model,
+    top_k=5,
+    repeat=5
+)
+
+timing_df = pd.DataFrame([
+    {
+        "retriever": "Manual Cosine Retriever",
+        "average_time_seconds": manual_avg_time
+    },
+    {
+        "retriever": "FAISS Cosine Retriever",
+        "average_time_seconds": faiss_avg_time
+    }
+])
+
+timing_df
+
+retriever  average_time_seconds
+0  Manual Cosine Retriever              0.041862
+1   FAISS Cosine Retriever              0.038298
+
+## Important Benchmark Note
+
+For a small PDF, the timing difference may not be very large.
+
+Sometimes the embedding model call dominates the retrieval time.
+
+That means most of the time is spent converting the question into an embedding, not searching the vectors.
+
+In large systems, we often separate these costs:
+
+```text
+Question embedding time
++
+Vector search time
+```
+FAISS mainly improves the vector search part.
+
+It does not remove the need to embed the question.
+
+## Modern AI Systems Connection
+
+In modern RAG and agentic AI systems, this FAISS retriever corresponds to the **vector search layer**.
+
+A simplified modern architecture is:
+
+```text
+Documents
+   ↓
+Chunking
+   ↓
+Embedding Model
+   ↓
+Vector Index / Vector Database
+   ↓
+Query Embedding
+   ↓
+Vector Search
+   ↓
+Retrieved Context
+   ↓
+Reader / LLM / Agent
+```
+In production, the vector index may be stored using tools such as:
+```
+FAISS
+Chroma
+Pinecone
+Weaviate
+Milvus
+Elasticsearch with vector search
+```
+The idea is the same:
+
+Store knowledge as vectors.
+Search relevant knowledge before answering.
+
+For our notebook, FAISS is enough because it shows the core idea clearly.
+
+## Concept Check
+
+1. What does `faiss_semantic_retrieve()` take as input?
+
+2. What does `faiss_semantic_retrieve()` return?
+
+3. Why do we normalize the question embedding before searching?
+
+4. Why is `faiss_index.ntotal == len(chunks)` an important check?
+
+5. What is the difference between FAISS index and chunk ID?
+
+6. Does FAISS extract the final answer?
+
+7. Why may FAISS not look much faster for a very small PDF?
+
+## Instructor-Only Answers
+
+1. It takes a question, chunks, FAISS index, embedding model, and retrieval settings such as `top_k`.
+
+2. It returns a ranked list of retrieved chunks with metadata and retrieval scores.
+
+3. We normalize the question embedding because the index was built using normalized chunk embeddings. With normalized vectors, inner product behaves like cosine similarity.
+
+4. It ensures that each FAISS vector index correctly maps back to one chunk. If they do not match, source tracking can become wrong.
+
+5. FAISS index is the vector position inside the FAISS index. Chunk ID is our own metadata identifier assigned during chunking.
+
+6. No. FAISS only retrieves relevant chunks. It does not extract answers.
+
+7. For small PDFs, most time may be spent embedding the question rather than searching vectors. FAISS becomes more useful when the number of vectors is large.
+
+## Bridge to Next Section
+
+Now we have a clean FAISS retriever.
+
+The next step is to replace the manual retriever inside our Retriever + Reader pipeline.
+
+The new architecture will be:
+
+```text
+Question
+   ↓
+FAISS Retriever
+   ↓
+Top-k Relevant Chunks
+   ↓
+BERT-style Reader
+   ↓
+Final Answer with Source Tracking
+```
+In the next section, we will build:
+```
+faiss_retrieve_then_answer()
+```
+This will become our main retrieval-based PDF QnA system.
+
+# Section 13: Combine FAISS Retriever with BERT Reader
+
+Now we will build the main system of this notebook:
+
+```text
+FAISS Retriever + BERT-style Reader
+```
+Until now, we have:
+```
+Created PDF chunks
+Created chunk embeddings
+Built a FAISS index
+Built a clean FAISS retriever
+Built a robust BERT-style extractive reader
+```
+Now we combine them.
+
+The final flow is:
+```
+Question
+   ↓
+FAISS Retriever
+   ↓
+Top-k Relevant Chunks
+   ↓
+BERT-style Reader
+   ↓
+Ranked Answer Candidates
+   ↓
+Final Answer with Source Tracking
+```
+This is a retrieval-based extractive document QnA system.
+
+## Theory / Intuition
+
+In brute-force QnA, the reader checked every chunk:
+
+```text
+Question → All Chunks → Reader
+```
+In FAISS-based retrieval QnA, the retriever first reduces the search space:
+```
+Question → FAISS Retriever → Top-k Chunks → Reader
+```
+This is a better architecture because:
+
+- FAISS handles search
+- BERT reader handles answer extraction
+- Metadata helps track the source
+- The reader no longer processes every chunk
+
+Important distinction:
+```
+FAISS finds relevant chunks.
+BERT reader extracts the answer.
+```
+FAISS is still not answering the question.
+
+It is only selecting the most useful context for the reader.
+
+## Mathematical Framing
+
+Let the question be:
+
+$$
+q
+$$
+
+Let the FAISS retriever return the top-k chunks:
+
+$$
+R_{\text{FAISS}}(q) = \{c_{i_1}, c_{i_2}, \dots, c_{i_k}\}
+$$
+
+Each retrieved chunk has a retrieval score:
+
+$$
+s^{\text{retrieval}}_j
+$$
+
+Then the BERT-style reader extracts an answer candidate from each retrieved chunk:
+
+$$
+\text{Reader}(q, c_{i_j}) \rightarrow a_j
+$$
+
+Each answer candidate has a reader score:
+
+$$
+s^{\text{reader}}_j
+$$
+
+The final system ranks answer candidates and selects the best answer:
+
+$$
+a^* = \arg\max_j \text{Score}(a_j)
+$$
+
+## Version 1: Simple `faiss_retrieve_then_answer_simple()`
+
+First, we will build a simple and explainable version.
+
+This version will:
+
+1. Retrieve top-k chunks using FAISS.
+2. Send each retrieved chunk to the BERT reader.
+3. Rank answers using only the reader span score.
+4. Return the best answer with source metadata.
+
+This is easy to understand and shows the core architecture clearly.
+
+def faiss_retrieve_then_answer_simple(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    faiss_index,
+    embedding_model,
+    tokenizer,
+    model,
+    device: str = "cpu",
+    top_k: int = 5,
+    max_answer_tokens: int = 40,
+    min_answer_chars: int = 10,
+    max_answer_chars: int = 400
+) -> Dict[str, Any]:
+    """
+    Simple FAISS Retriever + BERT Reader pipeline.
+
+    Steps:
+    1. Retrieve top-k chunks using FAISS.
+    2. Run extractive QnA reader on each retrieved chunk.
+    3. Rank valid answer candidates by reader span score.
+    4. Return best answer with source metadata.
+    """
+
+    # Step 1: Retrieve relevant chunks using FAISS
+    retrieved_chunks = faiss_semantic_retrieve(
+        question=question,
+        chunks=chunks,
+        faiss_index=faiss_index,
+        embedding_model=embedding_model,
+        top_k=top_k,
+        min_retrieval_score=None
+    )
+
+    if len(retrieved_chunks) == 0:
+        return {
+            "question": question,
+            "answer": "",
+            "status": "retrieval_failed",
+            "reason": "FAISS retriever did not return any chunks.",
+            "best_candidate": None,
+            "all_candidates": [],
+            "retrieved_chunks": []
+        }
+
+    answer_candidates = []
+
+    # Step 2: Run reader on each retrieved chunk
+    for retrieved_chunk in retrieved_chunks:
+
+        chunk_for_reader = {
+            "chunk_id": retrieved_chunk["chunk_id"],
+            "page_number": retrieved_chunk["page_number"],
+            "chunk_text": retrieved_chunk["chunk_text"],
+            "preview": retrieved_chunk["preview"],
+            "word_count": retrieved_chunk["word_count"],
+            "character_count": len(retrieved_chunk["chunk_text"])
+        }
+
+        reader_result = qa_on_single_chunk(
+            question=question,
+            chunk=chunk_for_reader,
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_answer_tokens=max_answer_tokens,
+            min_answer_chars=min_answer_chars,
+            max_answer_chars=max_answer_chars,
+            min_span_score=None
+        )
+
+        candidate = {
+            "question": question,
+            "answer": reader_result["answer"],
+            "raw_answer": reader_result["raw_answer"],
+            "reader_span_score": reader_result["span_score"],
+            "reader_confidence": reader_result["confidence"],
+            "reader_status": reader_result["status"],
+            "retrieval_rank": retrieved_chunk["rank"],
+            "retrieval_score": retrieved_chunk["retrieval_score"],
+            "faiss_index": retrieved_chunk["faiss_index"],
+            "chunk_id": retrieved_chunk["chunk_id"],
+            "page_number": retrieved_chunk["page_number"],
+            "context_preview": retrieved_chunk["preview"],
+            "chunk_text": retrieved_chunk["chunk_text"]
+        }
+
+        answer_candidates.append(candidate)
+
+    # Step 3: Keep only valid reader answers
+    valid_candidates = [
+        candidate
+        for candidate in answer_candidates
+        if candidate["reader_status"] == "valid_answer"
+    ]
+
+    if len(valid_candidates) == 0:
+        return {
+            "question": question,
+            "answer": "",
+            "status": "reader_failed",
+            "reason": "FAISS retrieved chunks, but reader could not extract a valid answer.",
+            "best_candidate": None,
+            "all_candidates": answer_candidates,
+            "retrieved_chunks": retrieved_chunks
+        }
+
+    # Step 4: Rank only using reader span score
+    valid_candidates = sorted(
+        valid_candidates,
+        key=lambda x: x["reader_span_score"],
+        reverse=True
+    )
+
+    best_candidate = valid_candidates[0]
+
+    return {
+        "question": question,
+        "answer": best_candidate["answer"],
+        "status": "valid_answer",
+        "reason": "Answer extracted using simple FAISS Retriever + Reader pipeline.",
+        "best_candidate": best_candidate,
+        "all_candidates": valid_candidates,
+        "retrieved_chunks": retrieved_chunks
+    }
+
+def display_faiss_qa_output(output: Dict[str, Any]):
+    """
+    Displays output from FAISS Retriever + Reader pipeline.
+    """
+
+    print("=" * 100)
+    print("Question:")
+    print(output["question"])
+    print("=" * 100)
+
+    print("Status:", output["status"])
+    print("Reason:", output["reason"])
+    print()
+
+    print("Final Answer:")
+    print(output["answer"])
+    print()
+
+    best_candidate = output.get("best_candidate")
+
+    if best_candidate is not None:
+        print("-" * 100)
+        print("Best Source")
+        print("Page Number:", best_candidate["page_number"])
+        print("Chunk ID:", best_candidate["chunk_id"])
+        print("FAISS Index:", best_candidate["faiss_index"])
+        print("Retrieval Rank:", best_candidate["retrieval_rank"])
+        print("Retrieval Score:", round(best_candidate["retrieval_score"], 4))
+        print("Reader Span Score:", round(best_candidate["reader_span_score"], 4))
+        print("Reader Confidence:", round(best_candidate["reader_confidence"], 6))
+        print("-" * 100)
+        print("Context Preview:")
+        print(best_candidate["context_preview"])
+
+# Test simple FAISS Retriever + Reader pipeline
+
+question = "What is the main idea of this document?"
+
+faiss_simple_output = faiss_retrieve_then_answer_simple(
+    question=question,
+    chunks=chunks_data,
+    faiss_index=faiss_cosine_index,
+    embedding_model=embedding_model,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=5
+)
+
+display_faiss_qa_output(faiss_simple_output)
+
+# Inspect all answer candidates from simple FAISS pipeline
+
+faiss_simple_candidates_df = pd.DataFrame([
+    {
+        "retrieval_rank": candidate["retrieval_rank"],
+        "retrieval_score": candidate["retrieval_score"],
+        "reader_span_score": candidate["reader_span_score"],
+        "reader_confidence": candidate["reader_confidence"],
+        "answer": candidate["answer"],
+        "page_number": candidate["page_number"],
+        "chunk_id": candidate["chunk_id"],
+        "faiss_index": candidate["faiss_index"],
+        "reader_status": candidate["reader_status"]
+    }
+    for candidate in faiss_simple_output["all_candidates"]
+])
+
+faiss_simple_candidates_df
+
+## Observation / Interpretation
+
+The simple FAISS pipeline is now complete.
+
+The system does this:
+
+```text
+Question → FAISS Search → Top-k Chunks → BERT Reader → Best Answer
+```
+This is much better than brute-force QnA because the reader no longer checks every chunk.
+
+However, this simple version ranks final answers using only:
+```
+reader span score
+```
+That means it ignores how strongly the chunk was retrieved by FAISS.
+
+A more practical system should consider both:
+```
+Chunk relevance
++
+Answer span strength
+```
+So now we build a better version.
+
+## Version 2: Better `faiss_retrieve_then_answer()`
+
+In the better version, we combine two signals:
+
+### 1. Retrieval Score
+
+This tells us how relevant the chunk is to the question.
+
+$$
+s^{\text{retrieval}}
+$$
+
+### 2. Reader Score
+
+This tells us how strongly the BERT reader found an answer span.
+
+$$
+s^{\text{reader}}
+$$
+
+The final score is:
+
+$$
+\text{final score}
+=
+\alpha \cdot \text{normalized retrieval score}
++
+(1-\alpha) \cdot \text{normalized reader score}
+$$
+
+where:
+
+- $\alpha$ controls the importance of retrieval
+- $1-\alpha$ controls the importance of reader confidence
+
+This makes the final answer ranking more balanced and easier to debug.
+
+def faiss_retrieve_then_answer(
+    question: str,
+    chunks: List[Dict[str, Any]],
+    faiss_index,
+    embedding_model,
+    tokenizer,
+    model,
+    device: str = "cpu",
+    top_k: int = 5,
+    alpha: float = 0.40,
+    min_retrieval_score: Optional[float] = 0.1,
+    max_answer_tokens: int = 40,
+    min_answer_chars: int = 10,
+    max_answer_chars: int = 400,
+    return_debug: bool = True
+) -> Dict[str, Any]:
+    """
+    Better FAISS Retriever + BERT Reader pipeline.
+
+    Improvements:
+    - Uses FAISS for retrieval.
+    - Supports retrieval score threshold.
+    - Uses robust BERT-style reader.
+    - Combines retrieval score and reader span score.
+    - Preserves source metadata.
+    - Returns debug information for failure analysis.
+    """
+
+    if question is None or len(question.strip()) == 0:
+        raise ValueError("Question cannot be empty.")
+
+    if not (0 <= alpha <= 1):
+        raise ValueError("alpha must be between 0 and 1.")
+
+    # Step 1: Retrieve relevant chunks using FAISS
+    retrieved_chunks = faiss_semantic_retrieve(
+        question=question,
+        chunks=chunks,
+        faiss_index=faiss_index,
+        embedding_model=embedding_model,
+        top_k=top_k,
+        min_retrieval_score=min_retrieval_score
+    )
+
+    if len(retrieved_chunks) == 0:
+        return {
+            "question": question,
+            "answer": "",
+            "status": "retrieval_failed",
+            "reason": "No chunks were retrieved. Try lowering threshold or increasing top_k.",
+            "best_candidate": None,
+            "all_candidates": [],
+            "retrieved_chunks": []
+        }
+
+    answer_candidates = []
+
+    # Step 2: Run reader on each retrieved chunk
+    for retrieved_chunk in retrieved_chunks:
+
+        chunk_for_reader = {
+            "chunk_id": retrieved_chunk["chunk_id"],
+            "page_number": retrieved_chunk["page_number"],
+            "chunk_text": retrieved_chunk["chunk_text"],
+            "preview": retrieved_chunk["preview"],
+            "word_count": retrieved_chunk["word_count"],
+            "character_count": len(retrieved_chunk["chunk_text"])
+        }
+
+        reader_result = qa_on_single_chunk(
+            question=question,
+            chunk=chunk_for_reader,
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_answer_tokens=max_answer_tokens,
+            min_answer_chars=min_answer_chars,
+            max_answer_chars=max_answer_chars,
+            min_span_score=None
+        )
+
+        candidate = {
+            "question": question,
+            "answer": reader_result["answer"],
+            "raw_answer": reader_result["raw_answer"],
+            "reader_span_score": reader_result["span_score"],
+            "reader_confidence": reader_result["confidence"],
+            "reader_status": reader_result["status"],
+            "reader_reason": reader_result["reason"],
+            "retrieval_rank": retrieved_chunk["rank"],
+            "retrieval_score": retrieved_chunk["retrieval_score"],
+            "faiss_index": retrieved_chunk["faiss_index"],
+            "chunk_id": retrieved_chunk["chunk_id"],
+            "page_number": retrieved_chunk["page_number"],
+            "context_preview": retrieved_chunk["preview"],
+            "chunk_text": retrieved_chunk["chunk_text"]
+        }
+
+        answer_candidates.append(candidate)
+
+    # Step 3: Keep only valid reader answers
+    valid_candidates = [
+        candidate
+        for candidate in answer_candidates
+        if candidate["reader_status"] == "valid_answer"
+    ]
+
+    if len(valid_candidates) == 0:
+        return {
+            "question": question,
+            "answer": "",
+            "status": "reader_failed",
+            "reason": "FAISS retrieved chunks, but reader could not extract a valid answer.",
+            "best_candidate": None,
+            "all_candidates": answer_candidates if return_debug else [],
+            "retrieved_chunks": retrieved_chunks
+        }
+
+    # Step 4: Normalize retrieval and reader scores
+    retrieval_scores = [
+        candidate["retrieval_score"]
+        for candidate in valid_candidates
+    ]
+
+    reader_scores = [
+        candidate["reader_span_score"]
+        for candidate in valid_candidates
+    ]
+
+    normalized_retrieval_scores = min_max_normalize(retrieval_scores)
+    normalized_reader_scores = min_max_normalize(reader_scores)
+
+    # Step 5: Combine scores
+    for idx, candidate in enumerate(valid_candidates):
+
+        candidate["normalized_retrieval_score"] = normalized_retrieval_scores[idx]
+        candidate["normalized_reader_score"] = normalized_reader_scores[idx]
+
+        candidate["final_score"] = (
+            alpha * candidate["normalized_retrieval_score"]
+            +
+            (1 - alpha) * candidate["normalized_reader_score"]
+        )
+
+    # Step 6: Rank using final score
+    valid_candidates = sorted(
+        valid_candidates,
+        key=lambda x: x["final_score"],
+        reverse=True
+    )
+
+    best_candidate = valid_candidates[0]
+
+    return {
+        "question": question,
+        "answer": best_candidate["answer"],
+        "status": "valid_answer",
+        "reason": "Answer selected using combined FAISS retrieval score and reader score.",
+        "best_candidate": best_candidate,
+        "all_candidates": valid_candidates if return_debug else [],
+        "retrieved_chunks": retrieved_chunks
+    }
+
+def display_faiss_qa_output_v2(output: Dict[str, Any]):
+    """
+    Displays output from improved FAISS Retriever + Reader pipeline.
+    """
+
+    print("=" * 100)
+    print("Question:")
+    print(output["question"])
+    print("=" * 100)
+
+    print("Status:", output["status"])
+    print("Reason:", output["reason"])
+    print()
+
+    print("Final Answer:")
+    print(output["answer"])
+    print()
+
+    best_candidate = output.get("best_candidate")
+
+    if best_candidate is not None:
+        print("-" * 100)
+        print("Best Source")
+        print("Page Number:", best_candidate["page_number"])
+        print("Chunk ID:", best_candidate["chunk_id"])
+        print("FAISS Index:", best_candidate["faiss_index"])
+        print("Retrieval Rank:", best_candidate["retrieval_rank"])
+        print("Retrieval Score:", round(best_candidate["retrieval_score"], 4))
+        print("Reader Span Score:", round(best_candidate["reader_span_score"], 4))
+        print("Normalized Retrieval Score:", round(best_candidate["normalized_retrieval_score"], 4))
+        print("Normalized Reader Score:", round(best_candidate["normalized_reader_score"], 4))
+        print("Final Score:", round(best_candidate["final_score"], 4))
+        print("-" * 100)
+        print("Context Preview:")
+        print(best_candidate["context_preview"])
+
+# Test improved FAISS Retriever + Reader pipeline
+
+question = "What is the main idea of this document?"
+
+faiss_improved_output = faiss_retrieve_then_answer(
+    question=question,
+    chunks=chunks_data,
+    faiss_index=faiss_cosine_index,
+    embedding_model=embedding_model,
+    tokenizer=qa_tokenizer,
+    model=qa_model,
+    device=device,
+    top_k=5,
+    alpha=0.40,
+    min_retrieval_score=None,
+    return_debug=True
+)
+
+display_faiss_qa_output_v2(faiss_improved_output)
+
+# Inspect final candidate ranking
+
+faiss_improved_candidates_df = pd.DataFrame([
+    {
+        "retrieval_rank": candidate["retrieval_rank"],
+        "retrieval_score": candidate["retrieval_score"],
+        "reader_span_score": candidate["reader_span_score"],
+        "normalized_retrieval_score": candidate["normalized_retrieval_score"],
+        "normalized_reader_score": candidate["normalized_reader_score"],
+        "final_score": candidate["final_score"],
+        "answer": candidate["answer"],
+        "page_number": candidate["page_number"],
+        "chunk_id": candidate["chunk_id"],
+        "faiss_index": candidate["faiss_index"]
+    }
+    for candidate in faiss_improved_output["all_candidates"]
+])
+
+faiss_improved_candidates_df
+
+## What Changed and Why?
+
+In the simple version, we selected the final answer using only:
+
+$$
+\text{reader span score}
+$$
+
+In the better version, we used:
+
+$$
+\text{final score}
+=
+\alpha \cdot \text{normalized retrieval score}
++
+(1-\alpha) \cdot \text{normalized reader score}
+$$
+
+This is better because:
+
+1. Retrieval score tells us whether the chunk is relevant.
+
+2. Reader score tells us whether the extracted span is strong.
+
+3. Combining both scores reduces the chance of selecting an answer from a weakly relevant chunk.
+
+4. The system becomes easier to debug because we can inspect:
+   - FAISS retrieval score
+   - Retrieval rank
+   - Reader span score
+   - Final score
+   - Page number
+   - Chunk ID
+   - Context preview
+
+This is closer to how modern retrieval-based systems combine multiple signals.
+
+## Compare Three QnA Approaches
+
+Now let us compare three approaches:
+
+### 1. Brute-force QnA
+
+```text
+Question → All Chunks → Reader
+```
+### 2. Manual Retrieval-based QnA
+```
+Question → Manual Cosine Retriever → Top-k Chunks → Reader
+```
+### 3. FAISS Retrieval-based QnA
+```
+Question → FAISS Retriever → Top-k Chunks → Reader
+```
+This comparison helps students see the architectural progression.
+
+comparison_questions = [
+    "What is the main contribution of the document?",
+    "What method or model is discussed?",
+    "What are the limitations mentioned?",
+    "What results or findings are reported?"
+]
+
+qa_comparison_rows = []
+
+for q in comparison_questions:
+
+    # Brute-force QnA
+    brute_results = brute_force_qa_over_chunks(
+        question=q,
+        chunks=chunks_data,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_n=1,
+        max_answer_tokens=35,
+        min_answer_chars=3,
+        max_answer_chars=300,
+        keep_invalid=False,
+        show_progress=False
+    )
+
+    brute_best = brute_results[0] if len(brute_results) > 0 else None
+
+    # Manual Retriever + Reader
+    manual_output = retrieve_then_answer(
+        question=q,
+        chunks=chunks_data,
+        chunk_embeddings=chunk_embeddings,
+        embedding_model=embedding_model,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_k=5,
+        alpha=0.40,
+        return_debug=True
+    )
+
+    manual_best = manual_output.get("best_candidate")
+
+    # FAISS Retriever + Reader
+    faiss_output = faiss_retrieve_then_answer(
+        question=q,
+        chunks=chunks_data,
+        faiss_index=faiss_cosine_index,
+        embedding_model=embedding_model,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_k=5,
+        alpha=0.40,
+        return_debug=True
+    )
+
+    faiss_best = faiss_output.get("best_candidate")
+
+    qa_comparison_rows.append({
+        "question": q,
+
+        "brute_force_answer": None if brute_best is None else brute_best["answer"],
+        "brute_force_page": None if brute_best is None else brute_best["page_number"],
+        "brute_force_chunk_id": None if brute_best is None else brute_best["chunk_id"],
+
+        "manual_retrieval_answer": manual_output["answer"],
+        "manual_retrieval_page": None if manual_best is None else manual_best["page_number"],
+        "manual_retrieval_chunk_id": None if manual_best is None else manual_best["chunk_id"],
+
+        "faiss_retrieval_answer": faiss_output["answer"],
+        "faiss_retrieval_page": None if faiss_best is None else faiss_best["page_number"],
+        "faiss_retrieval_chunk_id": None if faiss_best is None else faiss_best["chunk_id"],
+        "faiss_final_score": None if faiss_best is None else faiss_best["final_score"]
+    })
+
+qa_comparison_df = pd.DataFrame(qa_comparison_rows)
+
+qa_comparison_df
+
+## Observation / Interpretation
+
+This comparison should be discussed carefully.
+
+The goal is not only to check which answer looks better.
+
+The goal is to understand the architecture.
+
+### Brute-force QnA
+
+- Checks all chunks
+- Slow for large documents
+- Reader may extract misleading spans from irrelevant chunks
+
+### Manual Retrieval QnA
+
+- Retrieves top-k chunks using manual cosine similarity
+- Easier to understand
+- Still scans all chunk embeddings manually
+
+### FAISS Retrieval QnA
+
+- Retrieves top-k chunks using a vector index
+- More scalable
+- Similar idea to manual retrieval, but better engineering
+
+The important architectural improvement is:
+
+```text
+Search first, read second.
+```
+
+def time_function_call(func, repeat: int = 3):
+    """
+    Utility function to measure average execution time.
+    """
+
+    times = []
+
+    for _ in range(repeat):
+        start_time = time.time()
+        _ = func()
+        end_time = time.time()
+
+        times.append(end_time - start_time)
+
+    return sum(times) / len(times)
+
+timing_question = "What are the limitations mentioned?"
+
+brute_force_time = time_function_call(
+    lambda: brute_force_qa_over_chunks(
+        question=timing_question,
+        chunks=chunks_data,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_n=1,
+        max_answer_tokens=35,
+        min_answer_chars=3,
+        max_answer_chars=300,
+        keep_invalid=False,
+        show_progress=False
+    ),
+    repeat=1
+)
+
+manual_retrieval_qa_time = time_function_call(
+    lambda: retrieve_then_answer(
+        question=timing_question,
+        chunks=chunks_data,
+        chunk_embeddings=chunk_embeddings,
+        embedding_model=embedding_model,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_k=5,
+        alpha=0.40,
+        return_debug=False
+    ),
+    repeat=3
+)
+
+faiss_retrieval_qa_time = time_function_call(
+    lambda: faiss_retrieve_then_answer(
+        question=timing_question,
+        chunks=chunks_data,
+        faiss_index=faiss_cosine_index,
+        embedding_model=embedding_model,
+        tokenizer=qa_tokenizer,
+        model=qa_model,
+        device=device,
+        top_k=5,
+        alpha=0.40,
+        return_debug=False
+    ),
+    repeat=3
+)
+
+qa_timing_df = pd.DataFrame([
+    {
+        "approach": "Brute-force QnA",
+        "average_time_seconds": brute_force_time,
+        "reader_calls": len(chunks_data)
+    },
+    {
+        "approach": "Manual Retrieval + Reader",
+        "average_time_seconds": manual_retrieval_qa_time,
+        "reader_calls": 5
+    },
+    {
+        "approach": "FAISS Retrieval + Reader",
+        "average_time_seconds": faiss_retrieval_qa_time,
+        "reader_calls": 5
+    }
+])
+
+qa_timing_df
+
+approach  average_time_seconds  reader_calls
+0            Brute-force QnA              1.999185            78
+1  Manual Retrieval + Reader              0.131520             5
+2   FAISS Retrieval + Reader              0.133291             5
+
+## Important Timing Note
+
+For small PDFs, the timing difference between manual retrieval and FAISS retrieval may not be very large.
+
+This is because:
+
+```text
+Question embedding time may dominate the total time.
+```
+But the main saving comes from reducing reader calls.
+
+In brute-force QnA:
+$$
+Reader\ Calls=N
+$$
+In retrieval-based QnA:
+$$
+Reader\ Calls=k
+$$
+Usually:
+$$
+k≪N
+$$
+So retrieval-based QnA becomes much more useful as documents become larger.
+
+## Modern AI Systems Connection
+
+This FAISS Retriever + Reader pipeline is a simplified version of the architecture used in many document AI systems.
+
+Our current system is:
+
+```text
+Question
+   ↓
+FAISS Retriever
+   ↓
+Relevant Chunks
+   ↓
+BERT Reader
+   ↓
+Extracted Answer Span
+```
+Modern generative RAG systems often use:
+```
+Question
+   ↓
+Retriever
+   ↓
+Relevant Chunks
+   ↓
+LLM
+   ↓
+Generated Answer
+```
+The difference is:
+| System         | Final Answering Component     |
+| -------------- | ----------------------------- |
+| Our system     | BERT-style extractive reader  |
+| Generative RAG | LLM / decoder-style generator |
+
+In modern systems, this pipeline may be further improved using:
+
+- Better chunking
+- Hybrid search
+- Metadata filters
+- Rerankers
+- Query rewriting
+- Multi-hop retrieval
+- Agentic tool use
+
+But the foundation remains the same:
+```
+Retrieve useful context before answering.
+```
+
+## Concept Check
+
+1. What are the two main components of our FAISS-based QnA system?
+
+2. What does FAISS do in this pipeline?
+
+3. What does the BERT reader do in this pipeline?
+
+4. Why is this better than brute-force QnA?
+
+5. In the simple version, how did we rank final answers?
+
+6. In the improved version, which two scores were combined?
+
+7. Why is metadata important in FAISS-based QnA?
+
+8. Is this system a generative RAG system?
+
+## Instructor-Only Answers
+
+1. The two main components are the FAISS retriever and the BERT-style reader.
+
+2. FAISS retrieves the most relevant chunks by searching similar embeddings.
+
+3. The BERT reader extracts an answer span from each retrieved chunk.
+
+4. It is better because the reader processes only top-k retrieved chunks instead of every chunk.
+
+5. In the simple version, final answers were ranked using only the reader span score.
+
+6. In the improved version, retrieval score and reader span score were combined.
+
+7. Metadata is important because FAISS only returns vector indices. We need metadata to recover page number, chunk ID, preview, and source text.
+
+8. No. This is retrieval-based extractive QnA. A generative RAG system usually uses an LLM to generate the final answer from retrieved context.
+
+## Bridge to Next Section
+
+We now have the complete FAISS Retriever + BERT Reader system.
+
+But a strong document QnA system is not only about building the pipeline.
+
+We must also debug failures.
+
+When the system gives a poor answer, we need to identify where the failure happened.
+
+There are two major possibilities:
+
+```text
+Retrieval Failure
+```
+or
+```
+Reader Failure
+```
+In the next section, we will learn how to debug these two failure types separately.
+
+This completes the main **FAISS Retriever + BERT Reader** pipeline.

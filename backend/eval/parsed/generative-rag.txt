@@ -1,0 +1,7686 @@
+# From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit
+
+## A Continuous Masterclass on Retrieval-Augmented Generation
+
+In the previous notebook, we built a **retrieval-based PDF QnA system**.
+
+The system followed this idea:
+
+$$
+\text{PDF} \rightarrow \text{Chunks} \rightarrow \text{Embeddings} \rightarrow \text{FAISS Retrieval} \rightarrow \text{BERT-style Reader}
+$$
+
+That system was powerful because it did not ask the QnA model to read the entire PDF.  
+Instead, it first retrieved the most relevant chunks and then used a reader model to extract an answer.
+
+But there was one major limitation:
+
+> The BERT-style QnA reader could only extract an answer span from the retrieved context.
+
+In this notebook, we move one step closer to real-world GenAI systems.
+
+We will build a system where:
+
+$$
+\text{Retriever finds relevant context}
+$$
+
+and then
+
+$$
+\text{Generative model writes a grounded answer}
+$$
+
+This is the core idea behind **Retrieval-Augmented Generation**, commonly called **RAG**.
+
+## Why Are We Starting a New Notebook?
+
+This is a fresh Google Colab notebook.
+
+That means we should assume that nothing from the previous notebook exists here.
+
+So we will rebuild the full pipeline from scratch:
+
+1. Install required libraries
+2. Import packages
+3. Upload or read a PDF
+4. Extract text from the PDF
+5. Clean the extracted text
+6. Create meaningful chunks
+7. Generate embeddings for chunks
+8. Build a FAISS index
+9. Retrieve top-k relevant chunks
+10. Build a prompt using retrieved chunks
+11. Use a generative model to produce an answer
+12. Show answer with sources
+13. Analyze hallucination and grounding
+14. Prepare the system for a Streamlit app
+
+This notebook is not only about building a working project.
+
+It is about understanding the transition from:
+
+$$
+\text{Extractive QnA}
+$$
+
+to
+
+$$
+\text{Generative RAG}
+$$
+
+## Learning Objectives
+
+By the end of this masterclass, we should be able to:
+
+### 1. Understand the limitation of extractive QnA
+
+Explain why BERT-style QnA models can extract answer spans but cannot naturally generate complete explanatory answers.
+
+---
+
+### 2. Understand the difference between reader models and generator models
+
+Clearly distinguish between:
+
+- Encoder-based models
+- Decoder-based models
+- Encoder-decoder models
+- Extractive QnA models
+- Generative models
+
+---
+
+### 3. Build a PDF processing pipeline from scratch
+
+Create reusable functions for:
+
+- PDF text extraction
+- Text cleaning
+- Chunking with metadata
+- Source tracking
+
+---
+
+### 4. Build a semantic retriever
+
+Use embeddings and FAISS to retrieve relevant chunks from a PDF.
+
+---
+
+### 5. Build a manual RAG pipeline
+
+Construct the full RAG flow manually:
+
+$$
+\text{Question} \rightarrow \text{Retrieve Context} \rightarrow \text{Build Prompt} \rightarrow \text{Generate Answer}
+$$
+
+---
+
+### 6. Understand grounding and hallucination
+
+Analyze whether the generated answer is actually supported by the retrieved source chunks.
+
+---
+
+### 7. Compare extractive QnA and generative RAG
+
+Understand when extractive answering is useful and when generative answering is better.
+
+---
+
+### 8. Prepare the project for Streamlit deployment
+
+Understand how the notebook can be converted into a local app with:
+
+- PDF uploader
+- Question box
+- Answer display
+- Source chunk display
+- Retrieval score display
+
+## Masterclass Roadmap
+
+This notebook will flow as one continuous project.
+
+We will not divide it rigidly into separate classes.
+
+Instead, every section will naturally answer one project need.
+
+---
+
+### Phase 1: From Extractive QnA to Generative Need
+
+We start by revisiting our previous system.
+
+The previous system looked like this:
+
+$$
+\text{PDF Chunks} \rightarrow \text{Retriever} \rightarrow \text{BERT Reader} \rightarrow \text{Extracted Span}
+$$
+
+Then we ask:
+
+> What if the answer is not present as one exact span?
+
+This creates the need for generative answering.
+
+---
+
+### Phase 2: Understanding Model Roles
+
+We will clearly separate:
+
+| Model Type | Main Role |
+|---|---|
+| Encoder model | Understands input deeply |
+| Decoder model | Generates text token by token |
+| Encoder-decoder model | Reads input and generates output |
+| BERT-style QnA model | Extracts answer span |
+| FLAN-T5-style model | Generates natural-language answer |
+
+---
+
+### Phase 3: Rebuilding the PDF Pipeline
+
+We will rebuild everything from scratch:
+
+$$
+\text{PDF} \rightarrow \text{Text} \rightarrow \text{Clean Text} \rightarrow \text{Chunks with Metadata}
+$$
+
+Each chunk will store:
+
+- Chunk ID
+- Page number
+- Chunk text
+- Preview
+- Word count
+
+---
+
+### Phase 4: Building the Retriever
+
+We will use an embedding model to convert text chunks into vectors.
+
+Then we will store those vectors inside FAISS.
+
+The retriever will perform:
+
+$$
+\text{Question Embedding} \rightarrow \text{FAISS Search} \rightarrow \text{Top-k Relevant Chunks}
+$$
+
+---
+
+### Phase 5: Building the Generator
+
+We will use a lightweight generative model such as:
+
+```text
+google/flan-t5-small
+```
+or, if Colab resources allow:
+
+google/flan-t5-base
+
+The generator will not answer from memory alone.
+
+It will answer using retrieved context.
+
+### Phase 6: Building the RAG Pipeline
+
+The full pipeline will become:
+
+PDF→Chunks→Embeddings→FAISS Retriever→Top-k Context→Prompt→Generative Model→Grounded Answer
+### Phase 7: Evaluation and Failure Analysis
+
+We will analyze:
+```
+Retrieval failure
+Generation failure
+Unsupported answers
+Hallucination
+Weak prompts
+Missing context
+Irrelevant chunks
+```
+### Phase 8: Streamlit App Preparation
+
+Finally, we will understand how to convert this notebook into a simple local Streamlit app.
+
+The app will have:
+```
+PDF uploader
+Question input box
+Generated answer
+Retrieved source chunks
+Page number
+Chunk ID
+Retrieval score
+```
+
+## The Main Story
+
+Imagine a student uploads a research paper and asks:
+
+> What is the main contribution of this paper?
+
+In an extractive QnA system, the model tries to find an exact span from the document.
+
+But a good answer may require combining information from multiple places.
+
+For example, the answer may need:
+
+- One sentence from the abstract
+- One idea from the introduction
+- One detail from the methodology
+- One limitation from the conclusion
+
+A BERT-style extractive reader is not naturally designed to synthesize all of this into a complete answer.
+
+So we need a different approach.
+
+We still do not want the model to freely answer from memory.
+
+That can lead to hallucination.
+
+Instead, we do this:
+
+1. Retrieve the most relevant chunks from the PDF.
+2. Put those chunks inside a prompt.
+3. Ask a generative model to answer only from the provided context.
+4. Display the answer along with the source chunks.
+
+This is the central idea of RAG:
+
+$$
+\text{RAG} = \text{Retrieval} + \text{Generation}
+$$
+
+Retrieval gives the model external knowledge.
+
+Generation converts that knowledge into a readable answer.
+
+## Key Distinctions
+
+Before we start coding, we must keep some ideas clearly separated.
+
+---
+
+### 1. FAISS does not answer questions
+
+FAISS only retrieves similar vectors.
+
+It answers this question:
+
+> Which chunks are semantically closest to the question?
+
+It does not generate text.
+
+---
+
+### 2. BERT-style QnA models do not generate freely
+
+A BERT-style reader usually extracts a span from the context.
+
+It answers this question:
+
+> Which part of the context looks like the answer?
+
+---
+
+### 3. Generative models write new text
+
+A generative model produces text token by token.
+
+It answers this question:
+
+> Given the prompt and context, what response should I generate?
+
+---
+
+### 4. RAG is not just using an LLM
+
+Using an LLM alone is not necessarily RAG.
+
+RAG requires retrieval.
+
+The model must be given external context before generation.
+
+---
+
+### 5. Grounding matters
+
+A generated answer is useful only if it is supported by the retrieved source chunks.
+
+If the model says something that is not supported by the provided context, that is hallucination.
+
+---
+
+### 6. Retrieval failure and generation failure are different
+
+If the retriever brings the wrong chunks, the generator may answer poorly even if the model is good.
+
+If the retriever brings the correct chunks but the generator still gives a weak or unsupported answer, that is generation failure.
+
+## Expected Final Pipeline
+
+By the end of the notebook, our system should look like this:
+
+```text
+PDF
+↓
+Text Extraction
+↓
+Text Cleaning
+↓
+Chunking with Metadata
+↓
+Embedding Model
+↓
+FAISS Retriever
+↓
+Top-k Relevant Chunks
+↓
+Prompt Construction
+↓
+Generative Model
+↓
+Grounded Answer
+↓
+Source Display
+↓
+Failure Analysis
+↓
+Streamlit App Skeleton
+```
+The important idea is that every stage has a clear responsibility.
+| Stage          | Responsibility                             |
+| -------------- | ------------------------------------------ |
+| PDF extraction | Read raw text from document                |
+| Cleaning       | Remove unwanted formatting noise           |
+| Chunking       | Break long text into manageable units      |
+| Embedding      | Convert text into numerical vectors        |
+| FAISS          | Retrieve relevant chunks efficiently       |
+| Prompting      | Give context and instructions to generator |
+| Generator      | Produce readable answer                    |
+| Source display | Make answer traceable                      |
+| Evaluation     | Check whether answer is reliable           |
+| Streamlit      | Convert notebook into usable interface     |
+
+## Functions We Will Build
+
+We will build the project using clean reusable functions.
+
+The major functions will be:
+
+```python
+extract_text_from_pdf()
+clean_text()
+chunk_text_with_metadata()
+create_chunk_embeddings()
+build_faiss_index()
+retrieve_top_k_chunks()
+build_rag_prompt()
+generate_answer_from_context()
+rag_answer()
+display_rag_sources()
+```
+Each function will solve one part of the pipeline.
+
+This modular design has two benefits:
+
+1. It makes the notebook easier to understand.
+2. It makes the project easier to convert into a Streamlit app later.
+
+## Model Strategy
+
+We will use lightweight models suitable for Google Colab.
+
+### Embedding Model
+
+For embeddings, we will use:
+
+```text
+sentence-transformers/all-MiniLM-L6-v2
+```
+### Retriever
+
+For retrieval, we will use:
+```
+FAISS
+```
+FAISS allows efficient similarity search over many chunk embeddings.
+
+### Generative Model
+
+For answer generation, we will prefer:
+```
+google/flan-t5-small
+```
+If Colab resources allow, we may also discuss:
+```
+google/flan-t5-base
+```
+The small model is not perfect, but it is suitable for teaching the basic mechanics of RAG.
+
+### Important Teaching Note
+
+The goal is not to use the biggest LLM.
+
+The goal is to understand the architecture.
+
+A small model is enough to learn:
+```
+Retrieval
+Prompt construction
+Context grounding
+Source-based answering
+Failure analysis
+```
+
+## Concept Check
+
+Answer the following before moving ahead:
+
+### Q1.  
+In the previous Retriever + Reader system, what was the role of FAISS?
+
+### Q2.  
+Why is a BERT-style QnA reader called extractive?
+
+### Q3.  
+Why do we need a generative model in this new notebook?
+
+### Q4.  
+Is using an LLM alone the same as RAG?
+
+### Q5.  
+What are the two main components of RAG?
+
+### Q6.  
+Why should we show source chunks along with the generated answer?
+
+### Q7.  
+What is the difference between retrieval failure and generation failure?
+
+## Instructor-Only Answers
+
+### A1.  
+FAISS retrieves the most relevant chunks by searching over chunk embeddings.  
+It does not answer the question directly.
+
+---
+
+### A2.  
+A BERT-style QnA reader is called extractive because it selects an answer span from the given context.  
+The answer must usually appear inside the context.
+
+---
+
+### A3.  
+We need a generative model because real answers are often not just one copied span.  
+A generative model can synthesize information from retrieved chunks and produce a complete natural-language response.
+
+---
+
+### A4.  
+No. Using an LLM alone is not RAG.  
+RAG requires retrieval of external context before generation.
+
+---
+
+### A5.  
+The two main components of RAG are:
+
+$$
+\text{Retrieval} + \text{Generation}
+$$
+
+The retriever finds relevant context.  
+The generator writes an answer using that context.
+
+---
+
+### A6.  
+Source chunks make the answer traceable.  
+They help us verify whether the generated answer is grounded in the document or hallucinated.
+
+---
+
+### A7.  
+Retrieval failure happens when the system retrieves irrelevant or incomplete chunks.  
+Generation failure happens when the correct chunks are retrieved but the model still generates a weak, incorrect, or unsupported answer.
+
+## Bridge to the Next Section
+
+We now have the roadmap.
+
+The next step is to revisit our previous Retriever + Reader system conceptually.
+
+Before writing new code, we will ask:
+
+> What exactly was powerful about the Retriever + Reader architecture?
+
+and more importantly:
+
+> Where does it fail?
+
+This will naturally create the need for generative answering.
+
+In the next section, we will compare:
+
+$$
+\text{Retriever + Extractive Reader}
+$$
+
+with
+
+$$
+\text{Retriever + Generative Model}
+$$
+
+# Section 1: Recap of Retriever + Reader PDF QnA
+
+Before moving toward Generative RAG, we first revisit the system we already built.
+
+The previous system was not a simple QnA model.
+
+It was a two-stage architecture:
+
+$$
+\text{Retriever} + \text{Reader}
+$$
+
+The retriever selected the most relevant chunks from the PDF.
+
+The reader extracted an answer span from those selected chunks.
+
+This section will help us understand exactly what was powerful in that system and where its limitations begin.
+
+## 1.1 The Problem We Had Earlier
+
+A PDF document can be very long.
+
+It may contain:
+
+- 10 pages
+- 50 pages
+- 100 pages
+- thousands of sentences
+- many unrelated sections
+
+If a user asks a question, we cannot always pass the entire PDF into a BERT-style QnA model.
+
+There are two main reasons.
+
+---
+
+### Reason 1: Transformer models have input length limits
+
+Most BERT-style models can only process a limited number of tokens at once.
+
+For example, many BERT-like models commonly work with around 512 tokens.
+
+So a full research paper cannot be directly passed into the model.
+
+---
+
+### Reason 2: Running QnA on every chunk is expensive
+
+One naive solution is:
+
+> Break the PDF into chunks and run QnA on every chunk.
+
+But this becomes slow as the number of chunks increases.
+
+If a PDF has 500 chunks, then the QnA model has to run 500 times for one question.
+
+That is not scalable.
+
+So we introduced retrieval.
+
+## 1.2 The Retriever + Reader Architecture
+
+The Retriever + Reader system divides the work into two parts.
+
+---
+
+### Stage 1: Retriever
+
+The retriever answers this question:
+
+> Which chunks are most relevant to the user's question?
+
+It does not produce the final answer.
+
+It only selects useful context.
+
+Mathematically, the retriever compares the question vector with chunk vectors.
+
+$$
+\text{similarity}(\text{question}, \text{chunk})
+$$
+
+Then it selects the top-k most relevant chunks.
+
+---
+
+### Stage 2: Reader
+
+The reader answers this question:
+
+> Inside the retrieved chunks, which text span is the answer?
+
+The reader is usually an encoder-based extractive QnA model.
+
+For example:
+
+```text
+distilbert-base-cased-distilled-squad
+```
+The reader produces two important outputs:
+```
+start logits
+
+and
+
+end logits
+```
+These help identify where the answer starts and ends inside the context.
+
+## 1.3 Previous Pipeline
+
+The previous system followed this structure:
+
+```text
+PDF
+↓
+Text Extraction
+↓
+Text Cleaning
+↓
+Chunking
+↓
+Chunk Embeddings
+↓
+FAISS Index
+↓
+Question Embedding
+↓
+Top-k Chunk Retrieval
+↓
+BERT-style QnA Reader
+↓
+Extracted Answer Span
+↓
+Answer Ranking
+↓
+Source Display
+```
+In equation form:
+```
+PDF→Chunks→Embeddings→Retriever→Reader→Answer Span
+```
+The important improvement was that the reader did not process every chunk.
+
+It only processed the retrieved chunks.
+
+So instead of reading all chunks:
+
+$$N \  chunks$$
+
+the reader processed only:
+
+$$k \ chunks$$
+
+where usually:
+
+$$k≪N$$
+
+## 1.4 Mathematical Framing of Retrieval
+
+Suppose the PDF is divided into $N$ chunks:
+
+$$
+C = \{c_1, c_2, c_3, \dots, c_N\}
+$$
+
+Each chunk is converted into an embedding vector:
+
+$$
+e_i = f(c_i)
+$$
+
+where:
+
+$$
+f(\cdot)
+$$
+
+is the embedding model.
+
+The user question is also converted into an embedding:
+
+$$
+q = f(\text{question})
+$$
+
+Now we compare the question embedding with every chunk embedding.
+
+A common similarity measure is cosine similarity:
+
+$$
+\cos(\theta) = \frac{q \cdot e_i}{\|q\| \|e_i\|}
+$$
+
+The retriever selects the top-k chunks:
+
+$$
+\text{TopK}(q, C) = \{c_{i_1}, c_{i_2}, \dots, c_{i_k}\}
+$$
+
+These retrieved chunks are then passed to the reader.
+
+The reader tries to find:
+
+$$
+\text{answer} = c_i[s:e]
+$$
+
+where:
+
+- $s$ is the predicted start position
+- $e$ is the predicted end position
+- $c_i[s:e]$ is the extracted span
+
+## 1.5 Why Retriever + Reader Was Powerful
+
+The previous architecture solved an important scaling problem.
+
+Instead of asking the reader model to inspect the whole document, we first narrowed the search space.
+
+This gave us three advantages.
+
+---
+
+### Advantage 1: Better efficiency
+
+The reader model only runs on a few chunks.
+
+If the document has 300 chunks and we retrieve only top 5 chunks, then the expensive QnA model runs only 5 times instead of 300 times.
+
+---
+
+### Advantage 2: Better focus
+
+The reader sees more relevant context.
+
+This reduces confusion from unrelated parts of the document.
+
+---
+
+### Advantage 3: Source tracking
+
+Since every chunk has metadata, we can show:
+
+- page number
+- chunk ID
+- retrieved score
+- context preview
+
+This makes the answer more explainable.
+
+## 1.6 The Main Limitation
+
+The Retriever + Reader system was better than brute-force QnA.
+
+But it still had one major limitation:
+
+> The reader could only extract an answer span.
+
+This means the answer had to be present almost directly in the retrieved context.
+
+For example, if the context says:
+
+```text
+The Transformer model replaces recurrence with self-attention mechanisms.
+```
+and the question is:
+```
+What is the key idea of the Transformer model?
+```
+An extractive reader may return:
+```
+self-attention mechanisms
+```
+That is correct, but not very explanatory.
+
+A human-like answer may be:
+```
+The key idea of the Transformer is to replace recurrent processing with self-attention, allowing the model to capture relationships between tokens in parallel.
+```
+The second answer is more useful.
+
+But it is generated, not simply copied.
+
+## 1.7 Extractive Answer vs Generative Answer
+
+Let us compare both styles.
+
+---
+
+### Extractive QnA
+
+Extractive QnA selects text directly from the context.
+
+Example:
+
+```text
+Question:
+What mechanism does the Transformer use?
+
+Context:
+The Transformer replaces recurrence with self-attention mechanisms.
+
+Extractive Answer:
+self-attention mechanisms
+```
+The model copies a span.
+### Generative QnA
+
+Generative QnA writes a complete answer using the context.
+
+Example:
+```
+Question:
+What mechanism does the Transformer use?
+
+Context:
+The Transformer replaces recurrence with self-attention mechanisms.
+
+Generative Answer:
+The Transformer uses self-attention mechanisms instead of recurrence, allowing it to process token relationships more efficiently.
+```
+The model creates a complete sentence.
+
+## 1.8 Thought Experiment
+
+Suppose the retrieved context contains this information:
+
+```text
+Chunk 1:
+RAG systems retrieve relevant documents before generating an answer.
+
+Chunk 2:
+This helps reduce hallucination because the model is given external evidence.
+
+Chunk 3:
+The final answer should be grounded in the retrieved sources.
+```
+Now the user asks:
+```
+Why does RAG reduce hallucination?
+```
+An extractive reader may extract something like:
+```
+the model is given external evidence
+```
+This is not wrong.
+
+But a better answer would be:
+```
+RAG reduces hallucination by retrieving relevant external evidence before generation. The model is then instructed to answer using that retrieved context, making the response more grounded in the source material.
+```
+This answer combines ideas from multiple chunks.
+
+That is why we need generation.
+
+## Observation
+
+The extractive-style answer is short and directly copied from the context.
+
+It may be correct, but it may not fully explain the idea.
+
+The generative-style answer is more complete.
+
+It combines information from multiple retrieved chunks and writes a natural response.
+
+But this also creates a new risk.
+
+A generative model can write things that are not present in the context.
+
+So our next challenge is:
+
+> How do we generate useful answers while keeping them grounded in the retrieved document?
+
+This is exactly where RAG becomes important.
+
+## 1.9 Important Teaching Distinction
+
+At this point, we must be careful.
+
+We are not saying:
+
+> Extractive QnA is bad.
+
+Extractive QnA is useful when:
+
+- the answer is short
+- the answer is directly present in the context
+- exact wording matters
+- we want span-level evidence
+
+But generative RAG becomes useful when:
+
+- the answer needs explanation
+- multiple chunks need to be combined
+- the user expects a natural-language response
+- we want a more assistant-like system
+
+So the shift is not:
+
+$$
+\text{Extractive QnA is wrong}
+$$
+
+The shift is:
+
+$$
+\text{Extractive QnA is limited for assistant-like answering}
+$$
+
+## 1.10 Optimized Thinking
+
+In the previous notebook, we had two possible approaches.
+
+---
+
+### Approach 1: Brute-force QnA over all chunks
+
+```text
+Question → Run reader on every chunk → Rank answers
+```
+### Approach 2: Retriever + Reader
+```
+Question → Retrieve top-k chunks → Run reader only on selected chunks
+```
+This is better.
+
+The retriever acts like a filter.
+
+The reader works only on promising chunks.
+
+### Better Direction Now
+
+For generative RAG, we will use:
+```
+Question → Retrieve top-k chunks → Build prompt → Generate answer
+```
+This is better suited for natural-language answering.
+
+But it also needs careful design:
+```
+good chunking
+good retrieval
+good prompt construction
+source display
+hallucination checks
+```
+A generative model gives more flexibility, but also more responsibility.
+
+## Concept Check
+
+### Q1.  
+Why was running QnA on every chunk not scalable?
+
+### Q2.  
+What is the role of the retriever in a Retriever + Reader system?
+
+### Q3.  
+What is the role of the reader?
+
+### Q4.  
+Why is an extractive answer sometimes less useful than a generated answer?
+
+### Q5.  
+Give one example where extractive QnA is still better than generative QnA.
+
+### Q6.  
+Why does generative answering introduce hallucination risk?
+
+### Q7.  
+What is the next architectural change we are making after Retriever + Reader?
+
+## Instructor-Only Answers
+
+### A1.  
+Running QnA on every chunk is not scalable because the reader model has to process every chunk separately.  
+As the number of chunks increases, inference time and compute cost also increase.
+
+---
+
+### A2.  
+The retriever selects the most relevant chunks for the user question.  
+It reduces the search space before answer extraction or generation.
+
+---
+
+### A3.  
+The reader looks inside the retrieved chunks and extracts the answer span.
+
+---
+
+### A4.  
+An extractive answer may only return a short copied phrase.  
+It may not explain the idea fully or combine information from multiple chunks.
+
+---
+
+### A5.  
+Extractive QnA is better when the user asks for an exact fact, definition, date, name, value, or phrase that appears directly in the document.
+
+Example:
+
+```text
+Question:
+What is the reported accuracy of the model?
+
+Context:
+The model achieved 92.4% accuracy.
+
+Extractive Answer:
+92.4%
+```
+### A6.
+
+Generative answering introduces hallucination risk because the model can produce new text that may not be supported by the retrieved context.
+
+### A7.
+
+We are moving from:
+```
+Retriever+Extractive Reader
+```
+to:
+```
+Retriever+Generative Model
+```
+This is the foundation of RAG.
+
+## Bridge to the Next Section
+
+We have now identified the key limitation of the previous system.
+
+The previous reader could extract answers, but it could not naturally generate complete explanations.
+
+So before building RAG, we need to understand why this limitation exists.
+
+In the next section, we will study:
+
+$$
+\text{Encoder Models vs Decoder Models vs Encoder-Decoder Models}
+$$
+
+This will help us understand why BERT-style models are strong readers, while models like T5 or GPT-style models are better suited for generation.
+
+# Section 2: Why BERT Extracts but Does Not Generate
+
+In the previous section, we saw that our Retriever + Reader system had one major limitation:
+
+> The reader could extract an answer span, but it could not naturally generate a complete answer.
+
+Now we ask a deeper question:
+
+> Why does this limitation exist?
+
+The answer lies in model architecture.
+
+Different Transformer-based models are designed for different jobs.
+
+Some models are good at reading and understanding text.
+
+Some models are good at generating new text.
+
+Some models can read input and generate output.
+
+To build RAG properly, we must understand these differences.
+
+## 2.1 The Core Question
+
+Suppose we give this context to a model:
+
+```text
+The Transformer architecture replaces recurrence with self-attention mechanisms.
+This allows the model to process tokens in parallel and capture long-range dependencies.
+```
+And we ask:
+```
+Why is self-attention useful in Transformers?
+```
+A BERT-style extractive QnA model tries to find a span from the context.
+
+It may return:
+```
+process tokens in parallel and capture long-range dependencies
+```
+This is useful.
+
+But it is still copied from the context.
+
+A generative model may answer:
+```
+Self-attention is useful because it allows Transformers to compare all tokens with each other directly, capture long-range relationships, and process sequences in parallel instead of step by step.
+```
+This answer is not just a copied span.
+
+It is generated.
+
+So the important question is:
+```
+What kind of Transformer architecture allows this type of generation?
+```
+
+## 2.2 Three Major Transformer Model Families
+
+Transformer-based models are commonly grouped into three broad families:
+
+| Model Family | Common Examples | Main Strength |
+|---|---|---|
+| Encoder-only models | BERT, DistilBERT, RoBERTa | Understanding input |
+| Decoder-only models | GPT-style models | Generating text |
+| Encoder-decoder models | T5, FLAN-T5, BART | Reading input and generating output |
+
+Each family uses Transformer blocks, but the direction of information flow and training objective are different.
+
+That difference strongly affects what the model is naturally good at.
+
+## 2.3 Encoder-Only Models
+
+Encoder-only models are designed to deeply understand an input sequence.
+
+Examples:
+
+```text
+BERT
+DistilBERT
+RoBERTa
+```
+An encoder receives the full input sequence at once.
+
+Each token can attend to tokens on both the left and right side.
+
+For example, in this sentence:
+```
+The model uses attention for language understanding.
+```
+The token attention can look at:
+```
+The
+model
+uses
+for
+language
+understanding
+```
+This bidirectional attention makes encoder models very strong for understanding tasks.
+
+Common tasks include:
+```
+classification
+sentiment analysis
+named entity recognition
+extractive QnA
+semantic representation
+```
+
+## 2.4 Mathematical Framing: Encoder Attention
+
+In an encoder, each token representation is updated by attending to all tokens in the input.
+
+Suppose the input tokens are:
+
+$$
+x_1, x_2, x_3, \dots, x_n
+$$
+
+The encoder produces contextual representations:
+
+$$
+h_1, h_2, h_3, \dots, h_n
+$$
+
+Each output representation depends on the full input sequence:
+
+$$
+h_i = f(x_1, x_2, \dots, x_n)
+$$
+
+This means token $i$ can use information from both directions.
+
+For extractive QnA, the model receives:
+
+$$
+[\text{Question}; \text{Context}]
+$$
+
+Then it predicts two probability distributions:
+
+$$
+P_{\text{start}}(i)
+$$
+
+and
+
+$$
+P_{\text{end}}(j)
+$$
+
+The answer is selected as:
+
+$$
+\text{Answer} = \text{Context}[i:j]
+$$
+
+So the model is not generating a new sentence.
+
+It is selecting a span from the input.
+
+## 2.5 Why BERT-Style QnA Extracts Spans
+
+A BERT-style QnA model is usually trained on datasets where the answer appears inside the context.
+
+The model learns to predict:
+
+- where the answer starts
+- where the answer ends
+
+For each token in the context, the model produces a start score and an end score.
+
+The highest scoring start and end positions define the answer span.
+
+Example:
+
+```text
+Context:
+The capital of India is New Delhi.
+
+Question:
+What is the capital of India?
+
+Predicted Answer Span:
+New Delhi
+```
+The model does not write:
+```
+The capital of India is New Delhi.
+```
+It simply selects:
+```
+New Delhi
+```
+This is why it is called extractive QnA.
+
+## 2.6 Decoder-Only Models
+
+Decoder-only models are designed to generate text.
+
+Examples:
+
+```text
+GPT-style models
+```
+A decoder generates one token at a time.
+
+At each step, it predicts the next token based on the tokens already generated.
+
+For example:
+```
+RAG reduces hallucination by
+```
+The model predicts the next token:
+```
+retrieving
+```
+Then it continues:
+```
+RAG reduces hallucination by retrieving
+```
+Then it predicts the next token again.
+
+This process continues until the answer is complete.
+
+## 2.7 Mathematical Framing: Decoder Generation
+
+A decoder model generates a sequence token by token.
+
+Suppose the output answer is:
+
+$$
+y_1, y_2, y_3, \dots, y_m
+$$
+
+The decoder models the probability of the output sequence as:
+
+$$
+P(y_1, y_2, \dots, y_m)
+=
+\prod_{t=1}^{m} P(y_t \mid y_1, y_2, \dots, y_{t-1})
+$$
+
+This means each token depends only on previously generated tokens.
+
+For example:
+
+$$
+P(y_5 \mid y_1, y_2, y_3, y_4)
+$$
+
+This is called autoregressive generation.
+
+The model keeps generating until it reaches:
+
+- an end token
+- a maximum length
+- a stopping condition
+
+## 2.8 Encoder-Decoder Models
+
+Encoder-decoder models combine both abilities.
+
+Examples:
+
+```text
+T5
+FLAN-T5
+BART
+```
+They have two parts:
+```
+Encoder
+Decoder
+```
+The encoder reads and understands the input.
+
+The decoder generates the output.
+
+This makes encoder-decoder models very useful for tasks like:
+```
+translation
+summarization
+question answering
+instruction following
+text-to-text generation
+```
+For our RAG notebook, this family is very useful because we can give the model:
+```
+Question + Retrieved Context
+```
+and ask it to generate:
+```
+Grounded Answer
+```
+
+## 2.9 Mathematical Framing: Encoder-Decoder Generation
+
+In an encoder-decoder model, the encoder first reads the input sequence.
+
+Let the input be:
+
+$$
+X = (x_1, x_2, \dots, x_n)
+$$
+
+The encoder produces contextual representations:
+
+$$
+H = (h_1, h_2, \dots, h_n)
+$$
+
+The decoder then generates the output sequence:
+
+$$
+Y = (y_1, y_2, \dots, y_m)
+$$
+
+conditioned on the encoded input:
+
+$$
+P(Y \mid X)
+=
+\prod_{t=1}^{m} P(y_t \mid y_1, y_2, \dots, y_{t-1}, H)
+$$
+
+This means each generated token depends on:
+
+1. previously generated tokens
+2. the encoded input context
+
+This is exactly what we need for grounded generation.
+
+The model can read the retrieved chunks and then generate an answer using them.
+
+## 2.10 Model Family Comparison
+
+| Feature | Encoder-Only | Decoder-Only | Encoder-Decoder |
+|---|---|---|---|
+| Common examples | BERT, DistilBERT | GPT-style models | T5, FLAN-T5, BART |
+| Reads full input bidirectionally | Yes | No, usually causal | Encoder does |
+| Generates text naturally | No | Yes | Yes |
+| Best for understanding | Strong | Moderate to strong | Strong |
+| Best for generation | Weak | Strong | Strong |
+| Common QnA style | Extractive | Generative | Generative |
+| Good for RAG generation | Not ideal | Yes | Yes |
+
+For this notebook, we will use an encoder-decoder model such as:
+
+```text
+google/flan-t5-small
+```
+because it can read a prompt containing retrieved context and generate an answer.
+
+## 2.11 Important Clarification
+
+BERT is not weak.
+
+BERT is powerful for the job it was designed for.
+
+It is excellent for:
+
+- understanding text
+- producing contextual embeddings
+- classification
+- token-level prediction
+- extractive QnA
+
+But BERT is not naturally designed to generate long free-form answers token by token.
+
+So the limitation is not intelligence.
+
+The limitation is architectural alignment.
+
+A model should be matched with the task.
+
+For extractive QnA:
+
+$$
+\text{Encoder-only Reader}
+$$
+
+works well.
+
+For generative answering:
+
+$$
+\text{Decoder or Encoder-Decoder Generator}
+$$
+
+is more suitable.
+
+# This is a conceptual simulation.
+# We are not loading a model yet.
+# The goal is to show the difference between span extraction and token-by-token generation.
+
+context = "RAG retrieves relevant document chunks before generating an answer."
+question = "What does RAG do before generating an answer?"
+
+# Extractive-style answer: copied span from the context
+extractive_answer = "retrieves relevant document chunks"
+
+# Generative-style answer: built token by token
+generated_tokens = [
+    "RAG",
+    "retrieves",
+    "relevant",
+    "document",
+    "chunks",
+    "before",
+    "generating",
+    "an",
+    "answer",
+    "."
+]
+
+generated_answer = ""
+
+print("Question:")
+print(question)
+
+print("\nContext:")
+print(context)
+
+print("\nExtractive-style answer:")
+print(extractive_answer)
+
+print("\nGenerative-style answer built step by step:")
+for token in generated_tokens:
+    if token == ".":
+        generated_answer += token
+    elif generated_answer == "":
+        generated_answer += token
+    else:
+        generated_answer += " " + token
+
+    print(generated_answer)
+
+## Observation
+
+The extractive-style answer is selected from the context.
+
+It is a span.
+
+The generative-style answer is produced step by step.
+
+Even though our simulation is simple, it shows the key idea:
+
+- Extractive models select positions.
+- Generative models produce sequences.
+
+This difference matters because RAG needs the model to produce complete natural-language answers from retrieved context.
+
+## 2.12 Connection to RAG
+
+Now we can clearly see why RAG usually needs a generative model.
+
+The retriever gives us relevant context:
+
+$$
+\text{Retriever}(\text{Question}) \rightarrow \text{Top-k Chunks}
+$$
+
+Then the generator receives:
+
+$$
+\text{Question} + \text{Top-k Chunks}
+$$
+
+and produces:
+
+$$
+\text{Generated Answer}
+$$
+
+So the RAG pipeline becomes:
+
+$$
+\text{Question}
+\rightarrow
+\text{Retrieve Context}
+\rightarrow
+\text{Generate Grounded Answer}
+$$
+
+This is different from the previous system:
+
+$$
+\text{Question}
+\rightarrow
+\text{Retrieve Context}
+\rightarrow
+\text{Extract Answer Span}
+$$
+
+The retriever may remain similar.
+
+The answer-producing component changes.
+
+## 2.13 Optimized Thinking
+
+There are multiple possible model choices for RAG generation.
+
+---
+
+### Option 1: Decoder-only LLM
+
+Example:
+
+```text
+GPT-style model
+```
+This is powerful for generation.
+
+But in a small teaching notebook, large decoder models may be heavy.
+
+### Option 2: Encoder-decoder model
+
+Example:
+```
+google/flan-t5-small
+google/flan-t5-base
+```
+This is more practical for Colab.
+
+It accepts input text and generates output text.
+
+For teaching manual RAG, this is a good balance.
+
+### Option 3: Template-based fallback
+
+If model generation is slow or unavailable, we can still demonstrate the RAG structure using a simple template-based answer builder.
+
+This fallback will not be a true LLM generator, but it can still help students understand:
+```
+retrieval
+prompt construction
+source grounding
+answer formatting
+Teaching Decision
+```
+For this notebook, our main path will be:
+```
+FAISS Retriever + FLAN-T5 Generator
+```
+Fallback path:
+```
+FAISS Retriever + Template-Based Grounded Response
+```
+This keeps the notebook robust for Colab execution.
+
+## Concept Check
+
+### Q1.  
+Why are BERT-style models called encoder-only models?
+
+### Q2.  
+Why are encoder-only models strong for understanding tasks?
+
+### Q3.  
+In extractive QnA, what do start logits and end logits represent?
+
+### Q4.  
+What does a decoder model do during generation?
+
+### Q5.  
+What is autoregressive generation?
+
+### Q6.  
+Why are encoder-decoder models useful for tasks like summarization and RAG?
+
+### Q7.  
+Why is `google/flan-t5-small` a suitable teaching choice for this notebook?
+
+### Q8.  
+Is the shift from BERT reader to FLAN-T5 generator a replacement of retrieval?
+
+## Instructor-Only Answers
+
+### A1.  
+BERT-style models are called encoder-only models because they use the Transformer encoder architecture without a decoder for autoregressive text generation.
+
+---
+
+### A2.  
+Encoder-only models are strong for understanding because each token can attend to the full input sequence bidirectionally.  
+This gives each token a rich contextual representation.
+
+---
+
+### A3.  
+Start logits represent the model's score for each token being the beginning of the answer.  
+End logits represent the model's score for each token being the end of the answer.
+
+---
+
+### A4.  
+A decoder model generates text one token at a time.  
+At each step, it predicts the next token based on the tokens generated so far.
+
+---
+
+### A5.  
+Autoregressive generation means generating a sequence step by step, where each new token depends on the previously generated tokens.
+
+Mathematically:
+
+$$
+P(Y)
+=
+\prod_{t=1}^{m} P(y_t \mid y_1, y_2, \dots, y_{t-1})
+$$
+
+---
+
+### A6.  
+Encoder-decoder models are useful because the encoder can read and represent the input, while the decoder can generate a new output sequence based on that input.
+
+This is useful when the answer should be generated from provided context.
+
+---
+
+### A7.  
+`google/flan-t5-small` is suitable because it is lightweight, instruction-tuned, and practical for Google Colab demonstrations.
+
+It is not the most powerful model, but it is good for teaching the mechanics of generative RAG.
+
+---
+
+### A8.  
+No.
+
+The shift from BERT reader to FLAN-T5 generator changes the answer-producing component.
+
+The retriever is still needed to provide relevant external context.
+
+## Bridge to the Next Section
+
+We now understand why BERT-style readers extract and why generative models are needed for assistant-like answers.
+
+But before we generate answers, we need the external context.
+
+That means we must rebuild our document pipeline from scratch.
+
+In the next section, we will begin the actual notebook implementation.
+
+We will set up the Colab environment by installing and importing the required libraries for:
+
+- PDF reading
+- embeddings
+- FAISS retrieval
+- Hugging Face generation
+- utility functions
+
+# Section 3: Colab Setup, Library Installation, and Imports
+
+Now we begin the actual implementation.
+
+This is a fresh Google Colab notebook.
+
+So we must install and import everything again.
+
+In this section, we will prepare the environment for the full RAG pipeline.
+
+Our target pipeline is:
+
+$$
+\text{PDF}
+\rightarrow
+\text{Text Extraction}
+\rightarrow
+\text{Cleaning}
+\rightarrow
+\text{Chunking}
+\rightarrow
+\text{Embeddings}
+\rightarrow
+\text{FAISS Retrieval}
+\rightarrow
+\text{Prompt}
+\rightarrow
+\text{Generation}
+\rightarrow
+\text{Grounded Answer}
+$$
+
+Before building the pipeline, we need the correct tools.
+
+## 3.1 Why Setup Matters
+
+In machine learning notebooks, setup is not just a formality.
+
+A weak setup creates problems later.
+
+For this notebook, we need tools for five major tasks.
+
+---
+
+### 1. PDF Reading
+
+We need to read text from uploaded PDF files.
+
+For this, we will use:
+
+```text
+PyMuPDF
+```
+In Python, PyMuPDF is imported as:
+
+import fitz
+
+### 2. Text Embeddings
+
+We need to convert text chunks into numerical vectors.
+
+For this, we will use:
+```
+sentence-transformers
+```
+Our embedding model will be:
+```
+sentence-transformers/all-MiniLM-L6-v2
+```
+### 3. Vector Search
+
+We need to search similar vectors efficiently.
+
+For this, we will use:
+```
+FAISS
+```
+FAISS helps us retrieve the most relevant chunks for a question.
+
+### 4. Generative Model
+
+We need a lightweight model that can generate an answer from retrieved context.
+
+For this, we will use Hugging Face Transformers.
+
+Our first choice will be:
+```
+google/flan-t5-small
+```
+### 5. Utility Tools
+
+We also need standard Python utilities for:
+```
+file handling
+text cleaning
+numerical computation
+displaying results
+measuring execution time
+```
+
+## 3.2 Important Colab Note
+
+Google Colab environments are temporary.
+
+If the runtime disconnects or restarts, all installed libraries and loaded variables are lost.
+
+That is why every serious Colab notebook should begin with setup cells.
+
+In this notebook, we assume:
+
+> Nothing from the previous notebook exists.
+
+So we will install all required packages and define all required functions again from scratch.
+
+# Install required libraries for the RAG notebook
+
+!pip install -q pymupdf
+!pip install -q sentence-transformers
+!pip install -q faiss-cpu
+!pip install -q transformers accelerate
+
+## Observation
+
+The installation cell prepares four major components.
+
+| Library | Why We Need It |
+|---|---|
+| `pymupdf` | To read PDF files |
+| `sentence-transformers` | To create text embeddings |
+| `faiss-cpu` | To perform vector similarity search |
+| `transformers` | To load Hugging Face generative models |
+| `accelerate` | To improve Hugging Face model loading and execution support |
+
+If installation finishes without errors, we can move to imports.
+
+If Colab shows a warning about restarting runtime, restart the runtime once and run the setup cells again.
+
+# Core Python utilities
+import os
+import re
+import time
+import textwrap
+from typing import List, Dict, Tuple, Any
+
+# Numerical computation
+import numpy as np
+
+# PDF reading
+import fitz  # PyMuPDF
+
+# Google Colab file upload utility
+from google.colab import files
+
+# Embedding model
+from sentence_transformers import SentenceTransformer
+
+# FAISS for vector search
+import faiss
+
+# Hugging Face generation model
+import torch
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+## 3.3 Why These Imports Are Needed
+
+Let us understand the role of each imported package.
+
+---
+
+### Standard Utilities
+
+```python
+import os
+import re
+import time
+import textwrap
+```
+These help with:
+```
+file paths
+text cleaning
+measuring time
+wrapping long text for readable display
+```
+- Type Hints
+```
+from typing import List, Dict, Tuple, Any
+```
+Type hints make functions easier to understand.
+
+For example:
+```
+def clean_text(text: str) -> str:
+```
+This tells us that the input should be a string and the output will also be a string.
+
+- NumPy
+```
+import numpy as np
+```
+
+NumPy helps us work with embedding vectors.
+
+- PyMuPDF
+```
+import fitz
+```
+PyMuPDF reads PDF pages and extracts text.
+
+- SentenceTransformer
+```
+from sentence_transformers import SentenceTransformer
+```
+This loads the embedding model.
+
+- FAISS
+```
+import faiss
+```
+FAISS builds the vector index and performs similarity search.
+
+- Hugging Face Transformers
+```
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+```
+These load the generative model and tokenizer.
+
+For FLAN-T5, we need:
+```
+tokenizer
+sequence-to-sequence generation model
+```
+
+# Check whether GPU is available
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+print("Device available:", device)
+
+if device == "cuda":
+    print("GPU name:", torch.cuda.get_device_name(0))
+else:
+    print("GPU not available. The notebook will run on CPU, but generation may be slower.")
+
+Device available: cuda
+GPU name: Tesla T4
+
+## Observation
+
+The device check tells us whether Colab has assigned a GPU.
+
+If the output is:
+
+```text
+Device available: cuda
+```
+then model inference will usually be faster.
+
+If the output is:
+```
+Device available: cpu
+```
+the notebook can still run, but text generation may be slower.
+
+For this reason, we are choosing lightweight models.
+
+This is why we prefer:
+```
+google/flan-t5-small
+```
+instead of a very large LLM.
+
+## 3.4 Mathematical View of the Tools
+
+At a high level, the tools we installed map to different mathematical operations.
+
+---
+
+### Text Extraction
+
+The PDF reader converts a PDF into raw text:
+
+$$
+\text{PDF} \rightarrow T
+$$
+
+where $T$ is the extracted text.
+
+---
+
+### Chunking
+
+The extracted text is divided into smaller parts:
+
+$$
+T \rightarrow \{c_1, c_2, c_3, \dots, c_N\}
+$$
+
+where each $c_i$ is one chunk.
+
+---
+
+### Embedding
+
+The embedding model maps each chunk to a vector:
+
+$$
+f(c_i) = e_i
+$$
+
+where:
+
+$$
+e_i \in \mathbb{R}^d
+$$
+
+---
+
+### Retrieval
+
+FAISS searches for chunks whose embeddings are close to the question embedding:
+
+$$
+f(q) = e_q
+$$
+
+$$
+\text{RetrieveTopK}(e_q, \{e_1, e_2, \dots, e_N\})
+$$
+
+---
+
+### Generation
+
+The generative model receives the question and retrieved context:
+
+$$
+\text{Prompt} = [q; c_{i_1}; c_{i_2}; \dots; c_{i_k}]
+$$
+
+Then it generates:
+
+$$
+\hat{a} = g(\text{Prompt})
+$$
+
+where $\hat{a}$ is the generated answer.
+
+def print_wrapped(text: str, width: int = 100) -> None:
+    """
+    Print long text in a readable wrapped format.
+
+    Parameters
+    ----------
+    text : str
+        Text to print.
+    width : int
+        Maximum line width.
+    """
+    print(textwrap.fill(text, width=width))
+
+sample_text = (
+    "Retrieval-Augmented Generation first retrieves relevant context from an external source "
+    "and then uses a generative model to produce an answer grounded in that retrieved context."
+)
+
+print_wrapped(sample_text, width=80)
+
+Retrieval-Augmented Generation first retrieves relevant context from an external
+source and then uses a generative model to produce an answer grounded in that
+retrieved context.
+
+## Observation
+
+The helper function `print_wrapped()` is not part of the RAG algorithm.
+
+It is only a readability tool.
+
+In document QnA projects, we often print:
+
+- long chunks
+- retrieved context
+- generated answers
+- source previews
+
+Without wrapping, these outputs become difficult to read in Colab.
+
+So we define this helper early and reuse it throughout the notebook.
+
+## 3.5 Optimized / Better Setup Discussion
+
+The setup above is simple and explainable.
+
+For teaching, this is the right starting point.
+
+But in larger projects, we may improve the setup in several ways.
+
+---
+
+### 1. Version pinning
+
+Instead of installing the latest versions every time:
+
+```python
+!pip install sentence-transformers
+```
+we can pin versions:
+```
+!pip install sentence-transformers==3.0.1
+```
+This makes the notebook more reproducible.
+
+### 2. Dependency file
+
+For local deployment, we usually create a file called:
+
+requirements.txt
+
+Example:
+```
+pymupdf
+sentence-transformers
+faiss-cpu
+transformers
+accelerate
+streamlit
+```
+Then we install everything using:
+```
+pip install -r requirements.txt
+```
+
+### 3. GPU-aware model loading
+
+For bigger models, we may use:
+```
+half precision
+device mapping
+quantization
+smaller batch sizes
+```
+But for this teaching notebook, we will keep the setup simple.
+
+The goal is to understand the pipeline first.
+
+## 3.6 Debugging Checklist
+
+If the setup cell fails, check the following:
+
+---
+
+### Problem 1: `ModuleNotFoundError`
+
+Example:
+
+```text
+ModuleNotFoundError: No module named 'fitz'
+```
+Solution:
+
+Run:
+```
+!pip install pymupdf
+```
+Then rerun the import cell.
+
+### Problem 2: FAISS import error
+
+Example:
+```
+ModuleNotFoundError: No module named 'faiss'
+```
+Solution:
+```
+Run:
+
+!pip install faiss-cpu
+```
+Then rerun the import cell.
+
+### Problem 3: GPU not available
+
+This is not always an error.
+
+The notebook can still run on CPU, but generation may be slower.
+
+To request GPU in Colab:
+```
+Runtime → Change runtime type → Hardware accelerator → GPU
+```
+### Problem 4: Runtime restart warning
+
+Sometimes Colab asks for a runtime restart after installation.
+
+Restart once, then run the setup and import cells again.
+
+## Concept Check
+
+### Q1.  
+Why do we need `PyMuPDF` in this notebook?
+
+### Q2.  
+What is the role of `sentence-transformers`?
+
+### Q3.  
+What is the role of FAISS?
+
+### Q4.  
+Why do we need Hugging Face Transformers?
+
+### Q5.  
+Why are we checking whether GPU is available?
+
+### Q6.  
+Why is `google/flan-t5-small` preferred over a very large LLM for this teaching notebook?
+
+### Q7.  
+What does the helper function `print_wrapped()` do?
+
+## Instructor-Only Answers
+
+### A1.  
+We need `PyMuPDF` to read PDF files and extract page-wise text from them.
+
+---
+
+### A2.  
+`sentence-transformers` is used to load embedding models that convert text chunks and questions into numerical vectors.
+
+---
+
+### A3.  
+FAISS stores chunk embeddings and performs fast vector similarity search to retrieve relevant chunks.
+
+---
+
+### A4.  
+Hugging Face Transformers allows us to load a generative model such as FLAN-T5 for answer generation.
+
+---
+
+### A5.  
+We check GPU availability because generation models run faster on GPU.  
+If only CPU is available, we may need to use smaller models and shorter prompts.
+
+---
+
+### A6.  
+`google/flan-t5-small` is lightweight and suitable for Colab.  
+It helps students understand the mechanics of RAG without requiring heavy compute.
+
+---
+
+### A7.  
+`print_wrapped()` prints long text in a readable format by wrapping lines to a fixed width.
+
+## Bridge to the Next Section
+
+Our environment is now ready.
+
+But a RAG system needs a document.
+
+So the next step is:
+
+$$
+\text{PDF} \rightarrow \text{Raw Text}
+$$
+
+In the next section, we will upload a PDF and build:
+
+```python
+extract_text_from_pdf()
+```
+This function will extract page-wise text and preserve source metadata, especially page numbers.
+
+This is important because later we want our RAG assistant to show where the answer came from.
+
+
+---
+
+### Limitation and future improvement
+
+This setup keeps installation simple and beginner-friendly. For a production setup, we would pin library versions, create a `requirements.txt`, and test the environment locally before deployment. For teaching, the current setup is better because students can see each library’s role clearly.
+
+# Section 4: Uploading PDF and Extracting Page-Wise Text
+
+Now we begin the document processing part of the RAG pipeline.
+
+A RAG system needs an external knowledge source.
+
+In our case, the external knowledge source is a PDF.
+
+The first technical step is:
+
+$$
+\text{PDF} \rightarrow \text{Page-wise Text}
+$$
+
+We will upload a PDF in Google Colab and build a reusable function:
+
+```python
+extract_text_from_pdf()
+```
+
+## 4.1 Why Page-Wise Extraction Matters
+
+In a normal text generation task, we may only care about the final answer.
+
+But in a document QnA system, we also care about traceability.
+
+If the system gives an answer, the user may ask:
+
+> Where did this answer come from?
+
+So while extracting text, we should preserve metadata.
+
+The most basic metadata is:
+
+- PDF file name
+- page number
+- page text
+- character count
+- word count
+
+Later, when we create chunks, each chunk will inherit its page number.
+
+This allows the final RAG system to display sources like:
+
+```text
+Source:
+Page 3, Chunk 12
+```
+Without this metadata, our system may answer but it will not be explainable.
+
+## 4.2 What PyMuPDF Does
+
+We installed PyMuPDF earlier.
+
+In Python, we import it as:
+
+```python
+import fitz
+```
+PyMuPDF allows us to open a PDF file:
+```
+document = fitz.open(pdf_path)
+```
+Then we can loop through each page:
+```
+for page in document:
+    text = page.get_text()
+```
+Each page gives us raw extracted text.
+
+The raw text may contain:
+```
+headings
+paragraphs
+page numbers
+line breaks
+references
+table text
+sometimes noisy formatting
+```
+
+At this stage, we will not clean the text heavily.
+First, we only extract and inspect.
+
+## 4.3 Mathematical Framing
+
+Let a PDF document be represented as:
+
+$$
+D
+$$
+
+Suppose the PDF has $P$ pages.
+
+We can represent it as:
+
+$$
+D = \{p_1, p_2, p_3, \dots, p_P\}
+$$
+
+where each $p_i$ is one page.
+
+Text extraction maps every page to text:
+
+$$
+p_i \rightarrow t_i
+$$
+
+So after extraction, we get:
+
+$$
+T = \{t_1, t_2, t_3, \dots, t_P\}
+$$
+
+where:
+
+- $t_i$ is the extracted text from page $i$
+- page number is preserved
+- text is still mostly raw
+
+In code, we will store this as a list of dictionaries:
+
+```python
+[
+    {
+        "page_number": 1,
+        "text": "...",
+        "word_count": 250,
+        "character_count": 1430
+    },
+    {
+        "page_number": 2,
+        "text": "...",
+        "word_count": 310,
+        "character_count": 1780
+    }
+]
+```
+
+# Upload a PDF file from your local system
+
+uploaded_files = files.upload()
+
+# Get the uploaded PDF file name
+pdf_file_names = list(uploaded_files.keys())
+
+print("Uploaded files:")
+for file_name in pdf_file_names:
+    print(file_name)
+
+<IPython.core.display.HTML object>
+Saving Bert_Model.pdf to Bert_Model (1).pdf
+Uploaded files:
+Bert_Model (1).pdf
+
+## Observation
+
+After running the upload cell, Colab will ask you to choose a file from your computer.
+
+Once uploaded, the file becomes available in the current Colab runtime.
+
+The uploaded file name is stored in:
+
+```python
+pdf_file_names
+```
+For this notebook, we will usually work with one PDF at a time.
+
+So we can select the first uploaded file:
+```
+pdf_path = pdf_file_names[0]
+```
+If multiple files are uploaded, we should explicitly choose the correct one.
+
+# Select the first uploaded PDF file
+
+pdf_path = pdf_file_names[0]
+
+print("Selected PDF file:")
+print(pdf_path)
+
+Selected PDF file:
+Bert_Model (1).pdf
+
+def extract_text_from_pdf(pdf_path: str) -> List[Dict[str, Any]]:
+    """
+    Extract text from a PDF file page by page.
+
+    Parameters
+    ----------
+    pdf_path : str
+        Path to the PDF file.
+
+    Returns
+    -------
+    pages_data : List[Dict[str, Any]]
+        A list where each element contains page-wise extracted text and metadata.
+    """
+
+    pages_data = []
+
+    # Open the PDF document
+    document = fitz.open(pdf_path)
+
+    total_pages = len(document)
+
+    print(f"Total pages found: {total_pages}")
+
+    for page_index in range(total_pages):
+        page = document[page_index]
+
+        # Extract text from the page
+        text = page.get_text()
+
+        # Basic metadata
+        page_number = page_index + 1
+        word_count = len(text.split())
+        character_count = len(text)
+
+        page_info = {
+            "page_number": page_number,
+            "text": text,
+            "word_count": word_count,
+            "character_count": character_count
+        }
+
+        pages_data.append(page_info)
+
+    document.close()
+
+    return pages_data
+
+## 4.4 Function Explanation
+
+The function:
+
+```python
+extract_text_from_pdf()
+
+does four important things.
+
+1. Opens the PDF
+document = fitz.open(pdf_path)
+
+This loads the PDF into memory.
+
+2. Loops through pages
+for page_index in range(total_pages):
+
+This ensures that we process every page one by one.
+
+3. Extracts text
+text = page.get_text()
+
+This extracts the textual content of the page.
+
+4. Stores metadata
+
+For each page, we store:
+
+{
+    "page_number": page_number,
+    "text": text,
+    "word_count": word_count,
+    "character_count": character_count
+}
+```
+This metadata will help us later during chunking, source tracking, and debugging.
+
+# Extract page-wise text from the selected PDF
+
+pages_data = extract_text_from_pdf(pdf_path)
+
+print("\nExtraction completed.")
+print("Number of pages extracted:", len(pages_data))
+
+Total pages found: 16
+
+Extraction completed.
+Number of pages extracted: 16
+
+# Inspect metadata of the first page
+
+first_page = pages_data[0]
+
+print("Page number:", first_page["page_number"])
+print("Word count:", first_page["word_count"])
+print("Character count:", first_page["character_count"])
+
+Page number: 1
+Word count: 584
+Character count: 4062
+
+# Preview text from the first page
+
+print("First page preview:")
+print("-" * 80)
+print_wrapped(first_page["text"][:1500], width=100)
+print("-" * 80)
+
+## Observation
+
+At this stage, we should inspect the extracted text carefully.
+
+Good extraction usually means:
+
+- headings are visible
+- paragraphs are readable
+- important technical terms are preserved
+- text is not empty
+- page-wise separation is maintained
+
+But PDF extraction is not always perfect.
+
+Some common issues are:
+
+- broken lines
+- repeated headers or footers
+- page numbers inside the text
+- table text appearing in strange order
+- mathematical equations not extracted properly
+- scanned PDFs returning empty text
+
+If the extracted text is mostly empty, the PDF may be scanned or image-based.
+
+In that case, normal text extraction will not work and OCR would be required.
+
+# Display a simple summary of all extracted pages
+
+for page in pages_data:
+    print(
+        f"Page {page['page_number']:>3} | "
+        f"Words: {page['word_count']:>5} | "
+        f"Characters: {page['character_count']:>6}"
+    )
+
+## 4.5 Debugging Empty or Weak Extraction
+
+Sometimes PDF text extraction may fail or produce poor output.
+
+Let us understand common cases.
+
+---
+
+### Case 1: Scanned PDF
+
+If the PDF is made of images, `page.get_text()` may return almost nothing.
+
+Example symptom:
+
+```text
+Page 1 | Words: 0 | Characters: 0
+Page 2 | Words: 0 | Characters: 0
+```
+This means the PDF does not contain selectable text.
+
+Such PDFs need OCR.
+
+For this notebook, we will prefer text-based PDFs.
+
+### Case 2: Two-column research paper
+
+Research papers often have two-column layouts.
+
+The extracted text may still work, but sometimes the reading order becomes imperfect.
+
+This can affect chunk quality.
+
+### Case 3: Tables and equations
+
+Tables and equations may not be extracted cleanly.
+
+For RAG, this means the model may struggle to answer questions based on:
+```
+formulas
+tables
+diagrams
+charts
+```
+### Case 4: Headers and footers
+
+Some PDFs repeat the same header or footer on every page.
+
+This creates noise during retrieval.
+
+We will partially handle this during text cleaning.
+
+# Find pages where extraction may be weak
+
+low_text_pages = []
+
+for page in pages_data:
+    if page["word_count"] < 20:
+        low_text_pages.append(page)
+
+print("Pages with fewer than 20 words:", len(low_text_pages))
+
+for page in low_text_pages:
+    print(
+        f"Page {page['page_number']} | "
+        f"Words: {page['word_count']} | "
+        f"Characters: {page['character_count']}"
+    )
+
+Pages with fewer than 20 words: 0
+
+## Observation
+
+The low-text page check helps us detect possible extraction problems.
+
+A page with fewer than 20 words is not always wrong.
+
+It may be:
+
+- a title page
+- a blank page
+- a figure-heavy page
+- a references separator page
+
+But if most pages have very low word count, then the PDF may not be suitable for this text-based RAG pipeline.
+
+For teaching this notebook, prefer a PDF where text can be selected and copied.
+
+# Create a compact preview of extracted pages
+
+page_preview_data = []
+
+for page in pages_data:
+    preview = page["text"][:120].replace("\n", " ")
+    page_preview_data.append({
+        "page_number": page["page_number"],
+        "word_count": page["word_count"],
+        "character_count": page["character_count"],
+        "preview": preview
+    })
+
+page_preview_data[:5]
+
+## 4.6 Optimized / Better Extraction Discussion
+
+The function we wrote is simple and explainable.
+
+That is good for teaching.
+
+But in a stronger production-level system, PDF extraction can be improved.
+
+---
+
+### 1. Skip empty pages automatically
+
+We can avoid storing pages where extracted text is empty or too small.
+
+Example:
+
+```python
+if len(text.split()) < 5:
+    continue
+```
+But for teaching, we keep all pages first so students can inspect extraction quality.
+
+### 2. Extract blocks instead of plain text
+
+PyMuPDF can extract text blocks.
+
+Example:
+```
+page.get_text("blocks")
+```
+This can give more layout information.
+
+Useful when we want to handle:
+```
+columns
+headings
+tables
+sections
+```
+But it is more complex.
+
+### 3. Add document-level metadata
+
+We can include:
+```
+file name
+total pages
+extraction timestamp
+document title if available
+```
+This is useful in multi-document RAG.
+
+### 4. Use OCR for scanned PDFs
+
+If the PDF is scanned, text extraction alone will fail.
+
+Then we need OCR-based tools.
+
+However, OCR adds complexity and can introduce errors.
+
+For this notebook, we focus on text-based PDFs.
+
+## Concept Check
+
+### Q1.  
+Why do we extract text page by page instead of extracting the whole PDF as one long string?
+
+### Q2.  
+Why is page number important in a RAG system?
+
+### Q3.  
+What does `fitz.open(pdf_path)` do?
+
+### Q4.  
+What does `page.get_text()` return?
+
+### Q5.  
+If most pages show zero words after extraction, what is the likely issue?
+
+### Q6.  
+Why should we inspect extracted text before chunking?
+
+### Q7.  
+What kind of PDF is best for this notebook?
+
+## Instructor-Only Answers
+
+### A1.  
+Page-wise extraction preserves document structure and allows us to track where each piece of text came from.  
+This is important for source display and debugging.
+
+---
+
+### A2.  
+Page number allows the final RAG system to show the source of the answer.  
+It makes the answer more traceable and trustworthy.
+
+---
+
+### A3.  
+`fitz.open(pdf_path)` opens the PDF file so that Python can access its pages.
+
+---
+
+### A4.  
+`page.get_text()` returns the extracted text content from a PDF page.
+
+---
+
+### A5.  
+If most pages show zero words, the PDF is likely scanned or image-based.  
+Such PDFs require OCR.
+
+---
+
+### A6.  
+We inspect extracted text before chunking because poor extraction leads to poor chunks, poor retrieval, and poor answers.
+
+---
+
+### A7.  
+A text-based PDF is best for this notebook.  
+The text should be selectable and copyable from the PDF.
+
+## Bridge to the Next Section
+
+We have now completed the first document-processing step:
+
+$$
+\text{PDF} \rightarrow \text{Page-wise Raw Text}
+$$
+
+But the extracted text may contain noise.
+
+Before creating chunks, we should clean the text.
+
+In the next section, we will build:
+
+```python
+clean_text()
+```
+This function will remove unnecessary whitespace, broken line issues, and common formatting noise.
+
+Clean text will lead to better chunks.
+
+Better chunks will lead to better retrieval.
+
+Better retrieval will lead to better grounded answers.
+
+# Section 5: Text Cleaning Pipeline with Special Token Removal
+
+We have extracted raw page-wise text from the PDF.
+
+The current pipeline is:
+
+$$
+\text{PDF} \rightarrow \text{Page-wise Raw Text}
+$$
+
+But raw extracted text is often noisy.
+
+Before chunking, we should clean the text.
+
+So now the pipeline becomes:
+
+$$
+\text{PDF} \rightarrow \text{Page-wise Raw Text} \rightarrow \text{Cleaned Page-wise Text}
+$$
+
+In this section, we will build:
+
+```python
+clean_text()
+```
+This function will clean extracted PDF text and also remove unnecessary special tokens for better readability.
+
+## 5.1 Why Text Cleaning Matters
+
+PDF text extraction is rarely perfect.
+
+Even when the PDF is text-based, extracted text may contain:
+
+- unnecessary line breaks
+- repeated spaces
+- broken words
+- page headers
+- page footers
+- strange symbols
+- invisible Unicode characters
+- tokenizer-style special tokens
+- formatting artifacts
+
+If we directly create chunks from noisy text, then the retrieval quality may suffer.
+
+A noisy chunk creates a noisy embedding.
+
+A noisy embedding may lead to poor retrieval.
+
+Poor retrieval leads to weak RAG answers.
+
+So the quality of the final RAG answer depends heavily on the quality of the text cleaning stage.
+
+## 5.2 Why Remove Special Tokens?
+
+In NLP pipelines, we sometimes encounter special tokens such as:
+
+```text
+[CLS]
+[SEP]
+[PAD]
+[UNK]
+<MASK>
+<s>
+</s>
+<pad>
+</pad>
+```
+These tokens are useful internally for tokenizer/model processing.
+
+But they are usually not useful for human-readable chunks.
+
+For example, this is not readable:
+```
+[CLS] The Transformer uses self-attention. [SEP]
+```
+
+A cleaner version is:
+```
+The Transformer uses self-attention.
+```
+
+In a RAG system, source chunks are shown to users.
+
+So chunks should be readable.
+
+Special token removal improves:
+```
+source readability
+prompt quality
+generation quality
+debugging clarity
+```
+However, we should not remove every symbol blindly.
+
+Some symbols may be meaningful.
+
+For example:
+$$
+x^2 + y^2 = r^2
+$$
+contains special-looking characters, but they are mathematically important.
+
+So our cleaning should be useful but not destructive.
+
+## 5.3 Cleaning Strategy
+
+Our cleaning function will perform the following steps:
+
+---
+
+### Step 1: Normalize whitespace
+
+Convert repeated spaces, tabs, and newlines into clean spacing.
+
+---
+
+### Step 2: Remove tokenizer-style special tokens
+
+Remove common NLP special tokens such as:
+
+```text
+[CLS], [SEP], [PAD], [UNK], <s>, </s>, <pad>
+```
+Step 3: Remove strange invisible characters
+
+Some PDFs contain invisible Unicode characters.
+
+Examples:
+```
+\u200b
+\u200c
+\u200d
+\ufeff
+```
+These characters may not be visible, but they can affect cleaning and readability.
+
+### Step 4: Fix broken spacing
+
+Remove extra spaces before punctuation.
+
+Example:
+```
+This is attention .
+```
+becomes:
+```
+This is attention.
+```
+### Step 5: Preserve meaningful technical text
+
+We will not aggressively remove mathematical symbols, punctuation, or brackets because they may be important in AI/ML documents.
+
+## 5.4 Mathematical Framing
+
+Let the extracted raw text from page $i$ be:
+
+$$
+t_i
+$$
+
+The cleaning function is a transformation:
+
+$$
+g(t_i) = \tilde{t}_i
+$$
+
+where:
+
+- $t_i$ is raw extracted text
+- $g(\cdot)$ is the cleaning function
+- $\tilde{t}_i$ is cleaned text
+
+For the whole document:
+
+$$
+T = \{t_1, t_2, \dots, t_P\}
+$$
+
+After cleaning:
+
+$$
+\tilde{T} = \{\tilde{t}_1, \tilde{t}_2, \dots, \tilde{t}_P\}
+$$
+
+The next stage will chunk the cleaned text:
+
+$$
+\tilde{T} \rightarrow \{c_1, c_2, \dots, c_N\}
+$$
+
+So cleaning directly affects the quality of chunks.
+
+def clean_text(text: str) -> str:
+    """
+    Clean extracted PDF text for better chunking, retrieval, and readability.
+
+    This function:
+    1. Removes common tokenizer-style special tokens.
+    2. Removes invisible Unicode characters.
+    3. Normalizes whitespace.
+    4. Fixes spacing before punctuation.
+    5. Preserves meaningful mathematical and technical symbols.
+
+    Parameters
+    ----------
+    text : str
+        Raw text extracted from PDF.
+
+    Returns
+    -------
+    cleaned : str
+        Cleaned text.
+    """
+
+    if text is None:
+        return ""
+
+    cleaned = str(text)
+
+    # ------------------------------------------------------------
+    # 1. Remove common tokenizer/model special tokens
+    # ------------------------------------------------------------
+    special_tokens = [
+        "[CLS]", "[SEP]", "[PAD]", "[UNK]", "[MASK]",
+        "<s>", "</s>", "<pad>", "</pad>", "<unk>", "<mask>",
+        "<bos>", "</bos>", "<eos>", "</eos>"
+    ]
+
+    for token in special_tokens:
+        cleaned = cleaned.replace(token, " ")
+
+    # ------------------------------------------------------------
+    # 2. Remove invisible Unicode characters commonly found in PDFs
+    # ------------------------------------------------------------
+    invisible_chars = [
+        "\u200b",  # zero-width space
+        "\u200c",  # zero-width non-joiner
+        "\u200d",  # zero-width joiner
+        "\ufeff",  # byte order mark
+        "\xa0"     # non-breaking space
+    ]
+
+    for char in invisible_chars:
+        cleaned = cleaned.replace(char, " ")
+
+    # ------------------------------------------------------------
+    # 3. Normalize line breaks
+    # ------------------------------------------------------------
+    cleaned = cleaned.replace("\r", "\n")
+
+    # Join words that are broken across lines using hyphenation
+    # Example: "trans-\nformer" becomes "transformer"
+    cleaned = re.sub(r"(\w)-\n(\w)", r"\1\2", cleaned)
+
+    # Replace remaining newlines with spaces
+    cleaned = re.sub(r"\n+", " ", cleaned)
+
+    # ------------------------------------------------------------
+    # 4. Normalize repeated whitespace
+    # ------------------------------------------------------------
+    cleaned = re.sub(r"\s+", " ", cleaned)
+
+    # ------------------------------------------------------------
+    # 5. Fix spacing before common punctuation
+    # ------------------------------------------------------------
+    cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
+
+    # Remove extra spaces after opening brackets and before closing brackets
+    cleaned = re.sub(r"([\(\[\{])\s+", r"\1", cleaned)
+    cleaned = re.sub(r"\s+([\)\]\}])", r"\1", cleaned)
+
+    # ------------------------------------------------------------
+    # 6. Final strip
+    # ------------------------------------------------------------
+    cleaned = cleaned.strip()
+
+    return cleaned
+
+sample_noisy_text = """
+[CLS] The Transformer architecture uses self-attention mechanisms . [SEP]
+
+It replaces recurrence with attention-based computation .
+
+The word trans-
+former may sometimes be broken across lines.
+
+This text also contains invisible-like spacing and repeated      spaces.
+<pad>
+"""
+
+print("Original noisy text:")
+print("-" * 80)
+print(sample_noisy_text)
+
+cleaned_sample_text = clean_text(sample_noisy_text)
+
+print("\nCleaned text:")
+print("-" * 80)
+print_wrapped(cleaned_sample_text, width=100)
+
+## Observation
+
+The cleaned text should now be more readable.
+
+We should observe that:
+
+- `[CLS]` is removed
+- `[SEP]` is removed
+- `<pad>` is removed
+- repeated spaces are reduced
+- unnecessary line breaks are removed
+- broken hyphenated words are fixed
+- spaces before punctuation are removed
+
+This makes the text more suitable for chunking.
+
+But the cleaning is not too aggressive.
+
+It still preserves normal punctuation and mathematical symbols.
+
+# Apply cleaning to all extracted pages
+
+cleaned_pages_data = []
+
+for page in pages_data:
+    raw_text = page["text"]
+    cleaned_page_text = clean_text(raw_text)
+
+    cleaned_page_info = {
+        "page_number": page["page_number"],
+        "raw_text": raw_text,
+        "cleaned_text": cleaned_page_text,
+        "raw_word_count": page["word_count"],
+        "cleaned_word_count": len(cleaned_page_text.split()),
+        "raw_character_count": page["character_count"],
+        "cleaned_character_count": len(cleaned_page_text)
+    }
+
+    cleaned_pages_data.append(cleaned_page_info)
+
+print("Text cleaning completed.")
+print("Total pages cleaned:", len(cleaned_pages_data))
+
+Text cleaning completed.
+Total pages cleaned: 16
+
+# Compare raw and cleaned version of the first page
+
+page_index = 0
+
+print("Page number:", cleaned_pages_data[page_index]["page_number"])
+
+print("\nRaw text preview:")
+print("-" * 80)
+print_wrapped(cleaned_pages_data[page_index]["raw_text"][:1200], width=100)
+
+print("\nCleaned text preview:")
+print("-" * 80)
+print_wrapped(cleaned_pages_data[page_index]["cleaned_text"][:1200], width=100)
+
+# Display word and character count before and after cleaning
+
+for page in cleaned_pages_data:
+    print(
+        f"Page {page['page_number']:>3} | "
+        f"Raw words: {page['raw_word_count']:>5} | "
+        f"Cleaned words: {page['cleaned_word_count']:>5} | "
+        f"Raw chars: {page['raw_character_count']:>6} | "
+        f"Cleaned chars: {page['cleaned_character_count']:>6}"
+    )
+
+## Observation
+
+The cleaned word count and raw word count should usually be close.
+
+The cleaned character count may reduce because we removed:
+
+- extra spaces
+- line breaks
+- special tokens
+- invisible characters
+- formatting noise
+
+If cleaned word count becomes extremely small compared to raw word count, the cleaning function may be too aggressive.
+
+A good cleaning function should remove noise without removing meaning.
+
+## 5.6 Debugging Cleaning Problems
+
+Text cleaning should always be inspected.
+
+Here are some common issues.
+
+---
+
+### Problem 1: Cleaning removed too much text
+
+If many cleaned pages become empty, the cleaning function is too aggressive.
+
+Possible reason:
+
+```python
+re.sub()
+```
+pattern removed useful content accidentally.
+
+Solution:
+```
+Use simpler regex and inspect before applying globally.
+```
+### Problem 2: Mathematical notation becomes unreadable
+
+For AI/ML documents, mathematical notation may contain:
+$$
+x_i, W_q, QK^T, softmax(QK^T / \sqrt(d_k))
+$$
+We should avoid removing underscores, brackets, slashes, and mathematical symbols.
+
+That is why our cleaning function does not remove all special characters.
+
+### Problem 3: Table text is still messy
+
+Text cleaning cannot fully fix table extraction.
+
+Tables often need layout-aware parsing.
+
+For this notebook, we will focus on paragraph-based retrieval.
+
+### Problem 4: Headers and footers still appear
+
+Basic cleaning does not automatically remove repeated headers and footers.
+
+We can handle that later if they badly affect retrieval.
+
+For now, we keep the pipeline simple.
+
+## 5.7 Why We Do Not Remove All Special Characters
+
+A common mistake is to remove every non-alphanumeric character.
+
+For example:
+
+```python
+re.sub(r"[^a-zA-Z0-9 ]", "", text)
+```
+This may look clean, but it can damage technical meaning.
+
+Consider this expression:
+$$
+Attention(Q,K,V) = softmax((QK^t)/ \sqrt(dk))*V
+$$
+If we remove mathematical symbols, it may become unreadable.
+
+So we should distinguish between:
+| Type                        | Example                  | Remove? |
+| --------------------------- | ------------------------ | ------- |
+| Tokenizer special token     | `[CLS]`, `[SEP]`         | Yes     |
+| Invisible Unicode character | `\u200b`                 | Yes     |
+| Repeated whitespace         | many spaces              | Yes     |
+| Mathematical symbol         | $+$, $-$, $=$, $\sqrt{}$ | No      |
+| Useful punctuation          | `.`, `,`, `:`, `?`       | No      |
+
+## 5.8 Optimized / Better Cleaning Discussion
+
+The cleaning function above is simple and safe for teaching.
+
+But in a stronger RAG system, we can improve it.
+
+---
+
+### 1. Domain-aware cleaning
+
+For research papers, we may preserve equations and citations.
+
+For legal documents, we may preserve section numbers.
+
+For medical reports, we may preserve units and symbols.
+
+So cleaning should depend on document type.
+
+---
+
+### 2. Header and footer removal
+
+If the same header appears on every page, it may pollute retrieval.
+
+A better system can detect repeated lines across pages and remove them.
+
+Example idea:
+
+```text
+If the same line appears on more than 70% of pages, treat it as header/footer noise.
+```
+### 3. Section-aware cleaning
+
+Instead of treating all text equally, we can detect:
+```
+title
+abstract
+headings
+paragraphs
+references
+tables
+```
+This improves chunking quality.
+
+### 4. Special token list extension
+
+If we later observe more unwanted artifacts, we can extend the list:
+```
+special_tokens.append("new_unwanted_token")
+```
+This makes the cleaning pipeline easy to modify.
+
+### 5. Cleaning after chunking
+
+Sometimes it is useful to clean twice:
+```
+raw page text → page-level cleaning → chunking → chunk-level readability cleaning
+```
+In this notebook, we clean before chunking.
+
+But during chunking, we will also ensure that each chunk text is clean and readable.
+
+## Concept Check
+
+### Q1.  
+Why should we clean PDF text before chunking?
+
+### Q2.  
+Why do we remove tokens like `[CLS]` and `[SEP]`?
+
+### Q3.  
+Why should we not remove all special characters from technical documents?
+
+### Q4.  
+What is the purpose of fixing hyphenated line breaks?
+
+### Q5.  
+Why do we compare raw word count and cleaned word count?
+
+### Q6.  
+What can happen if the cleaning function is too aggressive?
+
+### Q7.  
+Why is text cleaning important for retrieval quality?
+
+## Instructor-Only Answers
+
+### A1.  
+We clean PDF text before chunking because noisy text creates noisy chunks.  
+Noisy chunks create poor embeddings, which can lead to poor retrieval and weak answers.
+
+---
+
+### A2.  
+Tokens like `[CLS]` and `[SEP]` are tokenizer/model special tokens.  
+They are useful internally for models but are not useful for human-readable source chunks or prompts.
+
+---
+
+### A3.  
+Technical documents often contain meaningful symbols such as equations, brackets, underscores, slashes, and mathematical notation.  
+Removing all special characters can destroy important meaning.
+
+---
+
+### A4.  
+Hyphenated line break fixing converts broken words such as:
+
+```text
+trans-
+former
+```
+into:
+```
+transformer
+```
+This improves readability and retrieval.
+
+### A5.
+
+Comparing raw and cleaned word counts helps us check whether cleaning removed only noise or accidentally removed useful content.
+
+### A6.
+
+If cleaning is too aggressive, important information may be deleted.
+This can damage chunk quality and make the RAG system unable to answer correctly.
+
+### A7.
+
+Retrieval depends on chunk embeddings.
+If chunks are noisy, embeddings become less meaningful, and the retriever may return irrelevant chunks.
+
+## Bridge to the Next Section
+
+We have now completed:
+
+$$
+\text{PDF} \rightarrow \text{Page-wise Raw Text} \rightarrow \text{Cleaned Page-wise Text}
+$$
+
+The next step is chunking.
+
+A generative model cannot receive the full PDF at once.
+
+So we need to divide the cleaned text into smaller meaningful chunks.
+
+In the next section, we will build:
+
+```python
+chunk_text_with_metadata()
+```
+Each chunk will store:
+```
+chunk ID
+page number
+chunk text
+word count
+character count
+preview
+```
+This will prepare the document for embedding generation and FAISS retrieval.
+
+# Section 6: Sentence-Aware Chunking with Metadata
+
+We have now completed:
+
+$$
+\text{PDF} \rightarrow \text{Page-wise Raw Text} \rightarrow \text{Cleaned Page-wise Text}
+$$
+
+Earlier, we discussed that simple word-based chunking is easy to implement, but it may cut ideas in the middle.
+
+For a better RAG pipeline, we will now use **sentence-aware chunking**.
+
+The updated pipeline is:
+
+$$
+\text{Cleaned Page-wise Text} \rightarrow \text{Sentence-Aware Chunks with Metadata}
+$$
+
+The goal is to create chunks that are:
+
+- readable
+- semantically meaningful
+- not randomly cut in the middle of sentences
+- traceable to their page number
+- suitable for embedding and retrieval
+
+In this section, we will build:
+
+```python
+chunk_text_with_metadata()
+```
+
+but this time using a sentence-aware approach.
+
+## 6.1 Why Sentence-Aware Chunking?
+
+In word-based chunking, we split text after a fixed number of words.
+
+For example:
+
+```text
+The Transformer replaces recurrence with self-attention mechanisms and allows the model
+```
+
+and the next chunk may continue:
+
+```text
+to process tokens in parallel across the sequence.
+```
+
+This is technically valid, but conceptually weak.
+
+The sentence was cut in the middle.
+
+A better chunk should preserve complete ideas.
+
+So instead of saying:
+
+```text
+Take every 180 words.
+```
+
+we say:
+
+```text
+Group complete sentences until the chunk reaches around 180 words.
+```
+
+This gives us chunks that are more natural and more meaningful.
+
+## 6.2 Why Sentence-Aware Chunks Help RAG
+
+A RAG system depends heavily on retrieval quality.
+
+Retrieval quality depends on embedding quality.
+
+Embedding quality depends on chunk quality.
+
+So we can write:
+
+$$
+\text{Better Chunks} \rightarrow \text{Better Embeddings} \rightarrow \text{Better Retrieval} \rightarrow \text{Better Answers}
+$$
+
+Sentence-aware chunks are usually better because:
+
+1. They preserve complete statements.
+2. They avoid cutting definitions midway.
+3. They make source chunks more readable.
+4. They give the generator cleaner context.
+5. They make debugging easier for humans.
+
+In a teaching notebook, this is also important because students can actually read the retrieved chunks and understand why a particular answer was generated.
+
+## 6.3 Chunk Size and Sentence Overlap
+
+In sentence-aware chunking, we still control chunk size.
+
+But instead of cutting exactly at word number 180, we group complete sentences until the chunk is close to the limit.
+
+Two parameters are important.
+
+---
+
+### 1. Maximum Words Per Chunk
+
+Example:
+
+```python
+max_words = 180
+```
+
+This means each chunk should contain approximately up to 180 words.
+
+The chunk may be slightly smaller because we do not want to cut a sentence in half.
+
+---
+
+### 2. Sentence Overlap
+
+Example:
+
+```python
+sentence_overlap = 2
+```
+
+This means the last 2 sentences of the previous chunk are repeated at the beginning of the next chunk.
+
+Overlap helps preserve continuity between chunks.
+
+---
+
+### Example
+
+Without overlap:
+
+```text
+Chunk 1:
+Transformers use self-attention. This allows tokens to interact directly.
+
+Chunk 2:
+The model can process sequences in parallel.
+```
+
+With sentence overlap:
+
+```text
+Chunk 1:
+Transformers use self-attention. This allows tokens to interact directly.
+
+Chunk 2:
+This allows tokens to interact directly. The model can process sequences in parallel.
+```
+
+This reduces the chance of losing meaning at chunk boundaries.
+
+## 6.4 Mathematical Framing
+
+Let the cleaned text from page $p$ be:
+
+$$
+\tilde{t}_p
+$$
+
+First, we split the page text into sentences:
+
+$$
+\tilde{t}_p \rightarrow \{s_{p,1}, s_{p,2}, s_{p,3}, \dots, s_{p,n}\}
+$$
+
+Then we group sentences into chunks:
+
+$$
+\{s_{p,1}, s_{p,2}, \dots, s_{p,n}\}
+\rightarrow
+\{c_{p,1}, c_{p,2}, c_{p,3}, \dots\}
+$$
+
+Each chunk is a group of consecutive sentences:
+
+$$
+c_i = \{s_a, s_{a+1}, \dots, s_b\}
+$$
+
+subject to the approximate constraint:
+
+$$
+\text{word_count}(c_i) \leq \text{max_words}
+$$
+
+If we use sentence overlap $r$, then the next chunk reuses the last $r$ sentences of the previous chunk.
+
+This helps preserve context across chunk boundaries.
+
+def split_into_sentences(text: str) -> List[str]:
+    """
+    Split cleaned text into sentences using a lightweight regex-based approach.
+
+    This function is intentionally simple and dependency-free for Colab teaching.
+
+    Parameters
+    ----------
+    text : str
+        Cleaned text.
+
+    Returns
+    -------
+    sentences : List[str]
+        List of sentence-like text units.
+    """
+
+    if text is None:
+        return []
+
+    text = clean_text(text)
+
+    if len(text.strip()) == 0:
+        return []
+
+    # Protect common abbreviations so they do not split incorrectly
+    abbreviation_map = {
+        "e.g.": "e<DOT>g<DOT>",
+        "i.e.": "i<DOT>e<DOT>",
+        "Fig.": "Fig<DOT>",
+        "fig.": "fig<DOT>",
+        "Eq.": "Eq<DOT>",
+        "eq.": "eq<DOT>",
+        "Dr.": "Dr<DOT>",
+        "Mr.": "Mr<DOT>",
+        "Ms.": "Ms<DOT>",
+        "Prof.": "Prof<DOT>",
+        "vs.": "vs<DOT>",
+        "et al.": "et al<DOT>"
+    }
+
+    protected_text = text
+
+    for original, protected in abbreviation_map.items():
+        protected_text = protected_text.replace(original, protected)
+
+    # Split when punctuation is followed by whitespace and a likely new sentence start
+    sentence_candidates = re.split(
+        r'(?<=[.!?])\s+(?=[A-Z0-9"\(\[])',
+        protected_text
+    )
+
+    sentences = []
+
+    for sentence in sentence_candidates:
+        # Restore protected dots
+        sentence = sentence.replace("<DOT>", ".")
+
+        sentence = clean_text(sentence)
+
+        if len(sentence.strip()) > 0:
+            sentences.append(sentence)
+
+    return sentences
+
+## 6.5 Sentence Splitter Explanation
+
+The function:
+
+```python
+split_into_sentences()
+```
+
+splits cleaned text into sentence-like units.
+
+We use a regex-based splitter instead of installing a heavy NLP library.
+
+This is useful because:
+
+- it is lightweight
+- it is easy to inspect
+- it avoids extra dependencies
+- it is enough for teaching the RAG pipeline
+
+However, sentence splitting is not perfect.
+
+For example, abbreviations such as:
+
+```text
+e.g.
+i.e.
+Fig.
+Eq.
+```
+
+can confuse simple sentence splitters.
+
+So we temporarily protect some common abbreviations before splitting.
+
+After splitting, we restore them back.
+
+sample_clean_text = """
+Transformers use self-attention mechanisms. This allows tokens to interact directly with each other.
+For example, each token can attend to all other tokens in the sequence. Fig. 1 shows the basic architecture.
+This design removes the need for recurrence.
+"""
+
+sample_sentences = split_into_sentences(sample_clean_text)
+
+print("Total sentences found:", len(sample_sentences))
+print("-" * 100)
+
+for idx, sentence in enumerate(sample_sentences):
+    print(f"Sentence {idx + 1}:")
+    print_wrapped(sentence, width=100)
+    print("-" * 100)
+
+## Observation
+
+The output should show sentence-like units.
+
+Notice that the splitter tries to preserve complete statements.
+
+This is already better than blindly cutting text after a fixed number of words.
+
+However, sentence splitting is still an approximation.
+
+In real PDF documents, sentence boundaries may be affected by:
+
+- abbreviations
+- equations
+- bullet points
+- references
+- table text
+- missing punctuation
+- line extraction artifacts
+
+So we will keep the chunking function robust.
+
+def chunk_text_with_metadata(
+    cleaned_pages_data: List[Dict[str, Any]],
+    max_words: int = 250,
+    sentence_overlap: int = 2
+) -> List[Dict[str, Any]]:
+    """
+    Create sentence-aware chunks from cleaned page-wise text.
+
+    The function groups complete sentences into chunks up to approximately max_words.
+    It also adds sentence overlap between consecutive chunks from the same page.
+
+    Parameters
+    ----------
+    cleaned_pages_data : List[Dict[str, Any]]
+        List of page dictionaries containing cleaned text and page metadata.
+
+    max_words : int
+        Approximate maximum number of words per chunk.
+
+    sentence_overlap : int
+        Number of sentences to overlap between consecutive chunks.
+
+    Returns
+    -------
+    chunks_data : List[Dict[str, Any]]
+        List of chunk dictionaries with metadata.
+    """
+
+    if max_words <= 0:
+        raise ValueError("max_words must be greater than 0.")
+
+    if sentence_overlap < 0:
+        raise ValueError("sentence_overlap cannot be negative.")
+
+    chunks_data = []
+    global_chunk_id = 0
+
+    for page in cleaned_pages_data:
+        page_number = page["page_number"]
+        page_text = clean_text(page["cleaned_text"])
+
+        if len(page_text.strip()) == 0:
+            continue
+
+        sentences = split_into_sentences(page_text)
+
+        if len(sentences) == 0:
+            continue
+
+        # Handle rare cases where one "sentence" is longer than max_words.
+        # This fallback prevents a single extremely long sentence from becoming an oversized chunk.
+        processed_sentences = []
+
+        for sentence in sentences:
+            words = sentence.split()
+
+            if len(words) <= max_words:
+                processed_sentences.append(sentence)
+            else:
+                # Fallback: split long sentence-like text into word-limited pieces.
+                # This is not ideal semantically, but it protects the pipeline.
+                for start in range(0, len(words), max_words):
+                    piece = " ".join(words[start:start + max_words])
+                    piece = clean_text(piece)
+
+                    if len(piece.strip()) > 0:
+                        processed_sentences.append(piece)
+
+        current_sentences = []
+        current_word_count = 0
+
+        for sentence in processed_sentences:
+            sentence = clean_text(sentence)
+            sentence_word_count = len(sentence.split())
+
+            if sentence_word_count == 0:
+                continue
+
+            # If adding this sentence exceeds max_words, finalize the current chunk first.
+            if current_sentences and current_word_count + sentence_word_count > max_words:
+                chunk_text = " ".join(current_sentences)
+                chunk_text = clean_text(chunk_text)
+
+                chunk_info = {
+                    "chunk_id": global_chunk_id,
+                    "page_number": page_number,
+                    "chunk_text": chunk_text,
+                    "word_count": len(chunk_text.split()),
+                    "character_count": len(chunk_text),
+                    "preview": chunk_text[:300],
+                    "num_sentences": len(current_sentences),
+                    "chunking_strategy": "sentence_aware_with_overlap",
+                    "max_words": max_words,
+                    "sentence_overlap": sentence_overlap
+                }
+
+                chunks_data.append(chunk_info)
+                global_chunk_id += 1
+
+                # Prepare overlap sentences for the next chunk
+                if sentence_overlap > 0:
+                    overlap_sentences = current_sentences[-sentence_overlap:]
+                else:
+                    overlap_sentences = []
+
+                current_sentences = overlap_sentences.copy()
+                current_word_count = sum(len(s.split()) for s in current_sentences)
+
+                # If overlap plus new sentence is still too large,
+                # remove old overlap sentences until the new sentence fits.
+                while current_sentences and current_word_count + sentence_word_count > max_words:
+                    removed_sentence = current_sentences.pop(0)
+                    current_word_count -= len(removed_sentence.split())
+
+            # Add the current sentence to the active chunk
+            current_sentences.append(sentence)
+            current_word_count += sentence_word_count
+
+        # Add the final chunk for the page
+        if current_sentences:
+            chunk_text = " ".join(current_sentences)
+            chunk_text = clean_text(chunk_text)
+
+            chunk_info = {
+                "chunk_id": global_chunk_id,
+                "page_number": page_number,
+                "chunk_text": chunk_text,
+                "word_count": len(chunk_text.split()),
+                "character_count": len(chunk_text),
+                "preview": chunk_text[:300],
+                "num_sentences": len(current_sentences),
+                "chunking_strategy": "sentence_aware_with_overlap",
+                "max_words": max_words,
+                "sentence_overlap": sentence_overlap
+            }
+
+            chunks_data.append(chunk_info)
+            global_chunk_id += 1
+
+    return chunks_data
+
+chunks_data = chunk_text_with_metadata(
+    cleaned_pages_data=cleaned_pages_data,
+    max_words=250,
+    sentence_overlap=2
+)
+
+print("Sentence-aware chunking completed.")
+print("Total chunks created:", len(chunks_data))
+
+Sentence-aware chunking completed.
+Total chunks created: 54
+
+for chunk in chunks_data[:3]:
+    print("=" * 100)
+    print(f"Chunk ID: {chunk['chunk_id']}")
+    print(f"Page Number: {chunk['page_number']}")
+    print(f"Word Count: {chunk['word_count']}")
+    print(f"Number of Sentences: {chunk['num_sentences']}")
+    print(f"Character Count: {chunk['character_count']}")
+    print("\nPreview:")
+    print_wrapped(chunk["preview"], width=100)
+
+## Observation
+
+After sentence-aware chunking, inspect the chunks carefully.
+
+A good chunk should:
+
+- contain complete sentences
+- preserve meaningful context
+- avoid abrupt cuts
+- have readable source text
+- not contain unnecessary special tokens
+- stay close to the maximum word limit
+- preserve page number metadata
+
+If the chunks look readable, then they are ready for embedding generation.
+
+This matters because the embedding model will convert each chunk into a vector.
+
+If the chunk is semantically clean, the vector representation is usually more meaningful.
+
+chunk_word_counts = [chunk["word_count"] for chunk in chunks_data]
+chunk_character_counts = [chunk["character_count"] for chunk in chunks_data]
+chunk_sentence_counts = [chunk["num_sentences"] for chunk in chunks_data]
+
+print("Total chunks:", len(chunks_data))
+print("\nWord Count Statistics")
+print("Minimum words in a chunk:", min(chunk_word_counts))
+print("Maximum words in a chunk:", max(chunk_word_counts))
+print("Average words per chunk:", round(np.mean(chunk_word_counts), 2))
+print("Median words per chunk:", round(np.median(chunk_word_counts), 2))
+
+print("\nSentence Count Statistics")
+print("Minimum sentences in a chunk:", min(chunk_sentence_counts))
+print("Maximum sentences in a chunk:", max(chunk_sentence_counts))
+print("Average sentences per chunk:", round(np.mean(chunk_sentence_counts), 2))
+
+print("\nCharacter Count Statistics")
+print("Minimum characters in a chunk:", min(chunk_character_counts))
+print("Maximum characters in a chunk:", max(chunk_character_counts))
+print("Average characters per chunk:", round(np.mean(chunk_character_counts), 2))
+
+Total chunks: 54
+
+Word Count Statistics
+Minimum words in a chunk: 79
+Maximum words in a chunk: 249
+Average words per chunk: 220.74
+Median words per chunk: 235.5
+
+Sentence Count Statistics
+Minimum sentences in a chunk: 3
+Maximum sentences in a chunk: 48
+Average sentences per chunk: 12.52
+
+Character Count Statistics
+Minimum characters in a chunk: 535
+Maximum characters in a chunk: 1865
+Average characters per chunk: 1413.78
+
+small_chunks = []
+
+for chunk in chunks_data:
+    if chunk["word_count"] < 30:
+        small_chunks.append(chunk)
+
+print("Number of chunks with fewer than 30 words:", len(small_chunks))
+
+for chunk in small_chunks[:5]:
+    print("=" * 100)
+    print(
+        f"Chunk ID: {chunk['chunk_id']} | "
+        f"Page: {chunk['page_number']} | "
+        f"Words: {chunk['word_count']} | "
+        f"Sentences: {chunk['num_sentences']}"
+    )
+    print_wrapped(chunk["chunk_text"], width=100)
+
+Number of chunks with fewer than 30 words: 0
+
+## Observation
+
+Very small chunks are not always wrong.
+
+They may come from:
+
+- title pages
+- headings
+- figure captions
+- conclusion lines
+- references
+- pages with very little extractable text
+
+But if there are too many small chunks, retrieval may become weaker.
+
+A very small chunk may not carry enough semantic context for the embedding model.
+
+If needed, we can later merge small chunks or adjust:
+
+```python
+max_words
+```
+
+and
+
+```python
+sentence_overlap
+```
+
+chunk_index = 0
+
+selected_chunk = chunks_data[chunk_index]
+
+print(f"Chunk ID: {selected_chunk['chunk_id']}")
+print(f"Page Number: {selected_chunk['page_number']}")
+print(f"Word Count: {selected_chunk['word_count']}")
+print(f"Number of Sentences: {selected_chunk['num_sentences']}")
+print("-" * 100)
+print_wrapped(selected_chunk["chunk_text"], width=100)
+
+## 6.7 Debugging Checklist
+
+### Problem 1: Total chunks created is zero
+
+Possible causes:
+
+- PDF extraction failed
+- cleaned text is empty
+- sentence splitter did not find usable text
+- wrong variable was passed
+
+Check:
+
+```python
+len(cleaned_pages_data)
+cleaned_pages_data[0]["cleaned_text"][:500]
+```
+
+---
+
+### Problem 2: Chunks are too large
+
+Possible cause:
+
+- `max_words` is too high
+- extracted text has very long sentence-like blocks
+
+Solution:
+
+Reduce:
+
+```python
+max_words
+```
+
+The function also includes a fallback that splits extremely long sentence-like blocks.
+
+---
+
+### Problem 3: Chunks are too small
+
+Possible causes:
+
+- many short sentences
+- title/heading-heavy pages
+- weak PDF extraction
+
+Possible solution:
+
+Increase:
+
+```python
+max_words
+```
+
+or reduce excessive page fragmentation.
+
+---
+
+### Problem 4: Sentence splitting looks wrong
+
+Possible causes:
+
+- abbreviations
+- equations
+- bullet points
+- references
+- missing punctuation in extracted PDF text
+
+Possible solution:
+
+Improve `split_into_sentences()` or use a stronger sentence tokenizer later.
+
+---
+
+### Problem 5: Chunks contain unwanted special tokens
+
+Possible solution:
+
+Update the `special_tokens` list inside:
+
+```python
+clean_text()
+```
+
+Then rerun the cleaning and chunking cells.
+
+## 6.8 Optimized / Better Chunking Discussion
+
+The sentence-aware chunking function is better than simple word-based chunking because it preserves sentence boundaries.
+
+But it is still not the final form of advanced chunking.
+
+---
+
+### Current Approach
+
+```text
+Clean text → Split into sentences → Group sentences into chunks → Add sentence overlap
+```
+
+This is a good teaching-level RAG chunker.
+
+---
+
+### Better Approach 1: Section-Aware Chunking
+
+Instead of only looking at sentences, we can detect sections such as:
+
+```text
+Abstract
+Introduction
+Methodology
+Results
+Conclusion
+```
+
+Then we can chunk within sections.
+
+This helps preserve document structure.
+
+---
+
+### Better Approach 2: Semantic Chunking
+
+Semantic chunking tries to split text based on meaning shifts.
+
+For example, if one paragraph discusses attention and the next discusses training cost, they may become separate chunks.
+
+This is more advanced but often improves retrieval.
+
+---
+
+### Better Approach 3: Token-Aware Chunking
+
+LLMs and embedding models work with tokens, not words.
+
+A more precise system would chunk based on token count instead of word count.
+
+For teaching, word count is easier to understand.
+
+For production, token-aware chunking is safer.
+
+---
+
+### Better Approach 4: Layout-Aware Chunking
+
+For research papers, layout matters.
+
+A layout-aware parser can handle:
+
+- columns
+- tables
+- captions
+- equations
+- headers
+- footers
+
+This is useful for advanced document AI systems.
+
+---
+
+### Teaching Decision
+
+For this notebook, sentence-aware chunking is the right balance.
+
+It is:
+
+- more meaningful than word chunking
+- simple enough to understand
+- robust enough for Colab
+- suitable for embeddings and FAISS retrieval
+
+## Concept Check
+
+### Q1.  
+Why is sentence-aware chunking better than word-based chunking?
+
+### Q2.  
+What does `sentence_overlap` mean?
+
+### Q3.  
+Why should we preserve page number in every chunk?
+
+### Q4.  
+Why can poor chunks lead to poor retrieval?
+
+### Q5.  
+Why do we still use `max_words` in sentence-aware chunking?
+
+### Q6.  
+Why is sentence splitting not always perfect for PDFs?
+
+### Q7.  
+What is the difference between sentence-aware chunking and semantic chunking?
+
+### Q8.  
+Why should we inspect chunks before creating embeddings?
+
+## Instructor-Only Answers
+
+### A1.  
+Sentence-aware chunking is better because it preserves complete sentences and avoids cutting ideas in the middle.
+
+---
+
+### A2.  
+`sentence_overlap` is the number of sentences repeated from the previous chunk into the next chunk.  
+It preserves continuity across chunk boundaries.
+
+---
+
+### A3.  
+Page number allows the final RAG system to show where the retrieved information came from.  
+This improves traceability and trust.
+
+---
+
+### A4.  
+Poor chunks create poor embeddings.  
+Poor embeddings lead to irrelevant retrieval.  
+Irrelevant retrieval gives weak or unsupported generated answers.
+
+---
+
+### A5.  
+We still use `max_words` to keep chunks within a manageable size for embeddings, retrieval, and prompt construction.
+
+---
+
+### A6.  
+PDF sentence splitting is difficult because extracted text may contain abbreviations, equations, bullet points, references, table text, or missing punctuation.
+
+---
+
+### A7.  
+Sentence-aware chunking preserves sentence boundaries.  
+Semantic chunking tries to split based on meaning or topic shifts.
+
+---
+
+### A8.  
+We inspect chunks because chunk quality directly affects embedding quality, retrieval quality, and final answer quality.
+
+## Bridge to the Next Section
+
+We now have clean sentence-aware chunks with metadata.
+
+Our pipeline is now:
+
+$$
+\text{PDF}
+\rightarrow
+\text{Page-wise Text}
+\rightarrow
+\text{Cleaned Text}
+\rightarrow
+\text{Sentence-Aware Chunks with Metadata}
+$$
+
+The next step is to make these chunks searchable.
+
+A computer cannot directly perform semantic search over raw text.
+
+So we need to convert each chunk into an embedding vector.
+
+In the next section, we will load an embedding model and build:
+
+```python
+create_chunk_embeddings()
+```
+
+This will convert every chunk:
+
+$$
+c_i \rightarrow e_i
+$$
+
+where:
+
+- $c_i$ is a sentence-aware text chunk
+- $e_i$ is its embedding vector
+
+# Section 7: Creating Embeddings for Sentence-Aware Chunks
+
+We have now created clean sentence-aware chunks with metadata.
+
+Our pipeline is currently:
+
+$$
+\text{PDF}
+\rightarrow
+\text{Page-wise Text}
+\rightarrow
+\text{Cleaned Text}
+\rightarrow
+\text{Sentence-Aware Chunks with Metadata}
+$$
+
+Now we move to the next step:
+
+$$
+\text{Chunks} \rightarrow \text{Chunk Embeddings}
+$$
+
+A retriever cannot directly search meaning from raw text.
+
+So we convert each chunk into a numerical vector.
+
+This vector is called an **embedding**.
+
+In this section, we will build:
+
+```python
+create_chunk_embeddings()
+```
+
+This function will convert each chunk into a dense vector representation.
+
+## 7.1 Why Do We Need Embeddings?
+
+A computer does not understand text the way humans do.
+
+For a human, these two sentences are clearly related:
+
+```text
+The model uses self-attention.
+```
+
+```text
+The architecture relies on attention mechanisms.
+```
+
+But for a computer, raw text is just a sequence of characters.
+
+To perform semantic search, we need to convert text into vectors.
+
+An embedding model maps text into a numerical space where similar meanings are placed close together.
+
+So instead of comparing text directly, we compare vectors.
+
+The idea is:
+
+$$
+\text{Text} \rightarrow \text{Vector}
+$$
+
+For every chunk:
+
+$$
+c_i \rightarrow e_i
+$$
+
+where:
+
+- $c_i$ is the chunk text
+- $e_i$ is the embedding vector of that chunk
+
+## 7.2 Semantic Meaning in Vector Space
+
+Embedding models try to place semantically similar texts near each other.
+
+For example:
+
+```text
+Sentence A:
+Transformers use self-attention.
+
+Sentence B:
+Self-attention is the key mechanism in Transformers.
+
+Sentence C:
+The weather is very hot today.
+```
+
+Sentence A and Sentence B should have nearby embeddings.
+
+Sentence C should be farther away.
+
+So, in vector space:
+
+$$
+\text{distance}(A, B) < \text{distance}(A, C)
+$$
+
+This is what allows retrieval.
+
+When the user asks a question, we embed the question.
+
+Then we search for chunk embeddings that are close to the question embedding.
+
+## 7.3 Mathematical Framing
+
+Suppose we have $N$ chunks:
+
+$$
+C = \{c_1, c_2, c_3, \dots, c_N\}
+$$
+
+An embedding model $f$ converts each chunk into a vector:
+
+$$
+e_i = f(c_i)
+$$
+
+where:
+
+$$
+e_i \in \mathbb{R}^d
+$$
+
+Here:
+
+- $e_i$ is the embedding of chunk $c_i$
+- $d$ is the embedding dimension
+- $f$ is the embedding model
+
+So the full document becomes an embedding matrix:
+
+$$
+E =
+\begin{bmatrix}
+e_1 \\
+e_2 \\
+e_3 \\
+\vdots \\
+e_N
+\end{bmatrix}
+$$
+
+where:
+
+$$
+E \in \mathbb{R}^{N \times d}
+$$
+
+Later, if the user asks a question $q$, we will compute:
+
+$$
+e_q = f(q)
+$$
+
+Then we will retrieve chunks whose embeddings are closest to $e_q$.
+
+## 7.4 Embedding Model Choice
+
+For this notebook, we will use:
+
+```text
+sentence-transformers/all-MiniLM-L6-v2
+```
+
+This is a good teaching choice because it is:
+
+- lightweight
+- fast enough for Colab
+- commonly used for semantic search demos
+- suitable for creating sentence and paragraph embeddings
+
+The goal here is not to use the largest embedding model.
+
+The goal is to clearly understand the role of embeddings in RAG.
+
+For a production system, we may later compare multiple embedding models.
+
+# Load sentence embedding model
+
+embedding_model_name = "sentence-transformers/all-MiniLM-L6-v2"
+
+start_time = time.time()
+
+embedding_model = SentenceTransformer(embedding_model_name, device=device)
+
+end_time = time.time()
+
+print("Embedding model loaded successfully.")
+print("Model name:", embedding_model_name)
+print("Device:", device)
+print("Loading time:", round(end_time - start_time, 2), "seconds")
+
+model.safetensors:   0%|          | 0.00/90.9M [00:00<?, ?B/s]
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]
+tokenizer_config.json:   0%|          | 0.00/350 [00:00<?, ?B/s]
+vocab.txt:   0%|          | 0.00/232k [00:00<?, ?B/s]
+tokenizer.json:   0%|          | 0.00/466k [00:00<?, ?B/s]
+special_tokens_map.json:   0%|          | 0.00/112 [00:00<?, ?B/s]
+config.json:   0%|          | 0.00/190 [00:00<?, ?B/s]
+Embedding model loaded successfully.
+Model name: sentence-transformers/all-MiniLM-L6-v2
+Device: cuda
+Loading time: 9.84 seconds
+
+## Observation
+
+The embedding model is now loaded.
+
+This model will be used to convert:
+
+```text
+chunk text → embedding vector
+```
+
+Later, the same model must also convert:
+
+```text
+user question → question embedding
+```
+
+This is very important.
+
+The chunk embeddings and question embeddings must come from the same embedding model.
+
+Otherwise, the vector comparison will not be meaningful.
+
+# Test embedding model on a small example
+
+sample_sentences = [
+    "Transformers use self-attention mechanisms.",
+    "Self-attention helps models capture relationships between tokens.",
+    "The weather is sunny today."
+]
+
+sample_embeddings = embedding_model.encode(
+    sample_sentences,
+    convert_to_numpy=True
+)
+
+print("Number of sample sentences:", len(sample_sentences))
+print("Embedding matrix shape:", sample_embeddings.shape)
+print("Embedding dimension:", sample_embeddings.shape[1])
+
+Number of sample sentences: 3
+Embedding matrix shape: (3, 384)
+Embedding dimension: 384
+
+## Observation
+
+The output shape should look like:
+
+```text
+(number_of_sentences, embedding_dimension)
+```
+
+For example:
+
+```text
+(3, 384)
+```
+
+This means:
+
+- 3 input sentences
+- each sentence converted into one vector
+- each vector has a fixed number of dimensions
+
+The exact embedding dimension is not something we manually decide here.
+
+It is determined by the embedding model architecture.
+
+## 7.5 Why Use the Same Embedding Model for Chunks and Questions?
+
+Suppose chunk embeddings are created using one model:
+
+$$
+e_i = f(c_i)
+$$
+
+But question embedding is created using a different model:
+
+$$
+e_q = g(q)
+$$
+
+Then $e_i$ and $e_q$ may not live in the same vector space.
+
+Comparing them can become meaningless.
+
+So we should use the same model:
+
+$$
+e_i = f(c_i)
+$$
+
+$$
+e_q = f(q)
+$$
+
+Now both chunk and question vectors live in the same embedding space.
+
+This makes similarity search valid.
+
+def create_chunk_embeddings(
+    chunks_data: List[Dict[str, Any]],
+    embedding_model: SentenceTransformer,
+    batch_size: int = 32,
+    normalize_embeddings: bool = True
+) -> np.ndarray:
+    """
+    Create embeddings for all chunks.
+
+    Parameters
+    ----------
+    chunks_data : List[Dict[str, Any]]
+        List of chunk dictionaries. Each dictionary must contain 'chunk_text'.
+
+    embedding_model : SentenceTransformer
+        Loaded sentence-transformers embedding model.
+
+    batch_size : int
+        Number of chunks encoded at once.
+
+    normalize_embeddings : bool
+        Whether to normalize embeddings to unit length.
+        This is useful when using dot product as cosine similarity in FAISS.
+
+    Returns
+    -------
+    chunk_embeddings : np.ndarray
+        Embedding matrix of shape (number_of_chunks, embedding_dimension).
+    """
+
+    if len(chunks_data) == 0:
+        raise ValueError("chunks_data is empty. Create chunks before generating embeddings.")
+
+    chunk_texts = []
+
+    for chunk in chunks_data:
+        text = chunk.get("chunk_text", "")
+        text = clean_text(text)
+
+        if len(text.strip()) == 0:
+            text = "empty chunk"
+
+        chunk_texts.append(text)
+
+    start_time = time.time()
+
+    chunk_embeddings = embedding_model.encode(
+        chunk_texts,
+        batch_size=batch_size,
+        convert_to_numpy=True,
+        normalize_embeddings=normalize_embeddings,
+        show_progress_bar=True
+    )
+
+    end_time = time.time()
+
+    # FAISS works best with float32 vectors
+    chunk_embeddings = chunk_embeddings.astype("float32")
+
+    print("Chunk embeddings created successfully.")
+    print("Number of chunks:", len(chunks_data))
+    print("Embedding matrix shape:", chunk_embeddings.shape)
+    print("Embedding dtype:", chunk_embeddings.dtype)
+    print("Embedding time:", round(end_time - start_time, 2), "seconds")
+
+    return chunk_embeddings
+
+## 7.6 Function Explanation
+
+The function:
+
+```python
+create_chunk_embeddings()
+```
+
+does the following:
+
+---
+
+### 1. Collects chunk texts
+
+```python
+chunk_texts.append(text)
+```
+
+Only the text part of each chunk is passed to the embedding model.
+
+The metadata remains stored in:
+
+```python
+chunks_data
+```
+
+---
+
+### 2. Encodes chunks in batches
+
+```python
+batch_size=32
+```
+
+Batching is more efficient than encoding one chunk at a time.
+
+---
+
+### 3. Converts embeddings to NumPy
+
+```python
+convert_to_numpy=True
+```
+
+This gives us an embedding matrix that can be used with FAISS.
+
+---
+
+### 4. Normalizes embeddings
+
+```python
+normalize_embeddings=True
+```
+
+Normalization converts each vector to unit length.
+
+This is useful because cosine similarity between normalized vectors becomes equivalent to dot product.
+
+---
+
+### 5. Converts embeddings to `float32`
+
+```python
+chunk_embeddings.astype("float32")
+```
+
+FAISS expects vectors to be in `float32` format.
+
+## 7.7 Why Normalize Embeddings?
+
+Cosine similarity between two vectors $a$ and $b$ is:
+
+$$
+\cos(\theta) =
+\frac{a \cdot b}{\|a\|\|b\|}
+$$
+
+If both vectors are normalized to unit length:
+
+$$
+\|a\| = 1
+$$
+
+and
+
+$$
+\|b\| = 1
+$$
+
+then cosine similarity becomes:
+
+$$
+\cos(\theta) = a \cdot b
+$$
+
+So after normalization, we can use dot product to compute cosine similarity.
+
+This is useful for FAISS because later we can use an inner product index:
+
+```python
+faiss.IndexFlatIP
+```
+
+and treat the result as cosine similarity.
+
+This is a common and efficient strategy.
+
+chunk_embeddings = create_chunk_embeddings(
+    chunks_data=chunks_data,
+    embedding_model=embedding_model,
+    batch_size=32,
+    normalize_embeddings=True
+)
+
+Batches:   0%|          | 0/2 [00:00<?, ?it/s]
+Chunk embeddings created successfully.
+Number of chunks: 54
+Embedding matrix shape: (54, 384)
+Embedding dtype: float32
+Embedding time: 0.26 seconds
+
+# Validate that each chunk has one embedding
+
+num_chunks = len(chunks_data)
+num_embeddings = chunk_embeddings.shape[0]
+embedding_dim = chunk_embeddings.shape[1]
+
+print("Number of chunks:", num_chunks)
+print("Number of embeddings:", num_embeddings)
+print("Embedding dimension:", embedding_dim)
+
+if num_chunks == num_embeddings:
+    print("Validation passed: every chunk has one embedding.")
+else:
+    print("Validation failed: chunk count and embedding count do not match.")
+
+Number of chunks: 54
+Number of embeddings: 54
+Embedding dimension: 384
+Validation passed: every chunk has one embedding.
+
+## Observation
+
+The number of chunks and number of embeddings should match.
+
+If we created 80 chunks, then the embedding matrix should have 80 rows.
+
+That means:
+
+$$
+\text{Number of rows in } E = \text{Number of chunks}
+$$
+
+Each row corresponds to one chunk.
+
+The order is important.
+
+The embedding at row 0 belongs to:
+
+```python
+chunks_data[0]
+```
+
+The embedding at row 1 belongs to:
+
+```python
+chunks_data[1]
+```
+
+This alignment is essential.
+
+Later, FAISS will return row indices.
+
+We will use those indices to recover the original chunk metadata.
+
+# Check whether embeddings are normalized
+
+embedding_norms = np.linalg.norm(chunk_embeddings, axis=1)
+
+print("Minimum norm:", round(float(np.min(embedding_norms)), 4))
+print("Maximum norm:", round(float(np.max(embedding_norms)), 4))
+print("Average norm:", round(float(np.mean(embedding_norms)), 4))
+
+Minimum norm: 1.0
+Maximum norm: 1.0
+Average norm: 1.0
+
+## Observation
+
+If embeddings were normalized correctly, the norms should be close to:
+
+$$
+1
+$$
+
+This confirms that dot product search can behave like cosine similarity.
+
+Small numerical differences are normal because computers use floating-point arithmetic.
+
+# Optional: store embedding index inside each chunk metadata
+# We do not store full embeddings inside dictionaries because that makes chunks_data heavy.
+
+for idx, chunk in enumerate(chunks_data):
+    chunk["embedding_index"] = idx
+
+print("Embedding indices added to chunk metadata.")
+
+print("\nExample chunk metadata keys:")
+print(chunks_data[0].keys())
+
+Embedding indices added to chunk metadata.
+
+Example chunk metadata keys:
+dict_keys(['chunk_id', 'page_number', 'chunk_text', 'word_count', 'character_count', 'preview', 'num_sentences', 'chunking_strategy', 'max_words', 'sentence_overlap', 'embedding_index'])
+
+## 7.8 Why Not Store Full Embeddings Inside Each Chunk?
+
+Each embedding is a numerical vector.
+
+If we store the full vector inside every chunk dictionary, the metadata becomes heavy and harder to inspect.
+
+So we keep:
+
+```python
+chunk_embeddings
+```
+
+as a separate matrix.
+
+And we keep:
+
+```python
+chunks_data
+```
+
+as readable metadata.
+
+The connection is maintained by index.
+
+```python
+chunks_data[i]
+```
+
+corresponds to:
+
+```python
+chunk_embeddings[i]
+```
+
+This is clean and efficient.
+
+# Mini demo: compare similarity between a query and first few chunks without FAISS
+
+demo_question = "What is the main idea discussed in this document?"
+
+demo_question_embedding = embedding_model.encode(
+    [demo_question],
+    convert_to_numpy=True,
+    normalize_embeddings=True
+).astype("float32")
+
+# Compare with first 5 chunks using dot product
+num_demo_chunks = min(5, len(chunks_data))
+
+similarities = np.dot(
+    chunk_embeddings[:num_demo_chunks],
+    demo_question_embedding[0]
+)
+
+print("Demo question:")
+print(demo_question)
+
+print("\nSimilarity with first few chunks:")
+for idx, score in enumerate(similarities):
+    print(
+        f"Chunk ID: {chunks_data[idx]['chunk_id']} | "
+        f"Page: {chunks_data[idx]['page_number']} | "
+        f"Score: {score:.4f}"
+    )
+    print_wrapped(chunks_data[idx]["preview"], width=100)
+    print("-" * 100)
+
+## Observation
+
+This mini demo manually compares a question embedding with a few chunk embeddings.
+
+The similarity score tells us how close the question is to each chunk in embedding space.
+
+However, this is not yet efficient.
+
+If the document has thousands of chunks, manually comparing against all embeddings using NumPy can become slow.
+
+This is why we will use FAISS in the next section.
+
+FAISS is designed for efficient vector search.
+
+## 7.9 Optimized / Better Embedding Discussion
+
+The current embedding approach is simple and strong enough for teaching.
+
+But there are several ways to improve it in larger systems.
+
+---
+
+### 1. Use larger embedding models
+
+`all-MiniLM-L6-v2` is lightweight.
+
+For production, larger embedding models may improve retrieval quality.
+
+But they may require more memory and compute.
+
+---
+
+### 2. Use domain-specific embedding models
+
+For medical, legal, finance, or scientific documents, domain-specific embeddings may perform better.
+
+Example:
+
+```text
+General embedding model → works broadly
+Domain embedding model → works better for specialized documents
+```
+
+---
+
+### 3. Cache embeddings
+
+Embedding creation can be expensive.
+
+If the same PDF is used repeatedly, we should save the embeddings.
+
+For example:
+
+```python
+np.save("chunk_embeddings.npy", chunk_embeddings)
+```
+
+Then we can load them later without recomputing.
+
+---
+
+### 4. Batch size tuning
+
+If GPU memory is limited, reduce:
+
+```python
+batch_size
+```
+
+If GPU memory is available, increasing batch size may speed up embedding creation.
+
+---
+
+### 5. Token-aware chunk length
+
+Embedding models have input token limits.
+
+If a chunk is too long, it may be truncated internally.
+
+Sentence-aware chunking helps readability, but token-aware chunking is more precise.
+
+This can be added in an advanced version.
+
+# Optional saving step.
+# This is useful if you do not want to recompute embeddings after runtime restart.
+
+save_embeddings = False
+
+if save_embeddings:
+    np.save("chunk_embeddings.npy", chunk_embeddings)
+
+    import pickle
+
+    with open("chunks_data.pkl", "wb") as f:
+        pickle.dump(chunks_data, f)
+
+    print("Embeddings saved as chunk_embeddings.npy")
+    print("Chunk metadata saved as chunks_data.pkl")
+else:
+    print("Skipping save step for now.")
+
+Skipping save step for now.
+
+## 7.10 Debugging Checklist
+
+### Problem 1: Model download is slow
+
+The embedding model may take some time to download the first time.
+
+After download, it is cached in the Colab runtime.
+
+---
+
+### Problem 2: CUDA out of memory
+
+If GPU memory is insufficient, reduce:
+
+```python
+batch_size
+```
+
+Example:
+
+```python
+batch_size = 8
+```
+
+---
+
+### Problem 3: Embedding count does not match chunk count
+
+This usually means some chunks were skipped incorrectly.
+
+In our function, we do not skip chunks during embedding.
+
+So the counts should match.
+
+---
+
+### Problem 4: FAISS gives error later
+
+FAISS usually expects:
+
+```python
+float32
+```
+
+vectors.
+
+That is why we convert:
+
+```python
+chunk_embeddings.astype("float32")
+```
+
+---
+
+### Problem 5: Poor retrieval later
+
+Poor retrieval may happen because of:
+
+- weak chunks
+- noisy text
+- poor PDF extraction
+- wrong embedding model
+- question phrasing
+- chunk size too large or too small
+
+Embedding quality depends on all previous stages.
+
+## Concept Check
+
+### Q1.  
+Why do we convert chunks into embeddings?
+
+### Q2.  
+What does it mean for two chunks to be close in embedding space?
+
+### Q3.  
+Why should chunk embeddings and question embeddings be created using the same model?
+
+### Q4.  
+What is the shape of the chunk embedding matrix?
+
+### Q5.  
+Why do we normalize embeddings?
+
+### Q6.  
+Why do we convert embeddings to `float32`?
+
+### Q7.  
+Why do we keep `chunk_embeddings` separate from `chunks_data`?
+
+### Q8.  
+Why is FAISS needed if we can already calculate similarity using NumPy?
+
+## Instructor-Only Answers
+
+### A1.  
+We convert chunks into embeddings so that semantic similarity can be computed numerically.
+
+---
+
+### A2.  
+If two chunks are close in embedding space, it means the embedding model considers them semantically similar.
+
+---
+
+### A3.  
+They must be created using the same model so that both vectors lie in the same embedding space.  
+Otherwise, similarity comparison may be meaningless.
+
+---
+
+### A4.  
+If there are $N$ chunks and embedding dimension is $d$, the embedding matrix has shape:
+
+$$
+N \times d
+$$
+
+---
+
+### A5.  
+We normalize embeddings so that dot product becomes equivalent to cosine similarity.
+
+If:
+
+$$
+\|a\| = 1
+$$
+
+and
+
+$$
+\|b\| = 1
+$$
+
+then:
+
+$$
+\cos(\theta) = a \cdot b
+$$
+
+---
+
+### A6.  
+FAISS expects vectors in `float32` format for efficient indexing and search.
+
+---
+
+### A7.  
+We keep embeddings separate because numerical vectors are heavy and not human-readable.  
+`chunks_data` stores readable metadata, while `chunk_embeddings` stores numerical vectors.
+
+---
+
+### A8.  
+NumPy similarity search is fine for small demos, but FAISS is designed for fast vector search at larger scale.
+
+## Bridge to the Next Section
+
+We have now completed:
+
+$$
+\text{Sentence-Aware Chunks} \rightarrow \text{Chunk Embeddings}
+$$
+
+Our pipeline is now:
+
+$$
+\text{PDF}
+\rightarrow
+\text{Text Extraction}
+\rightarrow
+\text{Cleaning}
+\rightarrow
+\text{Sentence-Aware Chunking}
+\rightarrow
+\text{Embedding Matrix}
+$$
+
+But embeddings alone are not enough.
+
+We need a fast way to search through them.
+
+In the next section, we will build a FAISS index using:
+
+```python
+build_faiss_index()
+```
+
+Then we will retrieve top-k relevant chunks for a user question using:
+
+```python
+retrieve_top_k_chunks()
+```
+
+This will complete the retriever part of our RAG pipeline.
+
+# Section 8: Building FAISS Index and Retrieving Top-k Chunks
+
+We have now created embeddings for all sentence-aware chunks.
+
+Our current pipeline is:
+
+$$
+\text{PDF}
+\rightarrow
+\text{Text Extraction}
+\rightarrow
+\text{Cleaning}
+\rightarrow
+\text{Sentence-Aware Chunking}
+\rightarrow
+\text{Chunk Embeddings}
+$$
+
+Now we need to make these embeddings searchable.
+
+For this, we will use FAISS.
+
+FAISS will help us retrieve the most relevant chunks for a user question.
+
+In this section, we will build two important functions:
+
+```python
+build_faiss_index()
+retrieve_top_k_chunks()
+```
+
+After this section, we will have the complete retriever part of the RAG pipeline.
+
+## 8.1 Why Do We Need FAISS?
+
+In the previous section, we created an embedding matrix:
+
+$$
+E \in \mathbb{R}^{N \times d}
+$$
+
+where:
+
+- $N$ is the number of chunks
+- $d$ is the embedding dimension
+
+For a user question, we will create a question embedding:
+
+$$
+e_q \in \mathbb{R}^{d}
+$$
+
+Now we need to find chunks whose embeddings are closest to the question embedding.
+
+A simple approach is:
+
+```text
+Compare question embedding with every chunk embedding
+Sort all scores
+Select top-k chunks
+```
+
+This works for small documents.
+
+But for large documents with thousands or millions of chunks, this becomes inefficient.
+
+FAISS is designed for fast vector similarity search.
+
+It helps us search over embedding vectors efficiently.
+
+## 8.2 What FAISS Does
+
+FAISS stores vectors inside an index.
+
+Once the index is built, we can search it using a query vector.
+
+The flow is:
+
+```text
+Chunk Embeddings → FAISS Index
+Question → Question Embedding → FAISS Search → Top-k Chunk Indices
+```
+
+FAISS does not understand text directly.
+
+It only works with vectors.
+
+So we must first convert text into embeddings.
+
+That is why the pipeline order matters:
+
+$$
+\text{Text} \rightarrow \text{Embeddings} \rightarrow \text{FAISS}
+$$
+
+not:
+
+$$
+\text{Text} \rightarrow \text{FAISS}
+$$
+
+## 8.3 Similarity Choice
+
+Earlier, we normalized our embeddings.
+
+That means each embedding vector has approximately unit length:
+
+$$
+\|e_i\| \approx 1
+$$
+
+For normalized vectors, cosine similarity becomes equivalent to dot product.
+
+Cosine similarity is:
+
+$$
+\cos(\theta) =
+\frac{a \cdot b}{\|a\|\|b\|}
+$$
+
+If:
+
+$$
+\|a\| = 1
+$$
+
+and:
+
+$$
+\|b\| = 1
+$$
+
+then:
+
+$$
+\cos(\theta) = a \cdot b
+$$
+
+So we can use FAISS inner product search:
+
+```python
+faiss.IndexFlatIP
+```
+
+Here, `IP` means inner product.
+
+Because our embeddings are normalized, inner product behaves like cosine similarity.
+
+## 8.4 Mathematical Framing
+
+Suppose we have chunk embeddings:
+
+$$
+E = \{e_1, e_2, e_3, \dots, e_N\}
+$$
+
+and a question embedding:
+
+$$
+e_q
+$$
+
+For each chunk, we compute similarity:
+
+$$
+s_i = e_q \cdot e_i
+$$
+
+Since vectors are normalized, this score behaves like cosine similarity:
+
+$$
+s_i \approx \cos(e_q, e_i)
+$$
+
+Then we select the top-k chunks:
+
+$$
+\text{TopK}(e_q, E) =
+\{e_{i_1}, e_{i_2}, \dots, e_{i_k}\}
+$$
+
+where:
+
+$$
+s_{i_1} \geq s_{i_2} \geq \dots \geq s_{i_k}
+$$
+
+FAISS returns two things:
+
+1. Similarity scores
+2. Indices of the matching vectors
+
+The returned index tells us which chunk was retrieved.
+
+For example:
+
+```python
+indices = [12, 5, 31]
+```
+
+means the top retrieved chunks are:
+
+```python
+chunks_data[12]
+chunks_data[5]
+chunks_data[31]
+```
+
+def build_faiss_index(chunk_embeddings: np.ndarray) -> faiss.Index:
+    """
+    Build a FAISS index for normalized chunk embeddings.
+
+    This function uses IndexFlatIP, which performs inner product search.
+    Since our embeddings are normalized, inner product behaves like cosine similarity.
+
+    Parameters
+    ----------
+    chunk_embeddings : np.ndarray
+        Embedding matrix of shape (number_of_chunks, embedding_dimension).
+
+    Returns
+    -------
+    index : faiss.Index
+        FAISS index containing all chunk embeddings.
+    """
+
+    if chunk_embeddings is None:
+        raise ValueError("chunk_embeddings cannot be None.")
+
+    if len(chunk_embeddings.shape) != 2:
+        raise ValueError("chunk_embeddings must be a 2D matrix.")
+
+    if chunk_embeddings.dtype != np.float32:
+        chunk_embeddings = chunk_embeddings.astype("float32")
+
+    num_chunks, embedding_dim = chunk_embeddings.shape
+
+    if num_chunks == 0:
+        raise ValueError("No embeddings found. Create chunk embeddings before building FAISS index.")
+
+    # Create FAISS index for inner product similarity
+    index = faiss.IndexFlatIP(embedding_dim)
+
+    # Add chunk embeddings to the index
+    index.add(chunk_embeddings)
+
+    print("FAISS index built successfully.")
+    print("Number of vectors in index:", index.ntotal)
+    print("Embedding dimension:", embedding_dim)
+    print("Index type: IndexFlatIP")
+
+    return index
+
+## 8.5 Function Explanation
+
+The function:
+
+```python
+build_faiss_index()
+```
+
+does three important things.
+
+---
+
+### 1. Checks embedding shape
+
+```python
+if len(chunk_embeddings.shape) != 2:
+```
+
+FAISS expects a matrix of vectors.
+
+So the shape should be:
+
+$$
+N \times d
+$$
+
+---
+
+### 2. Creates an inner product index
+
+```python
+index = faiss.IndexFlatIP(embedding_dim)
+```
+
+This creates a simple FAISS index that searches using inner product similarity.
+
+Because our embeddings are normalized, this works like cosine similarity.
+
+---
+
+### 3. Adds embeddings to the index
+
+```python
+index.add(chunk_embeddings)
+```
+
+This stores all chunk vectors inside FAISS.
+
+After this, FAISS can search for nearest chunks using a question embedding.
+
+faiss_index = build_faiss_index(chunk_embeddings)
+
+FAISS index built successfully.
+Number of vectors in index: 54
+Embedding dimension: 384
+Index type: IndexFlatIP
+
+print("Number of chunks:", len(chunks_data))
+print("Number of vectors in FAISS index:", faiss_index.ntotal)
+
+if faiss_index.ntotal == len(chunks_data):
+    print("Validation passed: FAISS index contains one vector for each chunk.")
+else:
+    print("Validation failed: FAISS vector count does not match chunk count.")
+
+Number of chunks: 54
+Number of vectors in FAISS index: 54
+Validation passed: FAISS index contains one vector for each chunk.
+
+## Observation
+
+The number of vectors in the FAISS index should match the number of chunks.
+
+This alignment is very important.
+
+FAISS only stores vectors.
+
+It does not store:
+
+- page number
+- chunk ID
+- chunk text
+- preview
+- word count
+
+That information remains inside:
+
+```python
+chunks_data
+```
+
+So when FAISS returns an index like:
+
+```python
+17
+```
+
+we use:
+
+```python
+chunks_data[17]
+```
+
+to recover the original chunk metadata.
+
+def retrieve_top_k_chunks(
+    question: str,
+    embedding_model: SentenceTransformer,
+    faiss_index: faiss.Index,
+    chunks_data: List[Dict[str, Any]],
+    top_k: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve top-k most relevant chunks for a user question.
+
+    Parameters
+    ----------
+    question : str
+        User question.
+
+    embedding_model : SentenceTransformer
+        The same embedding model used for chunk embeddings.
+
+    faiss_index : faiss.Index
+        FAISS index built from chunk embeddings.
+
+    chunks_data : List[Dict[str, Any]]
+        Chunk metadata list aligned with FAISS index positions.
+
+    top_k : int
+        Number of chunks to retrieve.
+
+    Returns
+    -------
+    retrieved_chunks : List[Dict[str, Any]]
+        List of retrieved chunks with similarity scores and ranks.
+    """
+
+    if question is None or len(question.strip()) == 0:
+        raise ValueError("Question cannot be empty.")
+
+    if faiss_index.ntotal == 0:
+        raise ValueError("FAISS index is empty.")
+
+    if len(chunks_data) == 0:
+        raise ValueError("chunks_data is empty.")
+
+    if faiss_index.ntotal != len(chunks_data):
+        raise ValueError("FAISS index size and chunks_data size do not match.")
+
+    top_k = min(top_k, len(chunks_data))
+
+    cleaned_question = clean_text(question)
+
+    # Create question embedding using the same embedding model
+    question_embedding = embedding_model.encode(
+        [cleaned_question],
+        convert_to_numpy=True,
+        normalize_embeddings=True
+    ).astype("float32")
+
+    # Search FAISS index
+    scores, indices = faiss_index.search(question_embedding, top_k)
+
+    retrieved_chunks = []
+
+    for rank, (score, index_position) in enumerate(zip(scores[0], indices[0]), start=1):
+        if index_position == -1:
+            continue
+
+        original_chunk = chunks_data[index_position]
+
+        retrieved_chunk = {
+            "rank": rank,
+            "retrieval_score": float(score),
+            "faiss_index": int(index_position),
+            "chunk_id": original_chunk["chunk_id"],
+            "page_number": original_chunk["page_number"],
+            "chunk_text": original_chunk["chunk_text"],
+            "word_count": original_chunk["word_count"],
+            "character_count": original_chunk["character_count"],
+            "preview": original_chunk["preview"]
+        }
+
+        # Preserve optional metadata if available
+        if "num_sentences" in original_chunk:
+            retrieved_chunk["num_sentences"] = original_chunk["num_sentences"]
+
+        if "chunking_strategy" in original_chunk:
+            retrieved_chunk["chunking_strategy"] = original_chunk["chunking_strategy"]
+
+        retrieved_chunks.append(retrieved_chunk)
+
+    return retrieved_chunks
+
+## 8.6 Function Explanation
+
+The function:
+
+```python
+retrieve_top_k_chunks()
+```
+
+performs the retrieval step.
+
+---
+
+### Step 1: Clean the question
+
+```python
+cleaned_question = clean_text(question)
+```
+
+This keeps question preprocessing consistent with chunk preprocessing.
+
+---
+
+### Step 2: Embed the question
+
+```python
+question_embedding = embedding_model.encode(...)
+```
+
+The question is converted into the same vector space as the chunks.
+
+---
+
+### Step 3: Search FAISS
+
+```python
+scores, indices = faiss_index.search(question_embedding, top_k)
+```
+
+FAISS returns:
+
+- similarity scores
+- index positions
+
+---
+
+### Step 4: Recover chunk metadata
+
+```python
+original_chunk = chunks_data[index_position]
+```
+
+The FAISS index tells us which chunk was retrieved.
+
+Then we recover:
+
+- chunk text
+- page number
+- chunk ID
+- preview
+- retrieval score
+
+This gives us traceable retrieval results.
+
+sample_question = "What is the main idea discussed in this document?"
+
+retrieved_chunks = retrieve_top_k_chunks(
+    question=sample_question,
+    embedding_model=embedding_model,
+    faiss_index=faiss_index,
+    chunks_data=chunks_data,
+    top_k=5
+)
+
+print("Question:")
+print(sample_question)
+
+print("\nTop retrieved chunks:")
+for chunk in retrieved_chunks:
+    print("=" * 100)
+    print(f"Rank: {chunk['rank']}")
+    print(f"Retrieval Score: {chunk['retrieval_score']:.4f}")
+    print(f"Page Number: {chunk['page_number']}")
+    print(f"Chunk ID: {chunk['chunk_id']}")
+    print(f"Word Count: {chunk['word_count']}")
+    print("\nPreview:")
+    print_wrapped(chunk["preview"], width=100)
+
+## Observation
+
+The retrieved chunks should be inspected manually.
+
+We should ask:
+
+- Are the chunks relevant to the question?
+- Are the top-ranked chunks more useful than lower-ranked chunks?
+- Is the retrieved context readable?
+- Are page numbers and chunk IDs correctly displayed?
+- Are retrieval scores reasonable?
+
+A high score does not automatically mean the answer is correct.
+
+It only means the chunk embedding is close to the question embedding.
+
+Semantic retrieval is powerful, but not perfect.
+
+def display_retrieved_chunks(
+    retrieved_chunks: List[Dict[str, Any]],
+    show_full_text: bool = False
+) -> None:
+    """
+    Display retrieved chunks in a readable format.
+
+    Parameters
+    ----------
+    retrieved_chunks : List[Dict[str, Any]]
+        List of retrieved chunk dictionaries.
+
+    show_full_text : bool
+        If True, display full chunk text.
+        If False, display only preview.
+    """
+
+    if len(retrieved_chunks) == 0:
+        print("No chunks retrieved.")
+        return
+
+    for chunk in retrieved_chunks:
+        print("=" * 100)
+        print(f"Rank: {chunk['rank']}")
+        print(f"Score: {chunk['retrieval_score']:.4f}")
+        print(f"Page: {chunk['page_number']}")
+        print(f"Chunk ID: {chunk['chunk_id']}")
+
+        if "num_sentences" in chunk:
+            print(f"Number of Sentences: {chunk['num_sentences']}")
+
+        print("-" * 100)
+
+        if show_full_text:
+            print_wrapped(chunk["chunk_text"], width=100)
+        else:
+            print_wrapped(chunk["preview"], width=100)
+
+display_retrieved_chunks(
+    retrieved_chunks=retrieved_chunks,
+    show_full_text=False
+)
+
+test_questions = [
+    "What is the main contribution of the document?",
+    "What problem is being solved?",
+    "What method or approach is used?",
+    "What are the limitations mentioned?"
+]
+
+for question in test_questions:
+    print("\n" + "#" * 120)
+    print("Question:", question)
+    print("#" * 120)
+
+    retrieved = retrieve_top_k_chunks(
+        question=question,
+        embedding_model=embedding_model,
+        faiss_index=faiss_index,
+        chunks_data=chunks_data,
+        top_k=3
+    )
+
+    display_retrieved_chunks(
+        retrieved_chunks=retrieved,
+        show_full_text=False
+    )
+
+## Observation
+
+Testing multiple questions helps us understand retriever behavior.
+
+Some questions may retrieve strong chunks.
+
+Some questions may retrieve weak chunks.
+
+This does not always mean FAISS failed.
+
+Possible reasons include:
+
+- the question is too broad
+- the PDF does not contain the answer
+- chunks are not well formed
+- the embedding model does not understand domain-specific language well
+- the answer is spread across multiple sections
+- the query wording does not match the document language
+
+This is why retrieval debugging is an important part of RAG development.
+
+## 8.7 How to Interpret Retrieval Scores
+
+Because we are using normalized embeddings with inner product search, the retrieval score behaves like cosine similarity.
+
+The score is usually between:
+
+$$
+-1
+$$
+
+and:
+
+$$
+1
+$$
+
+In practice, for text embeddings, many useful matches may appear between:
+
+```text
+0.3 and 0.8
+```
+
+But score ranges are not universal.
+
+A score should not be interpreted blindly.
+
+A good retrieval result depends on:
+
+- score
+- rank
+- actual chunk content
+- question difficulty
+- document quality
+
+The best debugging method is still to read the retrieved chunks.
+
+## 8.8 Retrieval Failure vs No Answer in Document
+
+A weak retrieved result can happen for two different reasons.
+
+---
+
+### Case 1: Retrieval Failure
+
+The answer exists in the PDF, but the retriever fails to bring the correct chunk.
+
+This may happen because of:
+
+- poor chunking
+- weak embeddings
+- bad question phrasing
+- too small `top_k`
+- domain-specific terminology
+
+---
+
+### Case 2: No Answer in Document
+
+The user asks something that is not present in the PDF.
+
+In this case, even a good retriever cannot bring a correct answer.
+
+The system should ideally say:
+
+```text
+The provided document does not contain enough information to answer this question.
+```
+
+This distinction will become very important once we add generation.
+
+A generator may produce fluent answers even when the retrieved context is weak.
+
+That is where hallucination risk begins.
+
+def check_retrieval_confidence(
+    retrieved_chunks: List[Dict[str, Any]],
+    warning_threshold: float = 0.15
+) -> None:
+    """
+    Print a warning if the top retrieval score is low.
+
+    Parameters
+    ----------
+    retrieved_chunks : List[Dict[str, Any]]
+        Retrieved chunks returned by retrieve_top_k_chunks().
+
+    warning_threshold : float
+        Minimum score threshold for a rough warning.
+    """
+
+    if len(retrieved_chunks) == 0:
+        print("Warning: No chunks were retrieved.")
+        return
+
+    top_score = retrieved_chunks[0]["retrieval_score"]
+
+    print("Top retrieval score:", round(top_score, 4))
+
+    if top_score < warning_threshold:
+        print("Warning: Retrieval confidence may be low.")
+        print("The retrieved context may not contain enough information to answer reliably.")
+    else:
+        print("Retrieval score looks reasonably strong.")
+
+check_retrieval_confidence(
+    retrieved_chunks=retrieved_chunks,
+    warning_threshold=0.15
+)
+
+Top retrieval score: 0.2209
+Retrieval score looks reasonably strong.
+
+## 8.9 Important Teaching Note
+
+The score threshold is only a rough heuristic.
+
+It is not a universal rule.
+
+For some documents, a score of 0.28 may still retrieve useful chunks.
+
+For other documents, even a score of 0.55 may be misleading.
+
+So this threshold should be used as a warning signal, not as a final decision.
+
+In real systems, retrieval confidence should be evaluated using:
+
+- manual inspection
+- benchmark questions
+- answer support checks
+- retrieval metrics
+- domain-specific validation
+
+## 8.10 Optimized / Better FAISS Discussion
+
+The current FAISS index is:
+
+```python
+faiss.IndexFlatIP
+```
+
+This is simple and exact.
+
+It compares the query vector against all vectors in the index.
+
+---
+
+### Current Approach: Exact Search
+
+```text
+IndexFlatIP → exact inner product search
+```
+
+Advantages:
+
+- simple
+- accurate
+- easy to teach
+- good for small to medium datasets
+
+Limitations:
+
+- can become slow for very large vector databases
+- stores all vectors in memory
+
+---
+
+### Better Approach 1: Approximate Search
+
+For very large datasets, FAISS supports approximate indexes such as:
+
+```python
+faiss.IndexIVFFlat
+faiss.IndexHNSWFlat
+```
+
+These can search faster but may sacrifice some accuracy.
+
+---
+
+### Better Approach 2: Persistent Vector Store
+
+In this notebook, FAISS index exists only in memory.
+
+If Colab restarts, the index is lost.
+
+For local deployment, we may save:
+
+```python
+faiss.write_index(faiss_index, "rag_index.faiss")
+```
+
+and later reload:
+
+```python
+faiss.read_index("rag_index.faiss")
+```
+
+---
+
+### Better Approach 3: Metadata Store
+
+FAISS stores vectors, not rich metadata.
+
+For larger applications, we usually maintain a separate metadata store.
+
+Example:
+
+```text
+FAISS index → vectors
+JSON / SQLite / database → chunk metadata
+```
+
+---
+
+### Better Approach 4: Hybrid Retrieval
+
+Embedding search is semantic, but sometimes keyword matching is also useful.
+
+A better retriever may combine:
+
+```text
+semantic search + keyword search
+```
+
+This is called hybrid retrieval.
+
+It can improve retrieval for exact terms, names, formulas, and abbreviations.
+
+# Optional FAISS persistence demo.
+# This is useful for deployment or avoiding rebuilding the index repeatedly.
+
+save_faiss_index = False
+
+if save_faiss_index:
+    faiss.write_index(faiss_index, "rag_faiss_index.faiss")
+    print("FAISS index saved as rag_faiss_index.faiss")
+
+    loaded_index = faiss.read_index("rag_faiss_index.faiss")
+    print("FAISS index reloaded successfully.")
+    print("Vectors in loaded index:", loaded_index.ntotal)
+else:
+    print("Skipping FAISS save/reload demo for now.")
+
+Skipping FAISS save/reload demo for now.
+
+## 8.11 Debugging Checklist
+
+### Problem 1: FAISS index has zero vectors
+
+Possible cause:
+
+```python
+chunk_embeddings
+```
+
+was empty.
+
+Check:
+
+```python
+chunk_embeddings.shape
+len(chunks_data)
+```
+
+---
+
+### Problem 2: FAISS vector count does not match chunk count
+
+Possible cause:
+
+The chunks were modified after embeddings were created.
+
+Solution:
+
+Recreate embeddings after changing chunks.
+
+Correct order:
+
+```text
+Create chunks → Create embeddings → Build FAISS index
+```
+
+---
+
+### Problem 3: FAISS dtype error
+
+FAISS expects vectors to be:
+
+```python
+float32
+```
+
+Solution:
+
+```python
+chunk_embeddings = chunk_embeddings.astype("float32")
+```
+
+---
+
+### Problem 4: Retrieved chunks are irrelevant
+
+Possible causes:
+
+- weak PDF extraction
+- poor cleaning
+- poor chunking
+- embedding model mismatch
+- question is too vague
+- top_k too small
+- answer not present in document
+
+---
+
+### Problem 5: Same chunk keeps appearing for many questions
+
+Possible causes:
+
+- generic introductory chunk
+- repeated header/footer text
+- noisy chunks
+- too broad questions
+
+Possible solution:
+
+Inspect chunks and improve cleaning or chunking.
+
+## Concept Check
+
+### Q1.  
+What problem does FAISS solve in our RAG pipeline?
+
+### Q2.  
+Why are we using `IndexFlatIP`?
+
+### Q3.  
+Why does inner product behave like cosine similarity in our setup?
+
+### Q4.  
+What does FAISS return after a search?
+
+### Q5.  
+Why do we need `chunks_data` after FAISS returns indices?
+
+### Q6.  
+What is the difference between retrieval score and answer correctness?
+
+### Q7.  
+What does a low top retrieval score indicate?
+
+### Q8.  
+What is one limitation of `IndexFlatIP`?
+
+### Q9.  
+Why might hybrid retrieval be better than semantic retrieval alone?
+
+## Instructor-Only Answers
+
+### A1.  
+FAISS solves the problem of fast similarity search over chunk embeddings.
+
+---
+
+### A2.  
+We use `IndexFlatIP` because our embeddings are normalized and we want inner product search.
+
+---
+
+### A3.  
+For normalized vectors, each vector has unit norm.
+
+So cosine similarity:
+
+$$
+\cos(\theta) =
+\frac{a \cdot b}{\|a\|\|b\|}
+$$
+
+becomes:
+
+$$
+\cos(\theta) = a \cdot b
+$$
+
+---
+
+### A4.  
+FAISS returns similarity scores and indices of the nearest vectors.
+
+---
+
+### A5.  
+FAISS only stores vectors.  
+It does not store page numbers, chunk IDs, or chunk text.  
+We use `chunks_data` to recover the original chunk metadata.
+
+---
+
+### A6.  
+Retrieval score measures vector similarity.  
+It does not guarantee that the chunk contains the correct answer.
+
+---
+
+### A7.  
+A low top retrieval score may indicate that the retrieved context is weak or that the document does not contain enough relevant information.
+
+---
+
+### A8.  
+`IndexFlatIP` performs exact search over all vectors.  
+It is simple and accurate but can become slow or memory-heavy for very large datasets.
+
+---
+
+### A9.  
+Hybrid retrieval combines semantic search with keyword search.  
+This can help with exact terms, names, formulas, abbreviations, and domain-specific phrases.
+
+## Bridge to the Next Section
+
+We have now completed the retriever part of the pipeline.
+
+Our system can now do this:
+
+$$
+\text{Question}
+\rightarrow
+\text{Question Embedding}
+\rightarrow
+\text{FAISS Search}
+\rightarrow
+\text{Top-k Relevant Chunks}
+$$
+
+But retrieval alone is not RAG.
+
+FAISS only gives us relevant chunks.
+
+It does not generate an answer.
+
+The next step is to convert retrieved chunks into a useful prompt.
+
+In the next section, we will build:
+
+```python
+build_rag_prompt()
+```
+
+This function will combine:
+
+- user question
+- retrieved chunks
+- instruction to answer only from context
+- source-aware formatting
+
+This is the bridge from retrieval to generation.
+
+# Section 9: Building a RAG Prompt from Retrieved Chunks
+
+We have now completed the retriever part of the pipeline.
+
+Our system can do:
+
+$$
+\text{Question}
+\rightarrow
+\text{Question Embedding}
+\rightarrow
+\text{FAISS Search}
+\rightarrow
+\text{Top-k Relevant Chunks}
+$$
+
+But retrieval alone is not RAG.
+
+FAISS gives us relevant chunks, but it does not generate an answer.
+
+Now we need to convert the retrieved chunks into a prompt that a generative model can use.
+
+In this section, we will build:
+
+```python
+build_rag_prompt()
+```
+
+This function will combine:
+
+- user question
+- retrieved context
+- clear answering instruction
+- grounding instruction
+- source-aware formatting
+
+This is the bridge from retrieval to generation.
+
+## 9.1 Why Prompt Construction Matters
+
+A generative model does not automatically know how to use retrieved chunks.
+
+If we simply give it some text and a question, it may:
+
+- ignore the context
+- answer from its own learned memory
+- hallucinate unsupported information
+- mix correct and incorrect details
+- produce an answer without source grounding
+
+So we must guide the model using a carefully designed prompt.
+
+The prompt should tell the model:
+
+1. Use only the provided context.
+2. Do not answer from outside knowledge.
+3. If the context is insufficient, say so.
+4. Write a clear answer.
+5. Keep the answer grounded in the retrieved chunks.
+
+This is where RAG becomes more than retrieval.
+
+The retrieved chunks provide evidence.
+
+The prompt controls how the generator uses that evidence.
+
+## 9.2 What Goes Inside a RAG Prompt?
+
+A basic RAG prompt has three main parts.
+
+---
+
+### Part 1: Instruction
+
+This tells the model what behavior is expected.
+
+Example:
+
+```text
+Answer the question using only the provided context.
+If the answer is not present in the context, say that the document does not provide enough information.
+```
+
+---
+
+### Part 2: Retrieved Context
+
+This contains the top-k chunks retrieved by FAISS.
+
+Example:
+
+```text
+[Source 1 | Page 2 | Chunk 7]
+The Transformer model uses self-attention mechanisms...
+
+[Source 2 | Page 3 | Chunk 10]
+Self-attention allows tokens to attend to all other tokens...
+```
+
+---
+
+### Part 3: User Question
+
+This is the actual question asked by the user.
+
+Example:
+
+```text
+Question:
+Why is self-attention useful in Transformers?
+```
+
+---
+
+The final prompt becomes:
+
+```text
+Instruction
++
+Retrieved Context
++
+Question
+```
+
+## 9.3 Mathematical Framing
+
+Let the user question be:
+
+$$
+q
+$$
+
+Let the retriever return top-k chunks:
+
+$$
+R(q) = \{c_{i_1}, c_{i_2}, \dots, c_{i_k}\}
+$$
+
+Now we construct a prompt:
+
+$$
+P = \text{Prompt}(q, R(q))
+$$
+
+The generator receives this prompt:
+
+$$
+\hat{a} = G(P)
+$$
+
+where:
+
+- $q$ is the user question
+- $R(q)$ is the retrieved context
+- $P$ is the constructed prompt
+- $G$ is the generative model
+- $\hat{a}$ is the generated answer
+
+So the RAG answer is not generated from the question alone.
+
+It is generated from:
+
+$$
+\text{Question} + \text{Retrieved Evidence}
+$$
+
+This is the key distinction:
+
+$$
+G(q)
+$$
+
+is normal generation.
+
+But:
+
+$$
+G(q, R(q))
+$$
+
+is retrieval-augmented generation.
+
+## 9.4 Grounded Prompt Design
+
+A grounded RAG prompt should reduce unsupported generation.
+
+A useful instruction is:
+
+```text
+Use only the context provided below.
+If the context does not contain the answer, say:
+"The provided document does not contain enough information to answer this question."
+```
+
+This instruction matters because a generative model may otherwise try to answer from memory.
+
+For example, if the PDF is about Transformers and the user asks:
+
+```text
+Who won the FIFA World Cup in 2022?
+```
+
+The model may know the answer from pretraining.
+
+But this is not what we want.
+
+In document-grounded RAG, the model should answer only from the document.
+
+So if the retrieved context does not contain the information, the correct behavior is:
+
+```text
+The provided document does not contain enough information to answer this question.
+```
+
+def build_rag_prompt(
+    question: str,
+    retrieved_chunks: List[Dict[str, Any]],
+    max_context_characters: int = 3500
+) -> str:
+    """
+    Build a grounded RAG prompt using the user question and retrieved chunks.
+
+    Parameters
+    ----------
+    question : str
+        User question.
+
+    retrieved_chunks : List[Dict[str, Any]]
+        List of retrieved chunks from retrieve_top_k_chunks().
+
+    max_context_characters : int
+        Maximum number of characters allowed for the combined context.
+        This prevents the prompt from becoming too long for small models.
+
+    Returns
+    -------
+    prompt : str
+        Final prompt to pass into a generative model.
+    """
+
+    if question is None or len(question.strip()) == 0:
+        raise ValueError("Question cannot be empty.")
+
+    if len(retrieved_chunks) == 0:
+        raise ValueError("retrieved_chunks cannot be empty.")
+
+    cleaned_question = clean_text(question)
+
+    context_blocks = []
+    current_context_length = 0
+
+    for chunk in retrieved_chunks:
+        source_header = (
+            f"[Source {chunk['rank']} | "
+            f"Page {chunk['page_number']} | "
+            f"Chunk {chunk['chunk_id']} | "
+            f"Score {chunk['retrieval_score']:.4f}]"
+        )
+
+        chunk_text = clean_text(chunk["chunk_text"])
+
+        block = source_header + "\n" + chunk_text
+
+        # Stop adding context if prompt becomes too long
+        if current_context_length + len(block) > max_context_characters:
+            remaining_characters = max_context_characters - current_context_length
+
+            if remaining_characters > 300:
+                trimmed_block = block[:remaining_characters]
+                trimmed_block = trimmed_block.rsplit(" ", 1)[0]
+                context_blocks.append(trimmed_block)
+
+            break
+
+        context_blocks.append(block)
+        current_context_length += len(block)
+
+    context_text = "\n\n".join(context_blocks)
+
+    prompt = f"""
+You are a document question-answering assistant.
+
+Use only the provided context to answer the question.
+Do not use outside knowledge.
+If the answer is not supported by the context, say:
+"The provided document does not contain enough information to answer this question."
+
+Write a clear and concise answer.
+
+Context:
+{context_text}
+
+Question:
+{cleaned_question}
+
+Answer:
+""".strip()
+
+    return prompt
+
+## 9.5 Function Explanation
+
+The function:
+
+```python
+build_rag_prompt()
+```
+
+creates the input that will be sent to the generative model.
+
+---
+
+### Step 1: Clean the question
+
+```python
+cleaned_question = clean_text(question)
+```
+
+This keeps the user question readable and consistent.
+
+---
+
+### Step 2: Format retrieved chunks as sources
+
+Each retrieved chunk is formatted like this:
+
+```text
+[Source 1 | Page 2 | Chunk 7 | Score 0.6214]
+Retrieved chunk text...
+```
+
+This makes the context traceable.
+
+---
+
+### Step 3: Control context length
+
+```python
+max_context_characters=3500
+```
+
+Small generative models have input length limits.
+
+So we avoid sending too much context.
+
+If the context becomes too long, we stop adding more chunks.
+
+---
+
+### Step 4: Add grounding instruction
+
+The prompt explicitly says:
+
+```text
+Use only the provided context.
+Do not use outside knowledge.
+```
+
+This is important for reducing hallucination.
+
+---
+
+### Step 5: Add fallback behavior
+
+The model is instructed to say that the document does not contain enough information if the answer is not supported.
+
+This is important for responsible RAG.
+
+sample_question = "What is the main idea discussed in this document?"
+
+retrieved_chunks = retrieve_top_k_chunks(
+    question=sample_question,
+    embedding_model=embedding_model,
+    faiss_index=faiss_index,
+    chunks_data=chunks_data,
+    top_k=5
+)
+
+rag_prompt = build_rag_prompt(
+    question=sample_question,
+    retrieved_chunks=retrieved_chunks,
+    max_context_characters=3500
+)
+
+print("RAG prompt created.")
+print("Prompt length in characters:", len(rag_prompt))
+
+RAG prompt created.
+Prompt length in characters: 3882
+
+print("=" * 120)
+print("RAG PROMPT PREVIEW")
+print("=" * 120)
+print_wrapped(rag_prompt[:2500], width=100)
+
+if len(rag_prompt) > 2500:
+    print("\n... prompt truncated in display ...")
+
+## Observation
+
+The prompt should contain:
+
+- instruction to answer only from context
+- retrieved source chunks
+- page numbers
+- chunk IDs
+- retrieval scores
+- user question
+- answer marker
+
+This prompt is now ready for a generative model.
+
+The quality of the prompt matters because the generator will not directly access:
+
+```python
+chunks_data
+```
+
+or:
+
+```python
+faiss_index
+```
+
+The generator only sees the final prompt text.
+
+So whatever evidence we want the generator to use must be inside the prompt.
+
+## 9.6 Why We Limit Context Length
+
+It may seem useful to pass many chunks into the prompt.
+
+But more context is not always better.
+
+Large prompts can create problems:
+
+1. The model may exceed its input token limit.
+2. The model may become slower.
+3. Important information may get buried.
+4. Irrelevant chunks may distract the model.
+5. Small models may struggle with long context.
+
+So we use:
+
+```python
+max_context_characters
+```
+
+as a simple teaching-level control.
+
+In production systems, we usually use token-based limits instead of character-based limits.
+
+But for this notebook, character length is easier to explain and debug.
+
+for k in [1, 3, 5]:
+    retrieved_k = retrieve_top_k_chunks(
+        question=sample_question,
+        embedding_model=embedding_model,
+        faiss_index=faiss_index,
+        chunks_data=chunks_data,
+        top_k=k
+    )
+
+    prompt_k = build_rag_prompt(
+        question=sample_question,
+        retrieved_chunks=retrieved_k,
+        max_context_characters=3500
+    )
+
+    print("=" * 100)
+    print(f"Top-k: {k}")
+    print("Number of retrieved chunks:", len(retrieved_k))
+    print("Prompt length:", len(prompt_k), "characters")
+    print("Top retrieval score:", round(retrieved_k[0]["retrieval_score"], 4))
+
+## Observation
+
+The value of `top_k` affects the prompt.
+
+If `top_k` is too small:
+
+```text
+The prompt may not contain enough information.
+```
+
+If `top_k` is too large:
+
+```text
+The prompt may contain irrelevant or distracting information.
+```
+
+So `top_k` is a design choice.
+
+A common starting point is:
+
+```python
+top_k = 3
+```
+
+or:
+
+```python
+top_k = 5
+```
+
+For short factual questions, smaller `top_k` may work.
+
+For broader explanation questions, larger `top_k` may help.
+
+## 9.7 Prompt Quality Checklist
+
+Before sending a prompt to the generative model, check:
+
+---
+
+### 1. Is the question clear?
+
+A vague question produces vague retrieval and vague generation.
+
+---
+
+### 2. Are the retrieved chunks relevant?
+
+Prompt quality depends on retrieval quality.
+
+Bad retrieved chunks create bad prompts.
+
+---
+
+### 3. Is the context too long?
+
+Too much context may confuse the generator.
+
+---
+
+### 4. Is the instruction clear?
+
+The model should know whether to answer briefly, explain deeply, or refuse unsupported answers.
+
+---
+
+### 5. Is fallback behavior defined?
+
+The prompt should tell the model what to do when the answer is not present.
+
+---
+
+### 6. Are sources preserved?
+
+Source labels help us later debug and display evidence.
+
+def build_strict_rag_prompt(
+    question: str,
+    retrieved_chunks: List[Dict[str, Any]],
+    max_context_characters: int = 3500
+) -> str:
+    """
+    Build a stricter RAG prompt that asks the model to avoid unsupported claims.
+
+    This version is useful when hallucination control is more important than answer style.
+    """
+
+    if question is None or len(question.strip()) == 0:
+        raise ValueError("Question cannot be empty.")
+
+    if len(retrieved_chunks) == 0:
+        raise ValueError("retrieved_chunks cannot be empty.")
+
+    cleaned_question = clean_text(question)
+
+    context_blocks = []
+    current_context_length = 0
+
+    for chunk in retrieved_chunks:
+        block = (
+            f"[Source {chunk['rank']} | Page {chunk['page_number']} | "
+            f"Chunk {chunk['chunk_id']} | Score {chunk['retrieval_score']:.4f}]\n"
+            f"{clean_text(chunk['chunk_text'])}"
+        )
+
+        if current_context_length + len(block) > max_context_characters:
+            break
+
+        context_blocks.append(block)
+        current_context_length += len(block)
+
+    context_text = "\n\n".join(context_blocks)
+
+    prompt = f"""
+You are a careful document-grounded assistant.
+
+Rules:
+1. Answer only using the context below.
+2. Do not add facts that are not present in the context.
+3. If the context is insufficient, say exactly:
+"The provided document does not contain enough information to answer this question."
+4. Keep the answer concise.
+5. Do not mention source numbers unless asked.
+
+Context:
+{context_text}
+
+Question:
+{cleaned_question}
+
+Grounded Answer:
+""".strip()
+
+    return prompt
+
+## 9.8 Simple Prompt vs Strict Prompt
+
+We now have two prompt-building functions.
+
+---
+
+### Simple Prompt
+
+```python
+build_rag_prompt()
+```
+
+This is useful for normal document QnA.
+
+It asks the model to answer clearly using the context.
+
+---
+
+### Strict Prompt
+
+```python
+build_strict_rag_prompt()
+```
+
+This is useful when hallucination control is more important.
+
+It gives stronger rules and a fixed fallback answer.
+
+---
+
+### Teaching Decision
+
+We will use:
+
+```python
+build_rag_prompt()
+```
+
+as the main function.
+
+But we keep:
+
+```python
+build_strict_rag_prompt()
+```
+
+as an improved version for comparison.
+
+Later, when we test generation, we can compare how both prompts affect answer quality.
+
+simple_prompt = build_rag_prompt(
+    question=sample_question,
+    retrieved_chunks=retrieved_chunks,
+    max_context_characters=3500
+)
+
+strict_prompt = build_strict_rag_prompt(
+    question=sample_question,
+    retrieved_chunks=retrieved_chunks,
+    max_context_characters=3500
+)
+
+print("Simple prompt length:", len(simple_prompt))
+print("Strict prompt length:", len(strict_prompt))
+
+print("\nStrict prompt preview:")
+print("=" * 100)
+print_wrapped(strict_prompt[:2000], width=100)
+
+## 9.9 Important Teaching Distinction
+
+At this stage, the system is still not generating answers.
+
+We have only built the prompt.
+
+The current flow is:
+
+$$
+\text{Question}
+\rightarrow
+\text{Retrieve Chunks}
+\rightarrow
+\text{Build Prompt}
+$$
+
+The next step will be:
+
+$$
+\text{Prompt}
+\rightarrow
+\text{Generative Model}
+\rightarrow
+\text{Answer}
+$$
+
+So far:
+
+- FAISS retrieved the evidence.
+- Prompt construction packaged the evidence.
+- The generator has not yet been used.
+
+This distinction is important.
+
+RAG is not one single model.
+
+It is a pipeline.
+
+## 9.10 Optimized / Better Prompting Discussion
+
+The current prompt is simple and explainable.
+
+But prompt construction can be improved in many ways.
+
+---
+
+### 1. Token-aware context trimming
+
+Our function uses:
+
+```python
+max_context_characters
+```
+
+This is simple.
+
+A better version would count tokens using the generator tokenizer.
+
+This prevents input from exceeding the model limit.
+
+---
+
+### 2. Better context ordering
+
+Currently, chunks are ordered by retrieval rank.
+
+Sometimes it is better to order by:
+
+- page number
+- document structure
+- retrieval score
+- source section
+
+For explanation questions, page order can sometimes produce more coherent answers.
+
+---
+
+### 3. Include only high-confidence chunks
+
+We may filter chunks with low retrieval scores.
+
+Example:
+
+```python
+if retrieval_score < 0.30:
+    skip chunk
+```
+
+But this threshold must be tuned carefully.
+
+---
+
+### 4. Ask for evidence-aware answers
+
+For advanced RAG, we may ask the model to answer with evidence.
+
+Example:
+
+```text
+Answer the question and mention which source supports each point.
+```
+
+This helps evaluation but can make answers longer.
+
+---
+
+### 5. Separate answer generation from citation display
+
+In this notebook, we will display sources separately using metadata.
+
+This is easier and more reliable than forcing a small model to generate perfect citations.
+
+## 9.11 Debugging Checklist
+
+### Problem 1: Prompt is too long
+
+Possible causes:
+
+- `top_k` is too large
+- chunks are too large
+- `max_context_characters` is too high
+
+Solution:
+
+Reduce:
+
+```python
+top_k
+```
+
+or:
+
+```python
+max_context_characters
+```
+
+---
+
+### Problem 2: Prompt contains irrelevant context
+
+Possible cause:
+
+Retrieval returned weak chunks.
+
+Solution:
+
+Inspect retrieved chunks using:
+
+```python
+display_retrieved_chunks()
+```
+
+---
+
+### Problem 3: Prompt does not include enough context
+
+Possible causes:
+
+- `top_k` is too small
+- retrieved chunks are incomplete
+- chunk size is too small
+- context limit is too strict
+
+Solution:
+
+Increase `top_k` or improve chunking.
+
+---
+
+### Problem 4: Prompt contains unreadable text
+
+Possible causes:
+
+- poor PDF extraction
+- weak cleaning
+- bad chunking
+
+Solution:
+
+Go back to extraction, cleaning, or chunk inspection.
+
+---
+
+### Problem 5: Model later hallucinates
+
+Possible causes:
+
+- weak instruction
+- irrelevant retrieved context
+- model limitation
+- question not answerable from document
+
+Solution:
+
+Use the stricter prompt and improve retrieval quality.
+
+## Concept Check
+
+### Q1.  
+Why do we need a prompt after retrieving chunks?
+
+### Q2.  
+What are the three main parts of a RAG prompt?
+
+### Q3.  
+Why should the prompt instruct the model to use only the provided context?
+
+### Q4.  
+Why do we include page number and chunk ID inside the context blocks?
+
+### Q5.  
+Why can too much retrieved context hurt generation?
+
+### Q6.  
+What is the role of `max_context_characters`?
+
+### Q7.  
+What is the difference between `build_rag_prompt()` and `build_strict_rag_prompt()`?
+
+### Q8.  
+At this stage, has the system generated an answer yet?
+
+## Instructor-Only Answers
+
+### A1.  
+We need a prompt because the generative model needs instructions and context.  
+Retrieved chunks must be packaged in a way the model can use.
+
+---
+
+### A2.  
+The three main parts are:
+
+1. instruction
+2. retrieved context
+3. user question
+
+---
+
+### A3.  
+This reduces hallucination risk.  
+Without this instruction, the model may answer from outside knowledge rather than the document.
+
+---
+
+### A4.  
+Page number and chunk ID make the context traceable.  
+They help us debug retrieval and display sources later.
+
+---
+
+### A5.  
+Too much context may exceed the model input limit, slow down generation, bury important information, or distract the model with irrelevant chunks.
+
+---
+
+### A6.  
+`max_context_characters` limits how much retrieved context is placed into the prompt.
+
+---
+
+### A7.  
+`build_rag_prompt()` is a general grounded prompt.  
+`build_strict_rag_prompt()` gives stronger rules and a fixed fallback response to reduce unsupported generation.
+
+---
+
+### A8.  
+No.  
+At this stage, we have only retrieved chunks and built a prompt.  
+The generative model will be added in the next section.
+
+## Bridge to the Next Section
+
+We have now completed:
+
+$$
+\text{Question}
+\rightarrow
+\text{Retriever}
+\rightarrow
+\text{Top-k Chunks}
+\rightarrow
+\text{RAG Prompt}
+$$
+
+The next step is generation.
+
+In the next section, we will load a lightweight Hugging Face generative model:
+
+```text
+google/flan-t5-small
+```
+
+Then we will build:
+
+```python
+generate_answer_from_context()
+```
+
+This function will take the RAG prompt and generate a natural-language answer.
+
+That will complete the first version of our generative RAG pipeline.
+
+# Section 10: Loading FLAN-T5 and Generating Grounded Answers
+
+We have now completed:
+
+$$
+\text{Question}
+\rightarrow
+\text{Retriever}
+\rightarrow
+\text{Top-k Chunks}
+\rightarrow
+\text{RAG Prompt}
+$$
+
+Now we add the generation component.
+
+The next step is:
+
+$$
+\text{RAG Prompt}
+\rightarrow
+\text{Generative Model}
+\rightarrow
+\text{Grounded Answer}
+$$
+
+In this section, we will load a lightweight Hugging Face generative model:
+
+```text
+google/flan-t5-small
+```
+
+Then we will build:
+
+```python
+generate_answer_from_context()
+```
+
+This function will take a RAG prompt and generate a natural-language answer.
+
+## 10.1 Why Do We Need a Generative Model?
+
+Until now, our system can retrieve relevant chunks.
+
+But retrieved chunks are not the final answer.
+
+They are evidence.
+
+A user usually expects a clear response such as:
+
+```text
+The main idea of the document is that retrieval should be used before generation so that the model can answer using external evidence.
+```
+
+This type of answer is not directly produced by FAISS.
+
+FAISS only retrieves.
+
+The generative model writes the answer.
+
+So the division of responsibility is:
+
+| Component | Responsibility |
+|---|---|
+| FAISS Retriever | Finds relevant chunks |
+| Prompt Builder | Packages chunks and question |
+| Generative Model | Writes answer from the prompt |
+
+This is the point where the system becomes a generative RAG system.
+
+## 10.2 Why FLAN-T5?
+
+For this notebook, we will use:
+
+```text
+google/flan-t5-small
+```
+
+FLAN-T5 is an instruction-tuned encoder-decoder model.
+
+This means it can take an instruction-like input and generate a text output.
+
+For example:
+
+```text
+Answer the question using the context.
+Context: ...
+Question: ...
+Answer:
+```
+
+This fits our RAG pipeline naturally.
+
+We choose `flan-t5-small` because:
+
+- it is lightweight
+- it works reasonably well in Colab
+- it is easier to load than large LLMs
+- it is suitable for teaching the RAG mechanism
+
+The goal is not to build the most powerful chatbot.
+
+The goal is to understand:
+
+$$
+\text{Retrieval} + \text{Prompting} + \text{Generation}
+$$
+
+## 10.3 Mathematical Framing
+
+From the previous section, we built a prompt:
+
+$$
+P = \text{Prompt}(q, R(q))
+$$
+
+where:
+
+- $q$ is the user question
+- $R(q)$ is the retrieved context
+- $P$ is the final RAG prompt
+
+Now the generative model produces an answer:
+
+$$
+\hat{a} = G(P)
+$$
+
+where:
+
+- $G$ is the generative model
+- $\hat{a}$ is the generated answer
+
+For an encoder-decoder model like T5:
+
+1. The encoder reads the prompt.
+2. The decoder generates the answer token by token.
+
+So the model estimates:
+
+$$
+P(y_1, y_2, \dots, y_m \mid P)
+=
+\prod_{t=1}^{m} P(y_t \mid y_1, y_2, \dots, y_{t-1}, P)
+$$
+
+The answer is generated one token at a time, conditioned on the prompt.
+
+# Load a lightweight text-to-text generation model
+
+generation_model_name = "google/flan-t5-small"
+
+start_time = time.time()
+
+generation_tokenizer = AutoTokenizer.from_pretrained(generation_model_name)
+generation_model = AutoModelForSeq2SeqLM.from_pretrained(generation_model_name)
+
+generation_model = generation_model.to(device)
+generation_model.eval()
+
+end_time = time.time()
+
+print("Generative model loaded successfully.")
+print("Model name:", generation_model_name)
+print("Device:", device)
+print("Loading time:", round(end_time - start_time, 2), "seconds")
+
+model.safetensors:   0%|          | 0.00/308M [00:00<?, ?B/s]

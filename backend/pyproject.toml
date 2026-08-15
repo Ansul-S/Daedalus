@@ -125,6 +125,12 @@ select = [
 # Tests may use assert freely and don't need the print ban.
 "tests/**" = ["S101", "T20"]
 
+# Command-line entry points. The T20 ban exists to keep debug prints out of
+# library code that should be logging; for these the printed report is the
+# output, and sending it to a logger would put it behind a level filter.
+"src/daedalus/evaluation/freeze.py" = ["T20"]
+"src/daedalus/evaluation/run.py" = ["T20"]
+
 
 # Mypy
 

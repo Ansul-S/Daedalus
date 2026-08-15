@@ -6,10 +6,13 @@
 # Run against everything:
 #     uv run pre-commit run --all-files
 
-# The evaluation corpus is frozen reference material, not source code.
-# Formatting or "fixing" it would change the text that evaluation labels
-# anchor to and silently invalidate every label. Never touch it.
-exclude: ^corpus/
+# The evaluation corpus and its frozen parsed text are reference material,
+# not source code. Formatting or "fixing" them changes the text that
+# evaluation labels anchor to and silently invalidates every label —
+# trailing-whitespace and end-of-file-fixer did exactly that to
+# backend/eval/parsed/ before it was listed here, and the manifest hash
+# check is what caught it. Never touch either path.
+exclude: ^(corpus/|backend/eval/parsed/)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

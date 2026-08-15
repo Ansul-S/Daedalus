@@ -1,0 +1,497 @@
+# **YOLO V5** 
+
+## Structured Notes 
+
+Architecture, CSP Backbone, FPN 
+
+Neck, Detection Head, SPPF, YOLO Label Format, and Practical Training Pipeline
+
+~~YOLO V5 - Notes~~ 
+
+~~1~~ 
+
+## **Contents** 
+
+|1<br>Introduction to YOLO V5<br>2|
+|---|
+|1.1<br>Applications of YOLO V5 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>2|
+|2<br>YOLO V5 Architecture Overview<br>2|
+|3<br>Backbone: Feature Extraction with CSPNet<br>3|
+|3.1<br>Feature Hierarchy. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>3|
+|3.2<br>Backbone Layer Structure . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>3|
+|4<br>C3 Block: Cross Stage Partial Bottleneck<br>3|
+|4.1<br>C3 Block with Skip Connection (Backbone) . . . . . . . . . . . . . . . . . . . . . . . . .<br>4|
+|4.2<br>C3 Block without Skip Connection (Neck) . . . . . . . . . . . . . . . . . . . . . . . . . .<br>4|
+|4.3<br>Why Diferent Convolution Operations Produce Diferent Outputs<br>. . . . . . . . . . . .<br>4|
+|5<br>SPPF: Spatial Pyramid Pooling Fast<br>4|
+|5.1<br>SPPF Operation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>5|
+|6<br>Neck: Feature Pyramid Network (FPN)<br>5|
+|6.1<br>Purpose of the Neck . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>5|
+|6.2<br>Why Concatenate Lower and Higher Level Features. . . . . . . . . . . . . . . . . . . . .<br>5|
+|6.3<br>Neck Layer Structure . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>5|
+|6.4<br>Cross-Layer Connections . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>6|
+|7<br>Head: Object Detection<br>6|
+|7.1<br>Anchor Boxes . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>6|
+|8<br>YOLO Label Format<br>6|
+|8.1<br>Comparison: YOLO Format vs XML Format . . . . . . . . . . . . . . . . . . . . . . . .<br>7|
+|8.2<br>Creating YOLO Format Labels . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>7|
+|9<br>YOLO V5 Training Pipeline<br>7|
+|9.1<br>Environment Setup . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>7|
+|9.2<br>Dataset Preparation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>7|
+|9.3<br>Custom Data YAML Confguration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>7|
+|9.4<br>Model Creation and Training . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>8|
+|9.5<br>Weights and Inference . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .<br>8|
+|10 Summary<br>8|
+
+
+
+10 Summary
+
+~~YOLO V5 - Notes~~ 
+
+~~2~~ 
+
+## **1 Introduction to YOLO V5** 
+
+#### **YOLO V5** 
+
+YOLO V5 (You Only Look Once, Version 5) is a real-time object detection model that detects objects in images by drawing bounding boxes around them. It represents the fifth iteration of the YOLO family and was introduced to address limitations of earlier versions. 
+
+YOLO V5 improves upon earlier versions (V1, V2, V3, V4) in several key areas: 
+
+- Higher speed — faster inference compared to previous versions 
+
+- Better accuracy — improved detection performance overall 
+
+- Small object detection — earlier versions (particularly V1) struggled with small objects and produced incorrect detections 
+
+- Adverse conditions — handles low contrast, poor lighting, crowded scenes, and occluded objects better than predecessors 
+
+#### **Limitations of YOLO V1** 
+
+YOLO V1 worked well when the object size was large enough, but it failed in cases where: 
+
+- Objects were small in size 
+
+- Environmental contrast was low 
+
+- Lighting conditions were adverse 
+
+- Objects appeared in crowded scenes or alongside other objects 
+
+These limitations motivated the development of YOLO V5. 
+
+### **1.1 Applications of YOLO V5** 
+
+YOLO V5 has widespread applications across various domains: 
+
+- Surveillance systems — real-time monitoring and threat detection 
+
+- Autonomous driving — detecting vehicles, pedestrians, and obstacles 
+
+- Face detection — identifying and localizing faces in images 
+
+- Medical imaging — detecting anomalies in medical scans 
+
+## **2 YOLO V5 Architecture Overview** 
+
+YOLO V5 comprises three major architectural components: 
+
+#### YOLO V5 Architecture = Backbone + Neck + Head 
+
+1. Backbone — Extracts features at multiple levels (low, mid, high) 
+
+2. Neck — Concatenates features across different scales for multi-scale detection 
+
+3. Head — Performs final object detection with bounding boxes 
+
+|Component|Key Module|Function|
+|---|---|---|
+|Backbone|CSPNet (C3 blocks)|Feature extraction|
+|Backbone|SPPF|Multi-scale pooling|
+|Neck|FPN + Upsampling|Feature concatenation across scales|
+|Head|Detection layer|Bounding box prediction|
+
+
+
+## **3 Backbone: Feature Extraction with CSPNet**
+
+~~YOLO V5 - Notes~~ 
+
+~~3~~ 
+
+#### **Backbone** 
+
+The backbone is responsible for extracting features from the input image. It uses multiple stages of Cross Stage Partial Networks (CSPNet) to progressively extract features from low-level to high-level representations. 
+
+### **3.1 Feature Hierarchy** 
+
+The backbone extracts three levels of features: 
+
+1. Low-level features — edges, textures, contours in the image 
+
+2. Mid-level features — parts of objects (e.g., face, arms, legs of a human) 
+
+3. High-level features — complete object understanding and recognition 
+
+As the network goes deeper, it progressively extracts higher-level features. The backbone also reduces computational cost because only a few layers are responsible for building each stage of the network. 
+
+### **3.2 Backbone Layer Structure** 
+
+The backbone is a sequential model where the output of each preceding layer serves as input to the succeeding layer. The layer configuration in the YOLO V5s YAML blueprint follows this pattern: 
+
+|Layer|Repeat|Module|Parameters|
+|---|---|---|---|
+|1|1|Conv|64 flters, 6_×_6, stride 2, padding 2|
+|2|1|Conv|128 flters, 3_×_3, stride 2, padding 1|
+|3|3|C3|128 flters|
+|4|1|Conv|256 flters, 3_×_3, stride 2, padding 1|
+|5|6|C3|256 flters|
+|6|1|Conv|512 flters, 3_×_3, stride 2|
+|7|9|C3|512 flters|
+|8|1|Conv|1024 flters, 3_×_3, stride 2, padding 1|
+|9|3|C3|1024 flters|
+|10|1|SPPF|1024 flters, kernel size 5|
+
+
+
+#### **YAML Blueprint Notation** 
+
+Each layer in the YAML file is specified as: `[from, repeat, module, args]` 
+
+- `from = -1` means the layer takes input from the previous layer 
+
+- `repeat` specifies how many times the layer/block is repeated 
+
+- `module` is the operation type (Conv, C3, SPPF, etc.) 
+
+- `args` contains filter count, kernel size, stride, and padding 
+
+## **4 C3 Block: Cross Stage Partial Bottleneck** 
+
+#### **C3 Block** 
+
+The C3 block (Cross Stage Partial Bottleneck) is the core building block used in both the backbone and neck of YOLO V5. It performs feature extraction through a combination of convolution operations, residual (skip) connections, and concatenation. The C3 block is defined in `common.py` .
+
+~~YOLO V5 - Notes~~ 
+
+~~4~~ 
+
+### **4.1 C3 Block with Skip Connection (Backbone)** 
+
+The C3 block used in the backbone includes a skip connection (residual connection). The operation proceeds as follows: 
+
+#### C3 Block Operation (with skip connection): 
+
+1. Take input _X_ 
+
+2. Perform convolution on _X_ to get _Y_ 1 
+
+3. Perform convolution on _Y_ 1 to get _Y_ 2 
+
+4. Add _Y_ 2 back to input: _Y_<sup>_′_</sup> = _Y_ 2 + _X_ (skip/residual connection) 
+
+5. Perform a separate convolution on _X_ to get _Y_ 3 (parallel path) 
+
+6. Concatenate _Y_<sup>_′_</sup> and _Y_ 3: _Y_ 4 = concat( _Y_<sup>_′_</sup> _, Y_ 3) 
+
+7. Perform convolution on _Y_ 4 to get the final output _Y_ 5 
+
+The skip connection (adding _Y_ 2 back to _X_ ) is the bottleneck operation. It helps preserve information from the original input and addresses the vanishing gradient problem. 
+
+### **4.2 C3 Block without Skip Connection (Neck)** 
+
+In the neck portion of the network, the C3 block is used with `False` flag, meaning no skip connection is used. The operation becomes: 
+
+#### C3 Block Operation (without skip connection): 
+
+1. Take input _X_ 
+
+2. Perform convolution on _X_ to get _Y_ 1 
+
+3. Perform convolution on _Y_ 1 to get _Y_ 2 
+
+4. Perform convolution on _Y_ 2 to get _Y_ 3 (no addition back to _X_ ) 
+
+5. Perform a separate convolution on _X_ to get _X_ 1 (parallel path) 
+
+6. Concatenate _Y_ 3 and _X_ 1 
+
+7. Perform convolution on the concatenation to get the final output 
+
+#### **Key Difference** 
+
+The C3 block with skip connection ( `True` ) is used in the backbone. The C3 block without skip connection ( `False` ) is used in the neck. The difference is whether _Y_ 2 is added back to the original input _X_ or not. 
+
+### **4.3 Why Different Convolution Operations Produce Different Outputs** 
+
+Even when two parallel convolution operations use the same number of filters (e.g., 64 filters), they produce different outputs because: 
+
+- Filters are initialized with different random numbers 
+
+- Different filters extract different features (e.g., one may extract edges while another extracts contours) 
+
+- Each convolution operation is independent with its own learned weights 
+
+## **5 SPPF: Spatial Pyramid Pooling Fast** 
+
+#### **SPPF** 
+
+SPPF (Spatial Pyramid Pooling Fast) is a block at the end of the backbone that performs max pooling at multiple scales and concatenates the results. It enables the network to capture features
+
+~~YOLO V5 - Notes~~ 
+
+~~5~~ 
+
+at different spatial resolutions. 
+
+### **5.1 SPPF Operation** 
+
+SPPF Block Operation: 
+
+1. Take input _X_ , perform convolution to get _X_<sup>_′_</sup> 
+
+2. Perform max pooling on _X_<sup>_′_</sup> to get _Y_ 1 
+
+3. Perform max pooling on _Y_ 1 to get _Y_ 2 
+
+4. Perform max pooling on _Y_ 2 to get _Y_ 3 
+
+5. Concatenate along the channel dimension: _Y_ 4 = concat( _X_<sup>_′_</sup> _, Y_ 1 _, Y_ 2 _, Y_ 3) 
+
+6. Perform convolution on _Y_ 4 to get the final output _Y_ 5 
+
+The SPPF block processes features at different scales through successive max pooling operations. Each max pooling reduces the spatial resolution while preserving the most prominent features, and by concatenating features from all scales, the network gains a multi-scale understanding of the image. 
+
+With SPPF, the backbone portion of the network is complete. 
+
+## **6 Neck: Feature Pyramid Network (FPN)** 
+
+#### **Neck** 
+
+The neck portion of YOLO V5 uses Feature Pyramid Networks (FPN) to concatenate features from different stages of the backbone. This enables the model to detect objects of varying sizes — small, medium, and large. 
+
+### **6.1 Purpose of the Neck** 
+
+The neck concatenates features across different levels to achieve: 
+
+- Accurate localization — determining where the object is in the image 
+
+- Correct object understanding — identifying what type of object is present 
+
+- Multi-scale detection — handling small, medium, and large objects 
+
+### **6.2 Why Concatenate Lower and Higher Level Features** 
+
+Higher-level layers process features extracted by lower layers and perform additional processing for complete object recognition. However, during this processing, some lower-level features may get lost. Concatenation recovers these lost features and provides a more complete representation. 
+
+### **6.3 Neck Layer Structure** 
+
+The neck uses several key operations: 
+
+1. Convolution layers with 1 _×_ 1 filters to reduce channel dimensions (e.g., 512 filters to 256) 
+
+2. Upsampling by a factor of 2 using nearest neighbor interpolation — for each pixel, the nearest neighbors are filled with the same value to increase spatial resolution 
+
+3. Concatenation of outputs from the current layer with outputs from earlier backbone layers along the channel dimension 
+
+4. C3 blocks without skip connections ( `False` flag) for further feature processing 
+
+#### **Upsampling in the Neck** 
+
+The upsampling operation uses nearest neighbor algorithm with a scale factor of 2. The output size is not fixed ( `None` in the configuration) because it depends on the input dimensions at each
+
+~~YOLO V5 - Notes~~ 
+
+~~6~~ 
+
+upsampling layer. This is distinct from convolution — upsampling increases spatial resolution rather than extracting features. 
+
+### **6.4 Cross-Layer Connections** 
+
+The neck takes outputs from specific backbone layers and concatenates them with the current processing path. For example: 
+
+- One concatenation layer combines the upsampled output with the 6th layer (backbone) output 
+
+- Another concatenation layer combines the upsampled output with the 4th layer (backbone) output 
+
+- Further concatenation layers link with layers 10 and 14 in the neck itself 
+
+All concatenations happen along the channel dimension. 
+
+## **7 Head: Object Detection** 
+
+#### **Head** 
+
+The head is the final component of YOLO V5 that performs actual object detection. It takes outputs from multiple neck layers and produces bounding box predictions along with class probabilities. 
+
+The head takes the output from layers 17, 20, and 23 of the network. It performs detection using: 
+
+- Bounding boxes — rectangular regions drawn around detected objects 
+
+- Number of classes (nc) — the total number of object categories (e.g., 1 for a single-class fish detection task) 
+
+- Anchors — predefined bounding box dimensions for different object sizes 
+
+### **7.1 Anchor Boxes** 
+
+Anchors are predefined bounding box sizes that serve as initial references for detection. They are defined for three object scales: 
+
+|Object Scale|Anchor Sizes (width|_×_ height)|
+|---|---|---|
+|Small objects|10_×_13,<br>16_×_30,|33_×_23|
+|Medium objects|30_×_61,<br>62_×_45,|59_×_119|
+|Large objects|116_×_90,<br>156_×_19|8,<br>373_×_326|
+
+
+
+Each grid cell in the image uses three bounding boxes (anchors) for each scale. This allows the model to detect objects of varying sizes within the same image. 
+
+## **8 YOLO Label Format** 
+
+#### **YOLO Format Labels** 
+
+The YOLO format for labels stores bounding box annotations in a simple text file. Each line represents one object with the format: 
+
+```
+class_idx_centery_centerwidthheight
+```
+
+All coordinates are normalized relative to the image dimensions.
+
+~~YOLO V5 - Notes~~ 
+
+~~7~~ 
+
+### **8.1 Comparison: YOLO Format vs XML Format** 
+
+|Aspect|YOLO Format|XML Format|
+|---|---|---|
+|File type|`.txt`|`.xml`|
+|Coordinate format|x_center, y_center, width, height|x_min, y_min, x_max, y_max|
+|Normalization|Normalized (0–1)|Pixel values|
+|Class representation|Integer ID (0, 1, 2, ...)|Class name string|
+|Simplicity|Simple, compact|Verbose, structured|
+|Used with|YOLO V5 and later|YOLO V1, Pascal VOC|
+
+
+
+#### **Class ID** 
+
+The class ID starts at 0. For a single-class detection task (e.g., fish detection), the class ID is always 0. For multi-class tasks, classes are numbered sequentially: 0, 1, 2, etc. 
+
+### **8.2 Creating YOLO Format Labels** 
+
+Labels can be created using annotation tools like makesense.ai: 
+
+1. Load images into the annotation tool 
+
+2. Draw bounding boxes around target objects 
+
+3. Export annotations in YOLO format 
+
+4. The raw coordinates ( `x_min, y_min, x_max, y_max` ) are converted to ( `x_center, y_center, width, height` ) through code 
+
+## **9 YOLO V5 Training Pipeline** 
+
+### **9.1 Environment Setup** 
+
+##### **Clone YOLO V5 Repository** 
+
+- 1 _<mark>`# Clone the YOLO V5 repository`</mark>_ 2 <mark>`!git clone https :// github.com/ultralytics/yolov5`</mark> 
+
+- 3 
+
+- 4 _<mark>`# This installs all libraries and dependencies`</mark>_ 5 _<mark>`# required for YOLO V5`</mark>_ 
+
+Listing 1: Installing YOLO V5 dependencies 
+
+### **9.2 Dataset Preparation** 
+
+The training pipeline requires the following steps: 
+
+1. Upload training data — upload the zipped training data to Google Colab 
+
+2. Unzip the data — extract to a folder and provide the correct path 
+
+3. Upload custom data YAML — place the `custom_data.yml` configuration file inside the `yolov5/data/` directory 
+
+4. Verify folder structure — ensure the training data folder ( `train_data` ) contains images and corresponding YOLO format label files 
+
+### **9.3 Custom Data YAML Configuration** 
+
+The `custom_data.yml` file defines: 
+
+- Anchor sizes — predefined bounding box dimensions for small, medium, and large objects
+
+~~YOLO V5 - Notes~~ 
+
+~~8~~ 
+
+- Number of classes (nc) — total number of object categories 
+
+- Class names — list of class labels 
+
+- Data paths — paths to training and validation image directories 
+
+### **9.4 Model Creation and Training** 
+
+#### **Model Blueprint** 
+
+The YOLO V5 model is created from a blueprint defined in a YAML file (e.g., `yolov5s.yaml` ). This blueprint specifies the complete architecture — all layers, their configurations, and connections. The `DetectionModel` class reads this blueprint and constructs the neural network. 
+
+The training process follows these steps: 
+
+1. The `train.py` script is executed with arguments specifying the custom data YAML, model weights, and other hyperparameters 
+
+2. The `DetectionModel` class builds the model from the YAML blueprint 
+
+3. Data loaders load the training images and labels in batches 
+
+4. For each epoch, the model processes the data, computes a loss, and updates the weights using optimizers 
+
+5. Checkpoints are saved — both the last epoch weights and the best epoch weights 
+
+### **9.5 Weights and Inference** 
+
+After training, two sets of weights are saved: 
+
+- Last weights — weights from the final training epoch 
+
+- Best weights — weights from the epoch with the best performance 
+
+For inference (testing), the best weights should be used. The path to the best weights is copied and provided to the detection script along with the test image path. 
+
+##### **Inference with Best Weights** 
+
+1 _<mark>`# Copy the path of the best weights`</mark>_ 2 _<mark>`# best_weights_path = "runs/train/exp/weights/best.pt"`</mark>_ 
+
+3 
+
+- 4 _<mark>`# Run detection on a test image`</mark>_ 5 <mark>`!python detect.py --weights { best_weights_path } \`</mark> 6 <mark>`--source { test_image_path }`</mark> 
+
+Listing 2: Running detection on test images 
+
+## **10 Summary** 
+
+- YOLO V5 is a real-time object detection model that improves upon earlier versions with better speed, accuracy, and small object detection capabilities 
+
+- The architecture consists of three components: Backbone (feature extraction), Neck (multi-scale feature fusion), and Head (detection) 
+
+- The Backbone uses Cross Stage Partial Networks (CSPNet/C3 blocks) to extract low-level, mid-level, and high-level features, ending with an SPPF block for multi-scale pooling 
+
+- The C3 block combines convolution, skip connections (in backbone) or no skip connections (in neck), and concatenation operations 
+
+- SPPF performs successive max pooling operations at different scales and concatenates the results for multi-resolution feature representation 
+
+- The Neck uses Feature Pyramid Networks with upsampling and cross-layer concatenation to enable detection of small, medium, and large objects
+
+~~YOLO V5 - Notes~~ 
+
+~~9~~ 
+
+- The Head uses anchor boxes of predefined sizes to detect objects and draw bounding boxes 
+
+- YOLO format labels use `class_id, x_center, y_center, width, height` (normalized), as opposed to the XML format used in earlier versions 
+
+- The training pipeline involves cloning the YOLO V5 repository, preparing labeled datasets, configuring a custom data YAML, and training with checkpointed best weights

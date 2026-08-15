@@ -1,0 +1,4961 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "doc_id": "attention-is-all-you-need",
+      "filename": "Attention is all you need.pdf",
+      "source_type": "arxiv",
+      "n_pages": 15,
+      "n_chars": 41780,
+      "text_sha256": "b900d03936ca37bce6a29219a5932cc20e0080a8fbff494956c6cf587779240d",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3016,
+          "extraction": "text",
+          "page": 1
+        },
+        {
+          "start": 3018,
+          "end": 7354,
+          "extraction": "text",
+          "page": 2
+        },
+        {
+          "start": 7356,
+          "end": 9241,
+          "extraction": "text",
+          "page": 3
+        },
+        {
+          "start": 9243,
+          "end": 11906,
+          "extraction": "text",
+          "page": 4
+        },
+        {
+          "start": 11908,
+          "end": 15347,
+          "extraction": "text",
+          "page": 5
+        },
+        {
+          "start": 15349,
+          "end": 18969,
+          "extraction": "text",
+          "page": 6
+        },
+        {
+          "start": 18971,
+          "end": 22385,
+          "extraction": "text",
+          "page": 7
+        },
+        {
+          "start": 22387,
+          "end": 25980,
+          "extraction": "text",
+          "page": 8
+        },
+        {
+          "start": 25982,
+          "end": 29286,
+          "extraction": "text",
+          "page": 9
+        },
+        {
+          "start": 29288,
+          "end": 32523,
+          "extraction": "text",
+          "page": 10
+        },
+        {
+          "start": 32525,
+          "end": 35869,
+          "extraction": "text",
+          "page": 11
+        },
+        {
+          "start": 35871,
+          "end": 39194,
+          "extraction": "text",
+          "page": 12
+        },
+        {
+          "start": 39196,
+          "end": 40069,
+          "extraction": "text",
+          "page": 13
+        },
+        {
+          "start": 40071,
+          "end": 40923,
+          "extraction": "text",
+          "page": 14
+        },
+        {
+          "start": 40925,
+          "end": 41780,
+          "extraction": "text",
+          "page": 15
+        }
+      ]
+    },
+    {
+      "doc_id": "bert",
+      "filename": "BERT.pdf",
+      "source_type": "arxiv",
+      "n_pages": 16,
+      "n_chars": 66192,
+      "text_sha256": "eaf79dc14a7cdea2066b55ef78adeafc252c6045aec23684f195fadfe15f663f",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3976,
+          "extraction": "text",
+          "page": 1
+        },
+        {
+          "start": 3978,
+          "end": 8506,
+          "extraction": "text",
+          "page": 2
+        },
+        {
+          "start": 8508,
+          "end": 12359,
+          "extraction": "text",
+          "page": 3
+        },
+        {
+          "start": 12361,
+          "end": 17312,
+          "extraction": "text",
+          "page": 4
+        },
+        {
+          "start": 17314,
+          "end": 21323,
+          "extraction": "text",
+          "page": 5
+        },
+        {
+          "start": 21325,
+          "end": 26013,
+          "extraction": "text",
+          "page": 6
+        },
+        {
+          "start": 26015,
+          "end": 30041,
+          "extraction": "text",
+          "page": 7
+        },
+        {
+          "start": 30043,
+          "end": 34615,
+          "extraction": "text",
+          "page": 8
+        },
+        {
+          "start": 34617,
+          "end": 38805,
+          "extraction": "text",
+          "page": 9
+        },
+        {
+          "start": 38807,
+          "end": 43468,
+          "extraction": "text",
+          "page": 10
+        },
+        {
+          "start": 43470,
+          "end": 48351,
+          "extraction": "text",
+          "page": 11
+        },
+        {
+          "start": 48353,
+          "end": 52336,
+          "extraction": "text",
+          "page": 12
+        },
+        {
+          "start": 52338,
+          "end": 56196,
+          "extraction": "text",
+          "page": 13
+        },
+        {
+          "start": 56198,
+          "end": 60351,
+          "extraction": "text",
+          "page": 14
+        },
+        {
+          "start": 60353,
+          "end": 62865,
+          "extraction": "text",
+          "page": 15
+        },
+        {
+          "start": 62867,
+          "end": 66192,
+          "extraction": "text",
+          "page": 16
+        }
+      ]
+    },
+    {
+      "doc_id": "rag",
+      "filename": "RAG.pdf",
+      "source_type": "arxiv",
+      "n_pages": 19,
+      "n_chars": 72093,
+      "text_sha256": "0f69ba4866b31bb631ca49c5654534664c6966fa9090fb75c8ff5a5417ac4678",
+      "segments": [
+        {
+          "start": 0,
+          "end": 3122,
+          "extraction": "text",
+          "page": 1
+        },
+        {
+          "start": 3124,
+          "end": 7875,
+          "extraction": "text",
+          "page": 2
+        },
+        {
+          "start": 7877,
+          "end": 11645,
+          "extraction": "text",
+          "page": 3
+        },
+        {
+          "start": 11647,
+          "end": 16255,
+          "extraction": "text",
+          "page": 4
+        },
+        {
+          "start": 16257,
+          "end": 20848,
+          "extraction": "text",
+          "page": 5
+        },
+        {
+          "start": 20850,
+          "end": 25431,
+          "extraction": "text",
+          "page": 6
+        },
+        {
+          "start": 25433,
+          "end": 30021,
+          "extraction": "text",
+          "page": 7
+        },
+        {
+          "start": 30023,
+          "end": 33546,
+          "extraction": "text",
+          "page": 8
+        },
+        {
+          "start": 33548,
+          "end": 37713,
+          "extraction": "text",
+          "page": 9
+        },
+        {
+          "start": 37715,
+          "end": 41590,
+          "extraction": "text",
+          "page": 10
+        },
+        {
+          "start": 41592,
+          "end": 45476,
+          "extraction": "text",
+          "page": 11
+        },
+        {
+          "start": 45478,
+          "end": 49560,
+          "extraction": "text",
+          "page": 12
+        },
+        {
+          "start": 49562,
+          "end": 53694,
+          "extraction": "text",
+          "page": 13
+        },
+        {
+          "start": 53696,
+          "end": 57797,
+          "extraction": "text",
+          "page": 14
+        },
+        {
+          "start": 57799,
+          "end": 61919,
+          "extraction": "text",
+          "page": 15
+        },
+        {
+          "start": 61921,
+          "end": 63079,
+          "extraction": "text",
+          "page": 16
+        },
+        {
+          "start": 63081,
+          "end": 65734,
+          "extraction": "text",
+          "page": 17
+        },
+        {
+          "start": 65736,
+          "end": 70063,
+          "extraction": "text",
+          "page": 18
+        },
+        {
+          "start": 70065,
+          "end": 72093,
+          "extraction": "text",
+          "page": 19
+        }
+      ]
+    },
+    {
+      "doc_id": "face-detection-features",
+      "filename": "Face Detection Features.pdf",
+      "source_type": "course_notes",
+      "n_pages": 10,
+      "n_chars": 23141,
+      "text_sha256": "6a013de40742da27e608eb07ff947a6682effb3f740533264cd7f6f55e8e041f",
+      "segments": [
+        {
+          "start": 0,
+          "end": 126,
+          "extraction": "text",
+          "page": 1
+        },
+        {
+          "start": 128,
+          "end": 3136,
+          "extraction": "text",
+          "page": 2
+        },
+        {
+          "start": 3138,
+          "end": 6156,
+          "extraction": "text",
+          "page": 3
+        },
+        {
+          "start": 6158,
+          "end": 8573,
+          "extraction": "text",
+          "page": 4
+        },
+        {
+          "start": 8575,
+          "end": 11013,
+          "extraction": "text",
+          "page": 5
+        },
+        {
+          "start": 11015,
+          "end": 13419,
+          "extraction": "text",
+          "page": 6
+        },
+        {
+          "start": 13421,
+          "end": 16139,
+          "extraction": "text",
+          "page": 7
+        },
+        {
+          "start": 16141,
+          "end": 17811,
+          "extraction": "text",
+          "page": 8
+        },
+        {
+          "start": 17813,
+          "end": 20467,
+          "extraction": "text",
+          "page": 9
+        },
+        {
+          "start": 20469,
+          "end": 23141,
+          "extraction": "text",
+          "page": 10
+        }
+      ]
+    },
+    {
+      "doc_id": "object-detection-image-segmentation",
+      "filename": "Object Detection & Image Segmentation.pdf",
+      "source_type": "course_notes",
+      "n_pages": 12,
+      "n_chars": 28633,
+      "text_sha256": "91082fa12313708d48f35069b10d567f601214966f3b85370251eb713479d36b",
+      "segments": [
+        {
+          "start": 0,
+          "end": 166,
+          "extraction": "text",
+          "page": 1
+        },
+        {
+          "start": 168,
+          "end": 4581,
+          "extraction": "text",
+          "page": 2
+        },
+        {
+          "start": 4583,
+          "end": 7055,
+          "extraction": "text",
+          "page": 3
+        },
+        {
+          "start": 7057,
+          "end": 9557,
+          "extraction": "text",
+          "page": 4
+        },
+        {
+          "start": 9559,
+          "end": 12109,
+          "extraction": "text",
+          "page": 5
+        },
+        {
+          "start": 12111,
+          "end": 14676,
+          "extraction": "text",
+          "page": 6
+        },
+        {
+          "start": 14678,
+          "end": 17139,
+          "extraction": "text",
+          "page": 7
+        },
+        {
+          "start": 17141,
+          "end": 19492,
+          "extraction": "text",
+          "page": 8
+        },
+        {
+          "start": 19494,
+          "end": 22278,
+          "extraction": "text",
+          "page": 9
+        },
+        {
+          "start": 22280,
+          "end": 24822,
+          "extraction": "text",
+          "page": 10
+        },
+        {
+          "start": 24824,
+          "end": 27258,
+          "extraction": "text",
+          "page": 11
+        },
+        {
+          "start": 27260,
+          "end": 28633,
+          "extraction": "text",
+          "page": 12
+        }
+      ]
+    },
+    {
+      "doc_id": "yolo-v5",
+      "filename": "YOLO V5.pdf",
+      "source_type": "course_notes",
+      "n_pages": 10,
+      "n_chars": 19386,
+      "text_sha256": "29ece3968a2a6856a3afa2d8b5dcdc3d37ba47c6c0220eac965a452e1d35d107",
+      "segments": [
+        {
+          "start": 0,
+          "end": 150,
+          "extraction": "text",
+          "page": 1
+        },
+        {
+          "start": 152,
+          "end": 2662,
+          "extraction": "text",
+          "page": 2
+        },
+        {
+          "start": 2664,
+          "end": 4848,
+          "extraction": "text",
+          "page": 3
+        },
+        {
+          "start": 4850,
+          "end": 7006,
+          "extraction": "text",
+          "page": 4
+        },
+        {
+          "start": 7008,
+          "end": 9435,
+          "extraction": "text",
+          "page": 5
+        },
+        {
+          "start": 9437,
+          "end": 12049,
+          "extraction": "text",
+          "page": 6
+        },
+        {
+          "start": 12051,
+          "end": 14146,
+          "extraction": "text",
+          "page": 7
+        },
+        {
+          "start": 14148,
+          "end": 16215,
+          "extraction": "text",
+          "page": 8
+        },
+        {
+          "start": 16217,
+          "end": 18952,
+          "extraction": "text",
+          "page": 9
+        },
+        {
+          "start": 18954,
+          "end": 19386,
+          "extraction": "text",
+          "page": 10
+        }
+      ]
+    },
+    {
+      "doc_id": "bert-qna-complete",
+      "filename": "Bert_QnA_Complete.ipynb",
+      "source_type": "notebook",
+      "n_pages": null,
+      "n_chars": 106908,
+      "text_sha256": "2daf5d7ae8191bc72af2d9ea2fcd69d11f51a76f375b4d0403cfce5caa474b23",
+      "segments": [
+        {
+          "start": 0,
+          "end": 363,
+          "extraction": "notebook",
+          "page": 1
+        },
+        {
+          "start": 365,
+          "end": 704,
+          "extraction": "notebook",
+          "page": 2
+        },
+        {
+          "start": 706,
+          "end": 899,
+          "extraction": "notebook",
+          "page": 3
+        },
+        {
+          "start": 901,
+          "end": 1139,
+          "extraction": "notebook",
+          "page": 4
+        },
+        {
+          "start": 1141,
+          "end": 1412,
+          "extraction": "notebook",
+          "page": 5
+        },
+        {
+          "start": 1414,
+          "end": 1481,
+          "extraction": "notebook",
+          "page": 6
+        },
+        {
+          "start": 1483,
+          "end": 1781,
+          "extraction": "notebook",
+          "page": 7
+        },
+        {
+          "start": 1783,
+          "end": 1892,
+          "extraction": "notebook",
+          "page": 8
+        },
+        {
+          "start": 1894,
+          "end": 2171,
+          "extraction": "notebook",
+          "page": 9
+        },
+        {
+          "start": 2173,
+          "end": 2245,
+          "extraction": "notebook",
+          "page": 10
+        },
+        {
+          "start": 2247,
+          "end": 2341,
+          "extraction": "notebook",
+          "page": 11
+        },
+        {
+          "start": 2343,
+          "end": 3092,
+          "extraction": "notebook",
+          "page": 12
+        },
+        {
+          "start": 3094,
+          "end": 3448,
+          "extraction": "notebook",
+          "page": 13
+        },
+        {
+          "start": 3450,
+          "end": 3556,
+          "extraction": "notebook",
+          "page": 14
+        },
+        {
+          "start": 3558,
+          "end": 3779,
+          "extraction": "notebook",
+          "page": 15
+        },
+        {
+          "start": 3781,
+          "end": 3885,
+          "extraction": "notebook",
+          "page": 16
+        },
+        {
+          "start": 3887,
+          "end": 3956,
+          "extraction": "notebook",
+          "page": 17
+        },
+        {
+          "start": 3958,
+          "end": 4583,
+          "extraction": "notebook",
+          "page": 18
+        },
+        {
+          "start": 4585,
+          "end": 5289,
+          "extraction": "notebook",
+          "page": 19
+        },
+        {
+          "start": 5291,
+          "end": 5747,
+          "extraction": "notebook",
+          "page": 20
+        },
+        {
+          "start": 5749,
+          "end": 6017,
+          "extraction": "notebook",
+          "page": 21
+        },
+        {
+          "start": 6019,
+          "end": 6403,
+          "extraction": "notebook",
+          "page": 22
+        },
+        {
+          "start": 6405,
+          "end": 6462,
+          "extraction": "notebook",
+          "page": 23
+        },
+        {
+          "start": 6464,
+          "end": 6890,
+          "extraction": "notebook",
+          "page": 24
+        },
+        {
+          "start": 6892,
+          "end": 7525,
+          "extraction": "notebook",
+          "page": 25
+        },
+        {
+          "start": 7527,
+          "end": 8523,
+          "extraction": "notebook",
+          "page": 26
+        },
+        {
+          "start": 8525,
+          "end": 9188,
+          "extraction": "notebook",
+          "page": 28
+        },
+        {
+          "start": 9190,
+          "end": 9320,
+          "extraction": "notebook",
+          "page": 29
+        },
+        {
+          "start": 9322,
+          "end": 9432,
+          "extraction": "notebook",
+          "page": 30
+        },
+        {
+          "start": 9434,
+          "end": 10159,
+          "extraction": "notebook",
+          "page": 31
+        },
+        {
+          "start": 10161,
+          "end": 10380,
+          "extraction": "notebook",
+          "page": 32
+        },
+        {
+          "start": 10382,
+          "end": 10747,
+          "extraction": "notebook",
+          "page": 33
+        },
+        {
+          "start": 10749,
+          "end": 10966,
+          "extraction": "notebook",
+          "page": 34
+        },
+        {
+          "start": 10968,
+          "end": 11069,
+          "extraction": "notebook",
+          "page": 35
+        },
+        {
+          "start": 11071,
+          "end": 11400,
+          "extraction": "notebook",
+          "page": 36
+        },
+        {
+          "start": 11402,
+          "end": 11674,
+          "extraction": "notebook",
+          "page": 37
+        },
+        {
+          "start": 11676,
+          "end": 11804,
+          "extraction": "notebook",
+          "page": 38
+        },
+        {
+          "start": 11806,
+          "end": 12742,
+          "extraction": "notebook",
+          "page": 39
+        },
+        {
+          "start": 12744,
+          "end": 13030,
+          "extraction": "notebook",
+          "page": 40
+        },
+        {
+          "start": 13032,
+          "end": 13108,
+          "extraction": "notebook",
+          "page": 41
+        },
+        {
+          "start": 13110,
+          "end": 13835,
+          "extraction": "notebook",
+          "page": 42
+        },
+        {
+          "start": 13837,
+          "end": 14028,
+          "extraction": "notebook",
+          "page": 43
+        },
+        {
+          "start": 14030,
+          "end": 14201,
+          "extraction": "notebook",
+          "page": 44
+        },
+        {
+          "start": 14203,
+          "end": 14426,
+          "extraction": "notebook",
+          "page": 45
+        },
+        {
+          "start": 14428,
+          "end": 14797,
+          "extraction": "notebook",
+          "page": 46
+        },
+        {
+          "start": 14799,
+          "end": 15047,
+          "extraction": "notebook",
+          "page": 47
+        },
+        {
+          "start": 15049,
+          "end": 15111,
+          "extraction": "notebook",
+          "page": 48
+        },
+        {
+          "start": 15113,
+          "end": 15189,
+          "extraction": "notebook",
+          "page": 49
+        },
+        {
+          "start": 15191,
+          "end": 15472,
+          "extraction": "notebook",
+          "page": 50
+        },
+        {
+          "start": 15474,
+          "end": 16551,
+          "extraction": "notebook",
+          "page": 51
+        },
+        {
+          "start": 16553,
+          "end": 16888,
+          "extraction": "notebook",
+          "page": 52
+        },
+        {
+          "start": 16890,
+          "end": 17707,
+          "extraction": "notebook",
+          "page": 53
+        },
+        {
+          "start": 17709,
+          "end": 18016,
+          "extraction": "notebook",
+          "page": 54
+        },
+        {
+          "start": 18018,
+          "end": 18351,
+          "extraction": "notebook",
+          "page": 55
+        },
+        {
+          "start": 18353,
+          "end": 18677,
+          "extraction": "notebook",
+          "page": 56
+        },
+        {
+          "start": 18679,
+          "end": 19121,
+          "extraction": "notebook",
+          "page": 57
+        },
+        {
+          "start": 19123,
+          "end": 19543,
+          "extraction": "notebook",
+          "page": 58
+        },
+        {
+          "start": 19545,
+          "end": 19725,
+          "extraction": "notebook",
+          "page": 59
+        },
+        {
+          "start": 19727,
+          "end": 20430,
+          "extraction": "notebook",
+          "page": 60
+        },
+        {
+          "start": 20432,
+          "end": 20654,
+          "extraction": "notebook",
+          "page": 61
+        },
+        {
+          "start": 20656,
+          "end": 21413,
+          "extraction": "notebook",
+          "page": 62
+        },
+        {
+          "start": 21415,
+          "end": 21653,
+          "extraction": "notebook",
+          "page": 63
+        },
+        {
+          "start": 21655,
+          "end": 22425,
+          "extraction": "notebook",
+          "page": 64
+        },
+        {
+          "start": 22427,
+          "end": 22696,
+          "extraction": "notebook",
+          "page": 65
+        },
+        {
+          "start": 22698,
+          "end": 23210,
+          "extraction": "notebook",
+          "page": 66
+        },
+        {
+          "start": 23212,
+          "end": 23405,
+          "extraction": "notebook",
+          "page": 67
+        },
+        {
+          "start": 23407,
+          "end": 23914,
+          "extraction": "notebook",
+          "page": 68
+        },
+        {
+          "start": 23916,
+          "end": 24227,
+          "extraction": "notebook",
+          "page": 69
+        },
+        {
+          "start": 24229,
+          "end": 24815,
+          "extraction": "notebook",
+          "page": 70
+        },
+        {
+          "start": 24817,
+          "end": 25330,
+          "extraction": "notebook",
+          "page": 71
+        },
+        {
+          "start": 25332,
+          "end": 25535,
+          "extraction": "notebook",
+          "page": 72
+        },
+        {
+          "start": 25537,
+          "end": 25807,
+          "extraction": "notebook",
+          "page": 73
+        },
+        {
+          "start": 25809,
+          "end": 25854,
+          "extraction": "notebook",
+          "page": 74
+        },
+        {
+          "start": 25856,
+          "end": 26019,
+          "extraction": "notebook",
+          "page": 75
+        },
+        {
+          "start": 26021,
+          "end": 26108,
+          "extraction": "notebook",
+          "page": 76
+        },
+        {
+          "start": 26110,
+          "end": 26278,
+          "extraction": "notebook",
+          "page": 77
+        },
+        {
+          "start": 26280,
+          "end": 26939,
+          "extraction": "notebook",
+          "page": 78
+        },
+        {
+          "start": 26941,
+          "end": 27102,
+          "extraction": "notebook",
+          "page": 79
+        },
+        {
+          "start": 27104,
+          "end": 27320,
+          "extraction": "notebook",
+          "page": 80
+        },
+        {
+          "start": 27322,
+          "end": 27593,
+          "extraction": "notebook",
+          "page": 81
+        },
+        {
+          "start": 27595,
+          "end": 27820,
+          "extraction": "notebook",
+          "page": 82
+        },
+        {
+          "start": 27822,
+          "end": 28010,
+          "extraction": "notebook",
+          "page": 83
+        },
+        {
+          "start": 28012,
+          "end": 28090,
+          "extraction": "notebook",
+          "page": 84
+        },
+        {
+          "start": 28092,
+          "end": 28172,
+          "extraction": "notebook",
+          "page": 85
+        },
+        {
+          "start": 28174,
+          "end": 28312,
+          "extraction": "notebook",
+          "page": 86
+        },
+        {
+          "start": 28314,
+          "end": 28449,
+          "extraction": "notebook",
+          "page": 87
+        },
+        {
+          "start": 28451,
+          "end": 28559,
+          "extraction": "notebook",
+          "page": 88
+        },
+        {
+          "start": 28561,
+          "end": 28716,
+          "extraction": "notebook",
+          "page": 89
+        },
+        {
+          "start": 28718,
+          "end": 28905,
+          "extraction": "notebook",
+          "page": 90
+        },
+        {
+          "start": 28907,
+          "end": 30247,
+          "extraction": "notebook",
+          "page": 91
+        },
+        {
+          "start": 30249,
+          "end": 30534,
+          "extraction": "notebook",
+          "page": 92
+        },
+        {
+          "start": 30536,
+          "end": 32495,
+          "extraction": "notebook",
+          "page": 93
+        },
+        {
+          "start": 32497,
+          "end": 32664,
+          "extraction": "notebook",
+          "page": 94
+        },
+        {
+          "start": 32666,
+          "end": 32721,
+          "extraction": "notebook",
+          "page": 95
+        },
+        {
+          "start": 32723,
+          "end": 32814,
+          "extraction": "notebook",
+          "page": 96
+        },
+        {
+          "start": 32816,
+          "end": 32923,
+          "extraction": "notebook",
+          "page": 97
+        },
+        {
+          "start": 32925,
+          "end": 33684,
+          "extraction": "notebook",
+          "page": 98
+        },
+        {
+          "start": 33686,
+          "end": 33802,
+          "extraction": "notebook",
+          "page": 99
+        },
+        {
+          "start": 33804,
+          "end": 34370,
+          "extraction": "notebook",
+          "page": 100
+        },
+        {
+          "start": 34372,
+          "end": 34516,
+          "extraction": "notebook",
+          "page": 101
+        },
+        {
+          "start": 34518,
+          "end": 34610,
+          "extraction": "notebook",
+          "page": 102
+        },
+        {
+          "start": 34612,
+          "end": 34816,
+          "extraction": "notebook",
+          "page": 103
+        },
+        {
+          "start": 34818,
+          "end": 35440,
+          "extraction": "notebook",
+          "page": 104
+        },
+        {
+          "start": 35442,
+          "end": 35648,
+          "extraction": "notebook",
+          "page": 105
+        },
+        {
+          "start": 35650,
+          "end": 35815,
+          "extraction": "notebook",
+          "page": 106
+        },
+        {
+          "start": 35817,
+          "end": 35908,
+          "extraction": "notebook",
+          "page": 107
+        },
+        {
+          "start": 35910,
+          "end": 36817,
+          "extraction": "notebook",
+          "page": 108
+        },
+        {
+          "start": 36819,
+          "end": 37065,
+          "extraction": "notebook",
+          "page": 109
+        },
+        {
+          "start": 37067,
+          "end": 37201,
+          "extraction": "notebook",
+          "page": 110
+        },
+        {
+          "start": 37203,
+          "end": 37405,
+          "extraction": "notebook",
+          "page": 111
+        },
+        {
+          "start": 37407,
+          "end": 37534,
+          "extraction": "notebook",
+          "page": 112
+        },
+        {
+          "start": 37536,
+          "end": 37610,
+          "extraction": "notebook",
+          "page": 113
+        },
+        {
+          "start": 37612,
+          "end": 38367,
+          "extraction": "notebook",
+          "page": 114
+        },
+        {
+          "start": 38369,
+          "end": 38565,
+          "extraction": "notebook",
+          "page": 115
+        },
+        {
+          "start": 38567,
+          "end": 38813,
+          "extraction": "notebook",
+          "page": 116
+        },
+        {
+          "start": 38815,
+          "end": 39164,
+          "extraction": "notebook",
+          "page": 117
+        },
+        {
+          "start": 39166,
+          "end": 39327,
+          "extraction": "notebook",
+          "page": 118
+        },
+        {
+          "start": 39329,
+          "end": 39467,
+          "extraction": "notebook",
+          "page": 119
+        },
+        {
+          "start": 39469,
+          "end": 39582,
+          "extraction": "notebook",
+          "page": 120
+        },
+        {
+          "start": 39584,
+          "end": 39675,
+          "extraction": "notebook",
+          "page": 121
+        },
+        {
+          "start": 39677,
+          "end": 39803,
+          "extraction": "notebook",
+          "page": 122
+        },
+        {
+          "start": 39805,
+          "end": 40055,
+          "extraction": "notebook",
+          "page": 123
+        },
+        {
+          "start": 40057,
+          "end": 40212,
+          "extraction": "notebook",
+          "page": 124
+        },
+        {
+          "start": 40214,
+          "end": 40602,
+          "extraction": "notebook",
+          "page": 125
+        },
+        {
+          "start": 40604,
+          "end": 41276,
+          "extraction": "notebook",
+          "page": 126
+        },
+        {
+          "start": 41278,
+          "end": 41481,
+          "extraction": "notebook",
+          "page": 127
+        },
+        {
+          "start": 41483,
+          "end": 41894,
+          "extraction": "notebook",
+          "page": 128
+        },
+        {
+          "start": 41896,
+          "end": 42041,
+          "extraction": "notebook",
+          "page": 129
+        },
+        {
+          "start": 42043,
+          "end": 42188,
+          "extraction": "notebook",
+          "page": 130
+        },
+        {
+          "start": 42190,
+          "end": 43063,
+          "extraction": "notebook",
+          "page": 131
+        },
+        {
+          "start": 43065,
+          "end": 43694,
+          "extraction": "notebook",
+          "page": 132
+        },
+        {
+          "start": 43696,
+          "end": 43856,
+          "extraction": "notebook",
+          "page": 133
+        },
+        {
+          "start": 43858,
+          "end": 43978,
+          "extraction": "notebook",
+          "page": 134
+        },
+        {
+          "start": 43980,
+          "end": 44335,
+          "extraction": "notebook",
+          "page": 135
+        },
+        {
+          "start": 44337,
+          "end": 44630,
+          "extraction": "notebook",
+          "page": 136
+        },
+        {
+          "start": 44632,
+          "end": 45459,
+          "extraction": "notebook",
+          "page": 137
+        },
+        {
+          "start": 45461,
+          "end": 45744,
+          "extraction": "notebook",
+          "page": 138
+        },
+        {
+          "start": 45746,
+          "end": 45816,
+          "extraction": "notebook",
+          "page": 139
+        },
+        {
+          "start": 45818,
+          "end": 46660,
+          "extraction": "notebook",
+          "page": 140
+        },
+        {
+          "start": 46662,
+          "end": 47164,
+          "extraction": "notebook",
+          "page": 141
+        },
+        {
+          "start": 47166,
+          "end": 47371,
+          "extraction": "notebook",
+          "page": 142
+        },
+        {
+          "start": 47373,
+          "end": 47552,
+          "extraction": "notebook",
+          "page": 143
+        },
+        {
+          "start": 47554,
+          "end": 47684,
+          "extraction": "notebook",
+          "page": 144
+        },
+        {
+          "start": 47686,
+          "end": 47764,
+          "extraction": "notebook",
+          "page": 145
+        },
+        {
+          "start": 47766,
+          "end": 48452,
+          "extraction": "notebook",
+          "page": 146
+        },
+        {
+          "start": 48454,
+          "end": 49158,
+          "extraction": "notebook",
+          "page": 147
+        },
+        {
+          "start": 49160,
+          "end": 49297,
+          "extraction": "notebook",
+          "page": 148
+        },
+        {
+          "start": 49299,
+          "end": 49463,
+          "extraction": "notebook",
+          "page": 149
+        },
+        {
+          "start": 49465,
+          "end": 49600,
+          "extraction": "notebook",
+          "page": 150
+        },
+        {
+          "start": 49602,
+          "end": 49871,
+          "extraction": "notebook",
+          "page": 151
+        },
+        {
+          "start": 49873,
+          "end": 51171,
+          "extraction": "notebook",
+          "page": 152
+        },
+        {
+          "start": 51173,
+          "end": 51425,
+          "extraction": "notebook",
+          "page": 153
+        },
+        {
+          "start": 51427,
+          "end": 51519,
+          "extraction": "notebook",
+          "page": 154
+        },
+        {
+          "start": 51521,
+          "end": 52197,
+          "extraction": "notebook",
+          "page": 155
+        },
+        {
+          "start": 52199,
+          "end": 53344,
+          "extraction": "notebook",
+          "page": 156
+        },
+        {
+          "start": 53346,
+          "end": 53568,
+          "extraction": "notebook",
+          "page": 157
+        },
+        {
+          "start": 53570,
+          "end": 53807,
+          "extraction": "notebook",
+          "page": 158
+        },
+        {
+          "start": 53809,
+          "end": 54066,
+          "extraction": "notebook",
+          "page": 159
+        },
+        {
+          "start": 54068,
+          "end": 54256,
+          "extraction": "notebook",
+          "page": 160
+        },
+        {
+          "start": 54258,
+          "end": 54336,
+          "extraction": "notebook",
+          "page": 161
+        },
+        {
+          "start": 54338,
+          "end": 54648,
+          "extraction": "notebook",
+          "page": 162
+        },
+        {
+          "start": 54650,
+          "end": 54754,
+          "extraction": "notebook",
+          "page": 163
+        },
+        {
+          "start": 54756,
+          "end": 54925,
+          "extraction": "notebook",
+          "page": 164
+        },
+        {
+          "start": 54927,
+          "end": 55025,
+          "extraction": "notebook",
+          "page": 165
+        },
+        {
+          "start": 55027,
+          "end": 55278,
+          "extraction": "notebook",
+          "page": 166
+        },
+        {
+          "start": 55280,
+          "end": 55339,
+          "extraction": "notebook",
+          "page": 167
+        },
+        {
+          "start": 55341,
+          "end": 57275,
+          "extraction": "notebook",
+          "page": 168
+        },
+        {
+          "start": 57277,
+          "end": 57556,
+          "extraction": "notebook",
+          "page": 169
+        },
+        {
+          "start": 57558,
+          "end": 58219,
+          "extraction": "notebook",
+          "page": 170
+        },
+        {
+          "start": 58221,
+          "end": 58434,
+          "extraction": "notebook",
+          "page": 171
+        },
+        {
+          "start": 58436,
+          "end": 59031,
+          "extraction": "notebook",
+          "page": 172
+        },
+        {
+          "start": 59033,
+          "end": 59324,
+          "extraction": "notebook",
+          "page": 173
+        },
+        {
+          "start": 59326,
+          "end": 59555,
+          "extraction": "notebook",
+          "page": 174
+        },
+        {
+          "start": 59557,
+          "end": 60924,
+          "extraction": "notebook",
+          "page": 175
+        },
+        {
+          "start": 60926,
+          "end": 61886,
+          "extraction": "notebook",
+          "page": 176
+        },
+        {
+          "start": 61888,
+          "end": 62253,
+          "extraction": "notebook",
+          "page": 177
+        },
+        {
+          "start": 62255,
+          "end": 62438,
+          "extraction": "notebook",
+          "page": 178
+        },
+        {
+          "start": 62440,
+          "end": 62536,
+          "extraction": "notebook",
+          "page": 179
+        },
+        {
+          "start": 62538,
+          "end": 62745,
+          "extraction": "notebook",
+          "page": 180
+        },
+        {
+          "start": 62747,
+          "end": 63411,
+          "extraction": "notebook",
+          "page": 181
+        },
+        {
+          "start": 63413,
+          "end": 63623,
+          "extraction": "notebook",
+          "page": 182
+        },
+        {
+          "start": 63625,
+          "end": 63763,
+          "extraction": "notebook",
+          "page": 183
+        },
+        {
+          "start": 63765,
+          "end": 64057,
+          "extraction": "notebook",
+          "page": 184
+        },
+        {
+          "start": 64059,
+          "end": 64774,
+          "extraction": "notebook",
+          "page": 185
+        },
+        {
+          "start": 64776,
+          "end": 65434,
+          "extraction": "notebook",
+          "page": 186
+        },
+        {
+          "start": 65436,
+          "end": 65948,
+          "extraction": "notebook",
+          "page": 187
+        },
+        {
+          "start": 65950,
+          "end": 66265,
+          "extraction": "notebook",
+          "page": 188
+        },
+        {
+          "start": 66267,
+          "end": 66328,
+          "extraction": "notebook",
+          "page": 189
+        },
+        {
+          "start": 66330,
+          "end": 66742,
+          "extraction": "notebook",
+          "page": 190
+        },
+        {
+          "start": 66744,
+          "end": 66805,
+          "extraction": "notebook",
+          "page": 191
+        },
+        {
+          "start": 66807,
+          "end": 67096,
+          "extraction": "notebook",
+          "page": 192
+        },
+        {
+          "start": 67098,
+          "end": 67205,
+          "extraction": "notebook",
+          "page": 193
+        },
+        {
+          "start": 67207,
+          "end": 67378,
+          "extraction": "notebook",
+          "page": 194
+        },
+        {
+          "start": 67380,
+          "end": 69206,
+          "extraction": "notebook",
+          "page": 195
+        },
+        {
+          "start": 69208,
+          "end": 69388,
+          "extraction": "notebook",
+          "page": 196
+        },
+        {
+          "start": 69390,
+          "end": 69520,
+          "extraction": "notebook",
+          "page": 197
+        },
+        {
+          "start": 69522,
+          "end": 69696,
+          "extraction": "notebook",
+          "page": 198
+        },
+        {
+          "start": 69698,
+          "end": 70145,
+          "extraction": "notebook",
+          "page": 199
+        },
+        {
+          "start": 70147,
+          "end": 70411,
+          "extraction": "notebook",
+          "page": 200
+        },
+        {
+          "start": 70413,
+          "end": 70532,
+          "extraction": "notebook",
+          "page": 201
+        },
+        {
+          "start": 70534,
+          "end": 71781,
+          "extraction": "notebook",
+          "page": 202
+        },
+        {
+          "start": 71783,
+          "end": 71951,
+          "extraction": "notebook",
+          "page": 203
+        },
+        {
+          "start": 71953,
+          "end": 72033,
+          "extraction": "notebook",
+          "page": 204
+        },
+        {
+          "start": 72035,
+          "end": 72369,
+          "extraction": "notebook",
+          "page": 205
+        },
+        {
+          "start": 72371,
+          "end": 72455,
+          "extraction": "notebook",
+          "page": 206
+        },
+        {
+          "start": 72457,
+          "end": 73543,
+          "extraction": "notebook",
+          "page": 207
+        },
+        {
+          "start": 73545,
+          "end": 73751,
+          "extraction": "notebook",
+          "page": 208
+        },
+        {
+          "start": 73753,
+          "end": 73877,
+          "extraction": "notebook",
+          "page": 209
+        },
+        {
+          "start": 73879,
+          "end": 74122,
+          "extraction": "notebook",
+          "page": 210
+        },
+        {
+          "start": 74124,
+          "end": 74744,
+          "extraction": "notebook",
+          "page": 211
+        },
+        {
+          "start": 74746,
+          "end": 75054,
+          "extraction": "notebook",
+          "page": 212
+        },
+        {
+          "start": 75056,
+          "end": 75116,
+          "extraction": "notebook",
+          "page": 213
+        },
+        {
+          "start": 75118,
+          "end": 75296,
+          "extraction": "notebook",
+          "page": 214
+        },
+        {
+          "start": 75298,
+          "end": 75390,
+          "extraction": "notebook",
+          "page": 215
+        },
+        {
+          "start": 75392,
+          "end": 75945,
+          "extraction": "notebook",
+          "page": 216
+        },
+        {
+          "start": 75947,
+          "end": 77383,
+          "extraction": "notebook",
+          "page": 217
+        },
+        {
+          "start": 77385,
+          "end": 77783,
+          "extraction": "notebook",
+          "page": 218
+        },
+        {
+          "start": 77785,
+          "end": 77983,
+          "extraction": "notebook",
+          "page": 219
+        },
+        {
+          "start": 77985,
+          "end": 78048,
+          "extraction": "notebook",
+          "page": 220
+        },
+        {
+          "start": 78050,
+          "end": 78639,
+          "extraction": "notebook",
+          "page": 221
+        },
+        {
+          "start": 78641,
+          "end": 79651,
+          "extraction": "notebook",
+          "page": 222
+        },
+        {
+          "start": 79653,
+          "end": 79858,
+          "extraction": "notebook",
+          "page": 223
+        },
+        {
+          "start": 79860,
+          "end": 80069,
+          "extraction": "notebook",
+          "page": 224
+        },
+        {
+          "start": 80071,
+          "end": 80358,
+          "extraction": "notebook",
+          "page": 225
+        },
+        {
+          "start": 80360,
+          "end": 80588,
+          "extraction": "notebook",
+          "page": 226
+        },
+        {
+          "start": 80590,
+          "end": 81008,
+          "extraction": "notebook",
+          "page": 227
+        },
+        {
+          "start": 81010,
+          "end": 81076,
+          "extraction": "notebook",
+          "page": 228
+        },
+        {
+          "start": 81078,
+          "end": 81258,
+          "extraction": "notebook",
+          "page": 229
+        },
+        {
+          "start": 81260,
+          "end": 81323,
+          "extraction": "notebook",
+          "page": 230
+        },
+        {
+          "start": 81325,
+          "end": 81801,
+          "extraction": "notebook",
+          "page": 231
+        },
+        {
+          "start": 81803,
+          "end": 82038,
+          "extraction": "notebook",
+          "page": 232
+        },
+        {
+          "start": 82040,
+          "end": 82128,
+          "extraction": "notebook",
+          "page": 233
+        },
+        {
+          "start": 82130,
+          "end": 82369,
+          "extraction": "notebook",
+          "page": 234
+        },
+        {
+          "start": 82371,
+          "end": 82544,
+          "extraction": "notebook",
+          "page": 235
+        },
+        {
+          "start": 82546,
+          "end": 83060,
+          "extraction": "notebook",
+          "page": 236
+        },
+        {
+          "start": 83062,
+          "end": 83312,
+          "extraction": "notebook",
+          "page": 237
+        },
+        {
+          "start": 83314,
+          "end": 83419,
+          "extraction": "notebook",
+          "page": 238
+        },
+        {
+          "start": 83421,
+          "end": 83577,
+          "extraction": "notebook",
+          "page": 239
+        },
+        {
+          "start": 83579,
+          "end": 84933,
+          "extraction": "notebook",
+          "page": 240
+        },
+        {
+          "start": 84935,
+          "end": 85225,
+          "extraction": "notebook",
+          "page": 241
+        },
+        {
+          "start": 85227,
+          "end": 85252,
+          "extraction": "notebook",
+          "page": 242
+        },
+        {
+          "start": 85254,
+          "end": 85448,
+          "extraction": "notebook",
+          "page": 243
+        },
+        {
+          "start": 85450,
+          "end": 85521,
+          "extraction": "notebook",
+          "page": 244
+        },
+        {
+          "start": 85523,
+          "end": 87624,
+          "extraction": "notebook",
+          "page": 245
+        },
+        {
+          "start": 87626,
+          "end": 87813,
+          "extraction": "notebook",
+          "page": 246
+        },
+        {
+          "start": 87815,
+          "end": 87884,
+          "extraction": "notebook",
+          "page": 247
+        },
+        {
+          "start": 87886,
+          "end": 87936,
+          "extraction": "notebook",
+          "page": 248
+        },
+        {
+          "start": 87938,
+          "end": 88696,
+          "extraction": "notebook",
+          "page": 249
+        },
+        {
+          "start": 88698,
+          "end": 88837,
+          "extraction": "notebook",
+          "page": 250
+        },
+        {
+          "start": 88839,
+          "end": 89057,
+          "extraction": "notebook",
+          "page": 251
+        },
+        {
+          "start": 89059,
+          "end": 89280,
+          "extraction": "notebook",
+          "page": 252
+        },
+        {
+          "start": 89282,
+          "end": 90161,
+          "extraction": "notebook",
+          "page": 253
+        },
+        {
+          "start": 90163,
+          "end": 90625,
+          "extraction": "notebook",
+          "page": 254
+        },
+        {
+          "start": 90627,
+          "end": 90804,
+          "extraction": "notebook",
+          "page": 255
+        },
+        {
+          "start": 90806,
+          "end": 90883,
+          "extraction": "notebook",
+          "page": 256
+        },
+        {
+          "start": 90885,
+          "end": 91386,
+          "extraction": "notebook",
+          "page": 257
+        },
+        {
+          "start": 91388,
+          "end": 91447,
+          "extraction": "notebook",
+          "page": 258
+        },
+        {
+          "start": 91449,
+          "end": 91840,
+          "extraction": "notebook",
+          "page": 259
+        },
+        {
+          "start": 91842,
+          "end": 92508,
+          "extraction": "notebook",
+          "page": 260
+        },
+        {
+          "start": 92510,
+          "end": 93625,
+          "extraction": "notebook",
+          "page": 261
+        },
+        {
+          "start": 93627,
+          "end": 93959,
+          "extraction": "notebook",
+          "page": 262
+        },
+        {
+          "start": 93961,
+          "end": 94050,
+          "extraction": "notebook",
+          "page": 263
+        },
+        {
+          "start": 94052,
+          "end": 94444,
+          "extraction": "notebook",
+          "page": 264
+        },
+        {
+          "start": 94446,
+          "end": 94574,
+          "extraction": "notebook",
+          "page": 265
+        },
+        {
+          "start": 94576,
+          "end": 94915,
+          "extraction": "notebook",
+          "page": 266
+        },
+        {
+          "start": 94917,
+          "end": 95010,
+          "extraction": "notebook",
+          "page": 267
+        },
+        {
+          "start": 95012,
+          "end": 95987,
+          "extraction": "notebook",
+          "page": 268
+        },
+        {
+          "start": 95989,
+          "end": 96932,
+          "extraction": "notebook",
+          "page": 269
+        },
+        {
+          "start": 96934,
+          "end": 97092,
+          "extraction": "notebook",
+          "page": 270
+        },
+        {
+          "start": 97094,
+          "end": 97190,
+          "extraction": "notebook",
+          "page": 271
+        },
+        {
+          "start": 97192,
+          "end": 97767,
+          "extraction": "notebook",
+          "page": 272
+        },
+        {
+          "start": 97769,
+          "end": 98058,
+          "extraction": "notebook",
+          "page": 273
+        },
+        {
+          "start": 98060,
+          "end": 98352,
+          "extraction": "notebook",
+          "page": 274
+        },
+        {
+          "start": 98354,
+          "end": 98738,
+          "extraction": "notebook",
+          "page": 275
+        },
+        {
+          "start": 98740,
+          "end": 98845,
+          "extraction": "notebook",
+          "page": 276
+        },
+        {
+          "start": 98847,
+          "end": 99614,
+          "extraction": "notebook",
+          "page": 277
+        },
+        {
+          "start": 99616,
+          "end": 100068,
+          "extraction": "notebook",
+          "page": 278
+        },
+        {
+          "start": 100070,
+          "end": 100386,
+          "extraction": "notebook",
+          "page": 279
+        },
+        {
+          "start": 100388,
+          "end": 100684,
+          "extraction": "notebook",
+          "page": 280
+        },
+        {
+          "start": 100686,
+          "end": 100778,
+          "extraction": "notebook",
+          "page": 281
+        },
+        {
+          "start": 100780,
+          "end": 101210,
+          "extraction": "notebook",
+          "page": 282
+        },
+        {
+          "start": 101212,
+          "end": 101526,
+          "extraction": "notebook",
+          "page": 283
+        },
+        {
+          "start": 101528,
+          "end": 101723,
+          "extraction": "notebook",
+          "page": 284
+        },
+        {
+          "start": 101725,
+          "end": 101788,
+          "extraction": "notebook",
+          "page": 285
+        },
+        {
+          "start": 101790,
+          "end": 101839,
+          "extraction": "notebook",
+          "page": 286
+        },
+        {
+          "start": 101841,
+          "end": 102177,
+          "extraction": "notebook",
+          "page": 287
+        },
+        {
+          "start": 102179,
+          "end": 102426,
+          "extraction": "notebook",
+          "page": 288
+        },
+        {
+          "start": 102428,
+          "end": 102485,
+          "extraction": "notebook",
+          "page": 289
+        },
+        {
+          "start": 102487,
+          "end": 102906,
+          "extraction": "notebook",
+          "page": 290
+        },
+        {
+          "start": 102908,
+          "end": 103371,
+          "extraction": "notebook",
+          "page": 291
+        },
+        {
+          "start": 103373,
+          "end": 103893,
+          "extraction": "notebook",
+          "page": 292
+        },
+        {
+          "start": 103895,
+          "end": 104491,
+          "extraction": "notebook",
+          "page": 293
+        },
+        {
+          "start": 104493,
+          "end": 105512,
+          "extraction": "notebook",
+          "page": 294
+        },
+        {
+          "start": 105514,
+          "end": 106908,
+          "extraction": "notebook",
+          "page": 295
+        }
+      ]
+    },
+    {
+      "doc_id": "generative-rag",
+      "filename": "Generative_RAG.ipynb",
+      "source_type": "notebook",
+      "n_pages": null,
+      "n_chars": 163067,
+      "text_sha256": "cf83035cef9c80ef92b065944c4e2476207e4f20582fe3316c7130cce9065ce1",
+      "segments": [
+        {
+          "start": 0,
+          "end": 1027,
+          "extraction": "notebook",
+          "page": 1
+        },
+        {
+          "start": 1029,
+          "end": 1864,
+          "extraction": "notebook",
+          "page": 2
+        },
+        {
+          "start": 1866,
+          "end": 3339,
+          "extraction": "notebook",
+          "page": 3
+        },
+        {
+          "start": 3341,
+          "end": 5139,
+          "extraction": "notebook",
+          "page": 4
+        },
+        {
+          "start": 5141,
+          "end": 5763,
+          "extraction": "notebook",
+          "page": 5
+        },
+        {
+          "start": 5765,
+          "end": 6885,
+          "extraction": "notebook",
+          "page": 6
+        },
+        {
+          "start": 6887,
+          "end": 8250,
+          "extraction": "notebook",
+          "page": 7
+        },
+        {
+          "start": 8252,
+          "end": 9432,
+          "extraction": "notebook",
+          "page": 8
+        },
+        {
+          "start": 9434,
+          "end": 9991,
+          "extraction": "notebook",
+          "page": 9
+        },
+        {
+          "start": 9993,
+          "end": 10556,
+          "extraction": "notebook",
+          "page": 10
+        },
+        {
+          "start": 10558,
+          "end": 10802,
+          "extraction": "notebook",
+          "page": 11
+        },
+        {
+          "start": 10804,
+          "end": 11336,
+          "extraction": "notebook",
+          "page": 12
+        },
+        {
+          "start": 11338,
+          "end": 12584,
+          "extraction": "notebook",
+          "page": 13
+        },
+        {
+          "start": 12586,
+          "end": 13075,
+          "extraction": "notebook",
+          "page": 14
+        },
+        {
+          "start": 13077,
+          "end": 13572,
+          "extraction": "notebook",
+          "page": 15
+        },
+        {
+          "start": 13574,
+          "end": 14485,
+          "extraction": "notebook",
+          "page": 16
+        },
+        {
+          "start": 14487,
+          "end": 15380,
+          "extraction": "notebook",
+          "page": 17
+        },
+        {
+          "start": 15382,
+          "end": 15988,
+          "extraction": "notebook",
+          "page": 18
+        },
+        {
+          "start": 15990,
+          "end": 16833,
+          "extraction": "notebook",
+          "page": 19
+        },
+        {
+          "start": 16835,
+          "end": 17624,
+          "extraction": "notebook",
+          "page": 20
+        },
+        {
+          "start": 17626,
+          "end": 18468,
+          "extraction": "notebook",
+          "page": 21
+        },
+        {
+          "start": 18470,
+          "end": 19264,
+          "extraction": "notebook",
+          "page": 22
+        },
+        {
+          "start": 19266,
+          "end": 20109,
+          "extraction": "notebook",
+          "page": 23
+        },
+        {
+          "start": 20111,
+          "end": 20668,
+          "extraction": "notebook",
+          "page": 24
+        },
+        {
+          "start": 20670,
+          "end": 21287,
+          "extraction": "notebook",
+          "page": 25
+        },
+        {
+          "start": 21289,
+          "end": 22095,
+          "extraction": "notebook",
+          "page": 26
+        },
+        {
+          "start": 22097,
+          "end": 22625,
+          "extraction": "notebook",
+          "page": 27
+        },
+        {
+          "start": 22627,
+          "end": 23853,
+          "extraction": "notebook",
+          "page": 28
+        },
+        {
+          "start": 23855,
+          "end": 24386,
+          "extraction": "notebook",
+          "page": 29
+        },
+        {
+          "start": 24388,
+          "end": 25022,
+          "extraction": "notebook",
+          "page": 30
+        },
+        {
+          "start": 25024,
+          "end": 25960,
+          "extraction": "notebook",
+          "page": 31
+        },
+        {
+          "start": 25962,
+          "end": 26552,
+          "extraction": "notebook",
+          "page": 32
+        },
+        {
+          "start": 26554,
+          "end": 27213,
+          "extraction": "notebook",
+          "page": 33
+        },
+        {
+          "start": 27215,
+          "end": 28014,
+          "extraction": "notebook",
+          "page": 34
+        },
+        {
+          "start": 28016,
+          "end": 28678,
+          "extraction": "notebook",
+          "page": 35
+        },
+        {
+          "start": 28680,
+          "end": 29186,
+          "extraction": "notebook",
+          "page": 36
+        },
+        {
+          "start": 29188,
+          "end": 29769,
+          "extraction": "notebook",
+          "page": 37
+        },
+        {
+          "start": 29771,
+          "end": 30340,
+          "extraction": "notebook",
+          "page": 38
+        },
+        {
+          "start": 30342,
+          "end": 31045,
+          "extraction": "notebook",
+          "page": 39
+        },
+        {
+          "start": 31047,
+          "end": 31769,
+          "extraction": "notebook",
+          "page": 40
+        },
+        {
+          "start": 31771,
+          "end": 32387,
+          "extraction": "notebook",
+          "page": 41
+        },
+        {
+          "start": 32389,
+          "end": 33458,
+          "extraction": "notebook",
+          "page": 42
+        },
+        {
+          "start": 33460,
+          "end": 33865,
+          "extraction": "notebook",
+          "page": 43
+        },
+        {
+          "start": 33867,
+          "end": 34546,
+          "extraction": "notebook",
+          "page": 44
+        },
+        {
+          "start": 34548,
+          "end": 35614,
+          "extraction": "notebook",
+          "page": 45
+        },
+        {
+          "start": 35616,
+          "end": 36214,
+          "extraction": "notebook",
+          "page": 46
+        },
+        {
+          "start": 36216,
+          "end": 37853,
+          "extraction": "notebook",
+          "page": 47
+        },
+        {
+          "start": 37855,
+          "end": 38384,
+          "extraction": "notebook",
+          "page": 48
+        },
+        {
+          "start": 38386,
+          "end": 39000,
+          "extraction": "notebook",
+          "page": 49
+        },
+        {
+          "start": 39002,
+          "end": 40110,
+          "extraction": "notebook",
+          "page": 50
+        },
+        {
+          "start": 40112,
+          "end": 40522,
+          "extraction": "notebook",
+          "page": 51
+        },
+        {
+          "start": 40524,
+          "end": 40702,
+          "extraction": "notebook",
+          "page": 52
+        },
+        {
+          "start": 40704,
+          "end": 41270,
+          "extraction": "notebook",
+          "page": 53
+        },
+        {
+          "start": 41272,
+          "end": 41755,
+          "extraction": "notebook",
+          "page": 54
+        },
+        {
+          "start": 41757,
+          "end": 42885,
+          "extraction": "notebook",
+          "page": 55
+        },
+        {
+          "start": 42887,
+          "end": 43229,
+          "extraction": "notebook",
+          "page": 56
+        },
+        {
+          "start": 43231,
+          "end": 43654,
+          "extraction": "notebook",
+          "page": 57
+        },
+        {
+          "start": 43656,
+          "end": 44615,
+          "extraction": "notebook",
+          "page": 58
+        },
+        {
+          "start": 44617,
+          "end": 44895,
+          "extraction": "notebook",
+          "page": 59
+        },
+        {
+          "start": 44897,
+          "end": 45322,
+          "extraction": "notebook",
+          "page": 60
+        },
+        {
+          "start": 45324,
+          "end": 45697,
+          "extraction": "notebook",
+          "page": 61
+        },
+        {
+          "start": 45699,
+          "end": 46658,
+          "extraction": "notebook",
+          "page": 62
+        },
+        {
+          "start": 46660,
+          "end": 47473,
+          "extraction": "notebook",
+          "page": 63
+        },
+        {
+          "start": 47475,
+          "end": 47913,
+          "extraction": "notebook",
+          "page": 64
+        },
+        {
+          "start": 47915,
+          "end": 48839,
+          "extraction": "notebook",
+          "page": 65
+        },
+        {
+          "start": 48841,
+          "end": 49628,
+          "extraction": "notebook",
+          "page": 66
+        },
+        {
+          "start": 49630,
+          "end": 50044,
+          "extraction": "notebook",
+          "page": 67
+        },
+        {
+          "start": 50046,
+          "end": 50716,
+          "extraction": "notebook",
+          "page": 68
+        },
+        {
+          "start": 50718,
+          "end": 51255,
+          "extraction": "notebook",
+          "page": 69
+        },
+        {
+          "start": 51257,
+          "end": 52024,
+          "extraction": "notebook",
+          "page": 70
+        },
+        {
+          "start": 52026,
+          "end": 52375,
+          "extraction": "notebook",
+          "page": 71
+        },
+        {
+          "start": 52377,
+          "end": 52841,
+          "extraction": "notebook",
+          "page": 72
+        },
+        {
+          "start": 52843,
+          "end": 52993,
+          "extraction": "notebook",
+          "page": 73
+        },
+        {
+          "start": 52995,
+          "end": 54067,
+          "extraction": "notebook",
+          "page": 74
+        },
+        {
+          "start": 54069,
+          "end": 54717,
+          "extraction": "notebook",
+          "page": 75
+        },
+        {
+          "start": 54719,
+          "end": 54974,
+          "extraction": "notebook",
+          "page": 76
+        },
+        {
+          "start": 54976,
+          "end": 55248,
+          "extraction": "notebook",
+          "page": 77
+        },
+        {
+          "start": 55250,
+          "end": 55398,
+          "extraction": "notebook",
+          "page": 78
+        },
+        {
+          "start": 55400,
+          "end": 56086,
+          "extraction": "notebook",
+          "page": 79
+        },
+        {
+          "start": 56088,
+          "end": 56320,
+          "extraction": "notebook",
+          "page": 80
+        },
+        {
+          "start": 56322,
+          "end": 57379,
+          "extraction": "notebook",
+          "page": 81
+        },
+        {
+          "start": 57381,
+          "end": 57812,
+          "extraction": "notebook",
+          "page": 82
+        },
+        {
+          "start": 57814,
+          "end": 58241,
+          "extraction": "notebook",
+          "page": 83
+        },
+        {
+          "start": 58243,
+          "end": 58615,
+          "extraction": "notebook",
+          "page": 84
+        },
+        {
+          "start": 58617,
+          "end": 59737,
+          "extraction": "notebook",
+          "page": 85
+        },
+        {
+          "start": 59739,
+          "end": 60214,
+          "extraction": "notebook",
+          "page": 86
+        },
+        {
+          "start": 60216,
+          "end": 61111,
+          "extraction": "notebook",
+          "page": 87
+        },
+        {
+          "start": 61113,
+          "end": 61657,
+          "extraction": "notebook",
+          "page": 88
+        },
+        {
+          "start": 61659,
+          "end": 62239,
+          "extraction": "notebook",
+          "page": 89
+        },
+        {
+          "start": 62241,
+          "end": 62887,
+          "extraction": "notebook",
+          "page": 90
+        },
+        {
+          "start": 62889,
+          "end": 63789,
+          "extraction": "notebook",
+          "page": 91
+        },
+        {
+          "start": 63791,
+          "end": 64680,
+          "extraction": "notebook",
+          "page": 92
+        },
+        {
+          "start": 64682,
+          "end": 65245,
+          "extraction": "notebook",
+          "page": 93
+        },
+        {
+          "start": 65247,
+          "end": 68127,
+          "extraction": "notebook",
+          "page": 94
+        },
+        {
+          "start": 68129,
+          "end": 68644,
+          "extraction": "notebook",
+          "page": 95
+        },
+        {
+          "start": 68646,
+          "end": 69095,
+          "extraction": "notebook",
+          "page": 96
+        },
+        {
+          "start": 69097,
+          "end": 69821,
+          "extraction": "notebook",
+          "page": 97
+        },
+        {
+          "start": 69823,
+          "end": 70212,
+          "extraction": "notebook",
+          "page": 98
+        },
+        {
+          "start": 70214,
+          "end": 70603,
+          "extraction": "notebook",
+          "page": 99
+        },
+        {
+          "start": 70605,
+          "end": 71028,
+          "extraction": "notebook",
+          "page": 100
+        },
+        {
+          "start": 71030,
+          "end": 72168,
+          "extraction": "notebook",
+          "page": 101
+        },
+        {
+          "start": 72170,
+          "end": 73067,
+          "extraction": "notebook",
+          "page": 102
+        },
+        {
+          "start": 73069,
+          "end": 74452,
+          "extraction": "notebook",
+          "page": 103
+        },
+        {
+          "start": 74454,
+          "end": 74942,
+          "extraction": "notebook",
+          "page": 104
+        },
+        {
+          "start": 74944,
+          "end": 76169,
+          "extraction": "notebook",
+          "page": 105
+        },
+        {
+          "start": 76171,
+          "end": 76732,
+          "extraction": "notebook",
+          "page": 106
+        },
+        {
+          "start": 76734,
+          "end": 77529,
+          "extraction": "notebook",
+          "page": 107
+        },
+        {
+          "start": 77531,
+          "end": 78197,
+          "extraction": "notebook",
+          "page": 108
+        },
+        {
+          "start": 78199,
+          "end": 78957,
+          "extraction": "notebook",
+          "page": 109
+        },
+        {
+          "start": 78959,
+          "end": 80135,
+          "extraction": "notebook",
+          "page": 110
+        },
+        {
+          "start": 80137,
+          "end": 80821,
+          "extraction": "notebook",
+          "page": 111
+        },
+        {
+          "start": 80823,
+          "end": 82404,
+          "extraction": "notebook",
+          "page": 112
+        },
+        {
+          "start": 82406,
+          "end": 83027,
+          "extraction": "notebook",
+          "page": 113
+        },
+        {
+          "start": 83029,
+          "end": 83589,
+          "extraction": "notebook",
+          "page": 114
+        },
+        {
+          "start": 83591,
+          "end": 84084,
+          "extraction": "notebook",
+          "page": 115
+        },
+        {
+          "start": 84086,
+          "end": 89294,
+          "extraction": "notebook",
+          "page": 116
+        },
+        {
+          "start": 89296,
+          "end": 89577,
+          "extraction": "notebook",
+          "page": 117
+        },
+        {
+          "start": 89579,
+          "end": 89960,
+          "extraction": "notebook",
+          "page": 118
+        },
+        {
+          "start": 89962,
+          "end": 90528,
+          "extraction": "notebook",
+          "page": 119
+        },
+        {
+          "start": 90530,
+          "end": 92022,
+          "extraction": "notebook",
+          "page": 120
+        },
+        {
+          "start": 92024,
+          "end": 92551,
+          "extraction": "notebook",
+          "page": 121
+        },
+        {
+          "start": 92553,
+          "end": 93017,
+          "extraction": "notebook",
+          "page": 122
+        },
+        {
+          "start": 93019,
+          "end": 93372,
+          "extraction": "notebook",
+          "page": 123
+        },
+        {
+          "start": 93374,
+          "end": 94643,
+          "extraction": "notebook",
+          "page": 124
+        },
+        {
+          "start": 94645,
+          "end": 96356,
+          "extraction": "notebook",
+          "page": 125
+        },
+        {
+          "start": 96358,
+          "end": 96906,
+          "extraction": "notebook",
+          "page": 126
+        },
+        {
+          "start": 96908,
+          "end": 98127,
+          "extraction": "notebook",
+          "page": 127
+        },
+        {
+          "start": 98129,
+          "end": 98798,
+          "extraction": "notebook",
+          "page": 128
+        },
+        {
+          "start": 98800,
+          "end": 99477,
+          "extraction": "notebook",
+          "page": 129
+        },
+        {
+          "start": 99479,
+          "end": 100208,
+          "extraction": "notebook",
+          "page": 130
+        },
+        {
+          "start": 100210,
+          "end": 100841,
+          "extraction": "notebook",
+          "page": 131
+        },
+        {
+          "start": 100843,
+          "end": 101482,
+          "extraction": "notebook",
+          "page": 132
+        },
+        {
+          "start": 101484,
+          "end": 101982,
+          "extraction": "notebook",
+          "page": 133
+        },
+        {
+          "start": 101984,
+          "end": 102937,
+          "extraction": "notebook",
+          "page": 135
+        },
+        {
+          "start": 102939,
+          "end": 103329,
+          "extraction": "notebook",
+          "page": 136
+        },
+        {
+          "start": 103331,
+          "end": 103915,
+          "extraction": "notebook",
+          "page": 137
+        },
+        {
+          "start": 103917,
+          "end": 104310,
+          "extraction": "notebook",
+          "page": 138
+        },
+        {
+          "start": 104312,
+          "end": 104811,
+          "extraction": "notebook",
+          "page": 139
+        },
+        {
+          "start": 104813,
+          "end": 106722,
+          "extraction": "notebook",
+          "page": 140
+        },
+        {
+          "start": 106724,
+          "end": 107682,
+          "extraction": "notebook",
+          "page": 141
+        },
+        {
+          "start": 107684,
+          "end": 108246,
+          "extraction": "notebook",
+          "page": 142
+        },
+        {
+          "start": 108248,
+          "end": 108604,
+          "extraction": "notebook",
+          "page": 143
+        },
+        {
+          "start": 108606,
+          "end": 109201,
+          "extraction": "notebook",
+          "page": 144
+        },
+        {
+          "start": 109203,
+          "end": 109754,
+          "extraction": "notebook",
+          "page": 145
+        },
+        {
+          "start": 109756,
+          "end": 110109,
+          "extraction": "notebook",
+          "page": 146
+        },
+        {
+          "start": 110111,
+          "end": 110369,
+          "extraction": "notebook",
+          "page": 147
+        },
+        {
+          "start": 110371,
+          "end": 110985,
+          "extraction": "notebook",
+          "page": 148
+        },
+        {
+          "start": 110987,
+          "end": 111475,
+          "extraction": "notebook",
+          "page": 149
+        },
+        {
+          "start": 111477,
+          "end": 112336,
+          "extraction": "notebook",
+          "page": 150
+        },
+        {
+          "start": 112338,
+          "end": 112777,
+          "extraction": "notebook",
+          "page": 151
+        },
+        {
+          "start": 112779,
+          "end": 114143,
+          "extraction": "notebook",
+          "page": 152
+        },
+        {
+          "start": 114145,
+          "end": 114636,
+          "extraction": "notebook",
+          "page": 153
+        },
+        {
+          "start": 114638,
+          "end": 115618,
+          "extraction": "notebook",
+          "page": 154
+        },
+        {
+          "start": 115620,
+          "end": 116175,
+          "extraction": "notebook",
+          "page": 155
+        },
+        {
+          "start": 116177,
+          "end": 117321,
+          "extraction": "notebook",
+          "page": 156
+        },
+        {
+          "start": 117323,
+          "end": 117975,
+          "extraction": "notebook",
+          "page": 157
+        },
+        {
+          "start": 117977,
+          "end": 118641,
+          "extraction": "notebook",
+          "page": 158
+        },
+        {
+          "start": 118643,
+          "end": 119369,
+          "extraction": "notebook",
+          "page": 159
+        },
+        {
+          "start": 119371,
+          "end": 119906,
+          "extraction": "notebook",
+          "page": 160
+        },
+        {
+          "start": 119908,
+          "end": 120493,
+          "extraction": "notebook",
+          "page": 161
+        },
+        {
+          "start": 120495,
+          "end": 121261,
+          "extraction": "notebook",
+          "page": 162
+        },
+        {
+          "start": 121263,
+          "end": 122678,
+          "extraction": "notebook",
+          "page": 163
+        },
+        {
+          "start": 122680,
+          "end": 123417,
+          "extraction": "notebook",
+          "page": 164
+        },
+        {
+          "start": 123419,
+          "end": 123581,
+          "extraction": "notebook",
+          "page": 165
+        },
+        {
+          "start": 123583,
+          "end": 124025,
+          "extraction": "notebook",
+          "page": 166
+        },
+        {
+          "start": 124027,
+          "end": 124461,
+          "extraction": "notebook",
+          "page": 167
+        },
+        {
+          "start": 124463,
+          "end": 127219,
+          "extraction": "notebook",
+          "page": 168
+        },
+        {
+          "start": 127221,
+          "end": 128114,
+          "extraction": "notebook",
+          "page": 169
+        },
+        {
+          "start": 128116,
+          "end": 128807,
+          "extraction": "notebook",
+          "page": 170
+        },
+        {
+          "start": 128809,
+          "end": 129313,
+          "extraction": "notebook",
+          "page": 171
+        },
+        {
+          "start": 129315,
+          "end": 130357,
+          "extraction": "notebook",
+          "page": 172
+        },
+        {
+          "start": 130359,
+          "end": 130450,
+          "extraction": "notebook",
+          "page": 173
+        },
+        {
+          "start": 130452,
+          "end": 131058,
+          "extraction": "notebook",
+          "page": 174
+        },
+        {
+          "start": 131060,
+          "end": 131643,
+          "extraction": "notebook",
+          "page": 175
+        },
+        {
+          "start": 131645,
+          "end": 132228,
+          "extraction": "notebook",
+          "page": 176
+        },
+        {
+          "start": 132230,
+          "end": 133084,
+          "extraction": "notebook",
+          "page": 177
+        },
+        {
+          "start": 133086,
+          "end": 133975,
+          "extraction": "notebook",
+          "page": 178
+        },
+        {
+          "start": 133977,
+          "end": 134142,
+          "extraction": "notebook",
+          "page": 179
+        },
+        {
+          "start": 134144,
+          "end": 134646,
+          "extraction": "notebook",
+          "page": 180
+        },
+        {
+          "start": 134648,
+          "end": 136230,
+          "extraction": "notebook",
+          "page": 181
+        },
+        {
+          "start": 136232,
+          "end": 136778,
+          "extraction": "notebook",
+          "page": 182
+        },
+        {
+          "start": 136780,
+          "end": 137907,
+          "extraction": "notebook",
+          "page": 183
+        },
+        {
+          "start": 137909,
+          "end": 138497,
+          "extraction": "notebook",
+          "page": 184
+        },
+        {
+          "start": 138499,
+          "end": 139770,
+          "extraction": "notebook",
+          "page": 185
+        },
+        {
+          "start": 139772,
+          "end": 140449,
+          "extraction": "notebook",
+          "page": 186
+        },
+        {
+          "start": 140451,
+          "end": 141177,
+          "extraction": "notebook",
+          "page": 187
+        },
+        {
+          "start": 141179,
+          "end": 141970,
+          "extraction": "notebook",
+          "page": 188
+        },
+        {
+          "start": 141972,
+          "end": 142848,
+          "extraction": "notebook",
+          "page": 189
+        },
+        {
+          "start": 142850,
+          "end": 143553,
+          "extraction": "notebook",
+          "page": 190
+        },
+        {
+          "start": 143555,
+          "end": 144403,
+          "extraction": "notebook",
+          "page": 191
+        },
+        {
+          "start": 144405,
+          "end": 146765,
+          "extraction": "notebook",
+          "page": 192
+        },
+        {
+          "start": 146767,
+          "end": 147896,
+          "extraction": "notebook",
+          "page": 193
+        },
+        {
+          "start": 147898,
+          "end": 148424,
+          "extraction": "notebook",
+          "page": 194
+        },
+        {
+          "start": 148426,
+          "end": 148610,
+          "extraction": "notebook",
+          "page": 195
+        },
+        {
+          "start": 148612,
+          "end": 149119,
+          "extraction": "notebook",
+          "page": 196
+        },
+        {
+          "start": 149121,
+          "end": 149755,
+          "extraction": "notebook",
+          "page": 197
+        },
+        {
+          "start": 149757,
+          "end": 150370,
+          "extraction": "notebook",
+          "page": 198
+        },
+        {
+          "start": 150372,
+          "end": 150848,
+          "extraction": "notebook",
+          "page": 199
+        },
+        {
+          "start": 150850,
+          "end": 151607,
+          "extraction": "notebook",
+          "page": 200
+        },
+        {
+          "start": 151609,
+          "end": 153221,
+          "extraction": "notebook",
+          "page": 201
+        },
+        {
+          "start": 153223,
+          "end": 153922,
+          "extraction": "notebook",
+          "page": 202
+        },
+        {
+          "start": 153924,
+          "end": 154407,
+          "extraction": "notebook",
+          "page": 203
+        },
+        {
+          "start": 154409,
+          "end": 154964,
+          "extraction": "notebook",
+          "page": 204
+        },
+        {
+          "start": 154966,
+          "end": 156316,
+          "extraction": "notebook",
+          "page": 205
+        },
+        {
+          "start": 156318,
+          "end": 157434,
+          "extraction": "notebook",
+          "page": 206
+        },
+        {
+          "start": 157436,
+          "end": 158019,
+          "extraction": "notebook",
+          "page": 207
+        },
+        {
+          "start": 158021,
+          "end": 159162,
+          "extraction": "notebook",
+          "page": 208
+        },
+        {
+          "start": 159164,
+          "end": 159692,
+          "extraction": "notebook",
+          "page": 209
+        },
+        {
+          "start": 159694,
+          "end": 160301,
+          "extraction": "notebook",
+          "page": 210
+        },
+        {
+          "start": 160303,
+          "end": 161081,
+          "extraction": "notebook",
+          "page": 211
+        },
+        {
+          "start": 161083,
+          "end": 161768,
+          "extraction": "notebook",
+          "page": 212
+        },
+        {
+          "start": 161770,
+          "end": 162441,
+          "extraction": "notebook",
+          "page": 213
+        },
+        {
+          "start": 162443,
+          "end": 163067,
+          "extraction": "notebook",
+          "page": 214
+        }
+      ]
+    },
+    {
+      "doc_id": "retrival-ext-qna-complete",
+      "filename": "Retrival_Ext_QnA_Complete.ipynb",
+      "source_type": "notebook",
+      "n_pages": null,
+      "n_chars": 154032,
+      "text_sha256": "eb0853cbc9b63bb446d063b5237dba342ec3acf3077e4da750027b78571d27a5",
+      "segments": [
+        {
+          "start": 0,
+          "end": 984,
+          "extraction": "notebook",
+          "page": 1
+        },
+        {
+          "start": 986,
+          "end": 2093,
+          "extraction": "notebook",
+          "page": 2
+        },
+        {
+          "start": 2095,
+          "end": 2640,
+          "extraction": "notebook",
+          "page": 3
+        },
+        {
+          "start": 2642,
+          "end": 3329,
+          "extraction": "notebook",
+          "page": 4
+        },
+        {
+          "start": 3331,
+          "end": 4290,
+          "extraction": "notebook",
+          "page": 5
+        },
+        {
+          "start": 4292,
+          "end": 6978,
+          "extraction": "notebook",
+          "page": 6
+        },
+        {
+          "start": 6980,
+          "end": 7362,
+          "extraction": "notebook",
+          "page": 7
+        },
+        {
+          "start": 7364,
+          "end": 7623,
+          "extraction": "notebook",
+          "page": 8
+        },
+        {
+          "start": 7625,
+          "end": 8138,
+          "extraction": "notebook",
+          "page": 9
+        },
+        {
+          "start": 8140,
+          "end": 8658,
+          "extraction": "notebook",
+          "page": 10
+        },
+        {
+          "start": 8660,
+          "end": 8928,
+          "extraction": "notebook",
+          "page": 11
+        },
+        {
+          "start": 8930,
+          "end": 9225,
+          "extraction": "notebook",
+          "page": 12
+        },
+        {
+          "start": 9227,
+          "end": 9425,
+          "extraction": "notebook",
+          "page": 13
+        },
+        {
+          "start": 9427,
+          "end": 9640,
+          "extraction": "notebook",
+          "page": 14
+        },
+        {
+          "start": 9642,
+          "end": 9880,
+          "extraction": "notebook",
+          "page": 15
+        },
+        {
+          "start": 9882,
+          "end": 10005,
+          "extraction": "notebook",
+          "page": 16
+        },
+        {
+          "start": 10007,
+          "end": 10834,
+          "extraction": "notebook",
+          "page": 17
+        },
+        {
+          "start": 10836,
+          "end": 11130,
+          "extraction": "notebook",
+          "page": 18
+        },
+        {
+          "start": 11132,
+          "end": 11686,
+          "extraction": "notebook",
+          "page": 19
+        },
+        {
+          "start": 11688,
+          "end": 11904,
+          "extraction": "notebook",
+          "page": 20
+        },
+        {
+          "start": 11906,
+          "end": 12229,
+          "extraction": "notebook",
+          "page": 21
+        },
+        {
+          "start": 12231,
+          "end": 12314,
+          "extraction": "notebook",
+          "page": 22
+        },
+        {
+          "start": 12316,
+          "end": 12751,
+          "extraction": "notebook",
+          "page": 23
+        },
+        {
+          "start": 12753,
+          "end": 13941,
+          "extraction": "notebook",
+          "page": 24
+        },
+        {
+          "start": 13943,
+          "end": 14338,
+          "extraction": "notebook",
+          "page": 25
+        },
+        {
+          "start": 14340,
+          "end": 14590,
+          "extraction": "notebook",
+          "page": 26
+        },
+        {
+          "start": 14592,
+          "end": 16151,
+          "extraction": "notebook",
+          "page": 27
+        },
+        {
+          "start": 16153,
+          "end": 16364,
+          "extraction": "notebook",
+          "page": 28
+        },
+        {
+          "start": 16366,
+          "end": 16474,
+          "extraction": "notebook",
+          "page": 29
+        },
+        {
+          "start": 16476,
+          "end": 16749,
+          "extraction": "notebook",
+          "page": 30
+        },
+        {
+          "start": 16751,
+          "end": 17025,
+          "extraction": "notebook",
+          "page": 31
+        },
+        {
+          "start": 17027,
+          "end": 17452,
+          "extraction": "notebook",
+          "page": 32
+        },
+        {
+          "start": 17454,
+          "end": 17561,
+          "extraction": "notebook",
+          "page": 33
+        },
+        {
+          "start": 17563,
+          "end": 18178,
+          "extraction": "notebook",
+          "page": 34
+        },
+        {
+          "start": 18180,
+          "end": 19311,
+          "extraction": "notebook",
+          "page": 35
+        },
+        {
+          "start": 19313,
+          "end": 20513,
+          "extraction": "notebook",
+          "page": 36
+        },
+        {
+          "start": 20515,
+          "end": 20682,
+          "extraction": "notebook",
+          "page": 37
+        },
+        {
+          "start": 20684,
+          "end": 27662,
+          "extraction": "notebook",
+          "page": 38
+        },
+        {
+          "start": 27664,
+          "end": 28499,
+          "extraction": "notebook",
+          "page": 39
+        },
+        {
+          "start": 28501,
+          "end": 29197,
+          "extraction": "notebook",
+          "page": 40
+        },
+        {
+          "start": 29199,
+          "end": 29347,
+          "extraction": "notebook",
+          "page": 41
+        },
+        {
+          "start": 29349,
+          "end": 29869,
+          "extraction": "notebook",
+          "page": 42
+        },
+        {
+          "start": 29871,
+          "end": 31600,
+          "extraction": "notebook",
+          "page": 43
+        },
+        {
+          "start": 31602,
+          "end": 33172,
+          "extraction": "notebook",
+          "page": 44
+        },
+        {
+          "start": 33174,
+          "end": 34446,
+          "extraction": "notebook",
+          "page": 45
+        },
+        {
+          "start": 34448,
+          "end": 34906,
+          "extraction": "notebook",
+          "page": 46
+        },
+        {
+          "start": 34908,
+          "end": 35550,
+          "extraction": "notebook",
+          "page": 47
+        },
+        {
+          "start": 35552,
+          "end": 36390,
+          "extraction": "notebook",
+          "page": 48
+        },
+        {
+          "start": 36392,
+          "end": 37032,
+          "extraction": "notebook",
+          "page": 49
+        },
+        {
+          "start": 37034,
+          "end": 38446,
+          "extraction": "notebook",
+          "page": 50
+        },
+        {
+          "start": 38448,
+          "end": 38726,
+          "extraction": "notebook",
+          "page": 51
+        },
+        {
+          "start": 38728,
+          "end": 39233,
+          "extraction": "notebook",
+          "page": 52
+        },
+        {
+          "start": 39235,
+          "end": 39745,
+          "extraction": "notebook",
+          "page": 53
+        },
+        {
+          "start": 39747,
+          "end": 40309,
+          "extraction": "notebook",
+          "page": 54
+        },
+        {
+          "start": 40311,
+          "end": 40847,
+          "extraction": "notebook",
+          "page": 55
+        },
+        {
+          "start": 40849,
+          "end": 41501,
+          "extraction": "notebook",
+          "page": 56
+        },
+        {
+          "start": 41503,
+          "end": 42203,
+          "extraction": "notebook",
+          "page": 57
+        },
+        {
+          "start": 42205,
+          "end": 42385,
+          "extraction": "notebook",
+          "page": 58
+        },
+        {
+          "start": 42387,
+          "end": 43323,
+          "extraction": "notebook",
+          "page": 59
+        },
+        {
+          "start": 43325,
+          "end": 43765,
+          "extraction": "notebook",
+          "page": 60
+        },
+        {
+          "start": 43767,
+          "end": 44238,
+          "extraction": "notebook",
+          "page": 61
+        },
+        {
+          "start": 44240,
+          "end": 44996,
+          "extraction": "notebook",
+          "page": 62
+        },
+        {
+          "start": 44998,
+          "end": 45131,
+          "extraction": "notebook",
+          "page": 63
+        },
+        {
+          "start": 45133,
+          "end": 45785,
+          "extraction": "notebook",
+          "page": 64
+        },
+        {
+          "start": 45787,
+          "end": 46194,
+          "extraction": "notebook",
+          "page": 65
+        },
+        {
+          "start": 46196,
+          "end": 46657,
+          "extraction": "notebook",
+          "page": 66
+        },
+        {
+          "start": 46659,
+          "end": 47011,
+          "extraction": "notebook",
+          "page": 67
+        },
+        {
+          "start": 47013,
+          "end": 47736,
+          "extraction": "notebook",
+          "page": 68
+        },
+        {
+          "start": 47738,
+          "end": 48131,
+          "extraction": "notebook",
+          "page": 69
+        },
+        {
+          "start": 48133,
+          "end": 48296,
+          "extraction": "notebook",
+          "page": 70
+        },
+        {
+          "start": 48298,
+          "end": 48885,
+          "extraction": "notebook",
+          "page": 71
+        },
+        {
+          "start": 48887,
+          "end": 49452,
+          "extraction": "notebook",
+          "page": 72
+        },
+        {
+          "start": 49454,
+          "end": 49975,
+          "extraction": "notebook",
+          "page": 73
+        },
+        {
+          "start": 49977,
+          "end": 50354,
+          "extraction": "notebook",
+          "page": 74
+        },
+        {
+          "start": 50356,
+          "end": 51419,
+          "extraction": "notebook",
+          "page": 75
+        },
+        {
+          "start": 51421,
+          "end": 51905,
+          "extraction": "notebook",
+          "page": 76
+        },
+        {
+          "start": 51907,
+          "end": 52236,
+          "extraction": "notebook",
+          "page": 77
+        },
+        {
+          "start": 52238,
+          "end": 52650,
+          "extraction": "notebook",
+          "page": 78
+        },
+        {
+          "start": 52652,
+          "end": 52987,
+          "extraction": "notebook",
+          "page": 79
+        },
+        {
+          "start": 52989,
+          "end": 53196,
+          "extraction": "notebook",
+          "page": 80
+        },
+        {
+          "start": 53198,
+          "end": 53484,
+          "extraction": "notebook",
+          "page": 81
+        },
+        {
+          "start": 53486,
+          "end": 54071,
+          "extraction": "notebook",
+          "page": 82
+        },
+        {
+          "start": 54073,
+          "end": 54449,
+          "extraction": "notebook",
+          "page": 83
+        },
+        {
+          "start": 54451,
+          "end": 54863,
+          "extraction": "notebook",
+          "page": 84
+        },
+        {
+          "start": 54865,
+          "end": 55444,
+          "extraction": "notebook",
+          "page": 85
+        },
+        {
+          "start": 55446,
+          "end": 55980,
+          "extraction": "notebook",
+          "page": 86
+        },
+        {
+          "start": 55982,
+          "end": 56602,
+          "extraction": "notebook",
+          "page": 87
+        },
+        {
+          "start": 56604,
+          "end": 57180,
+          "extraction": "notebook",
+          "page": 88
+        },
+        {
+          "start": 57182,
+          "end": 57618,
+          "extraction": "notebook",
+          "page": 89
+        },
+        {
+          "start": 57620,
+          "end": 57853,
+          "extraction": "notebook",
+          "page": 90
+        },
+        {
+          "start": 57855,
+          "end": 58610,
+          "extraction": "notebook",
+          "page": 91
+        },
+        {
+          "start": 58612,
+          "end": 59066,
+          "extraction": "notebook",
+          "page": 92
+        },
+        {
+          "start": 59068,
+          "end": 59563,
+          "extraction": "notebook",
+          "page": 93
+        },
+        {
+          "start": 59565,
+          "end": 60036,
+          "extraction": "notebook",
+          "page": 94
+        },
+        {
+          "start": 60038,
+          "end": 61082,
+          "extraction": "notebook",
+          "page": 95
+        },
+        {
+          "start": 61084,
+          "end": 61461,
+          "extraction": "notebook",
+          "page": 96
+        },
+        {
+          "start": 61463,
+          "end": 61821,
+          "extraction": "notebook",
+          "page": 97
+        },
+        {
+          "start": 61823,
+          "end": 62150,
+          "extraction": "notebook",
+          "page": 98
+        },
+        {
+          "start": 62152,
+          "end": 62624,
+          "extraction": "notebook",
+          "page": 99
+        },
+        {
+          "start": 62626,
+          "end": 63052,
+          "extraction": "notebook",
+          "page": 100
+        },
+        {
+          "start": 63054,
+          "end": 63513,
+          "extraction": "notebook",
+          "page": 101
+        },
+        {
+          "start": 63515,
+          "end": 64012,
+          "extraction": "notebook",
+          "page": 102
+        },
+        {
+          "start": 64014,
+          "end": 64589,
+          "extraction": "notebook",
+          "page": 103
+        },
+        {
+          "start": 64591,
+          "end": 64800,
+          "extraction": "notebook",
+          "page": 104
+        },
+        {
+          "start": 64802,
+          "end": 64973,
+          "extraction": "notebook",
+          "page": 105
+        },
+        {
+          "start": 64975,
+          "end": 65493,
+          "extraction": "notebook",
+          "page": 106
+        },
+        {
+          "start": 65495,
+          "end": 65854,
+          "extraction": "notebook",
+          "page": 107
+        },
+        {
+          "start": 65856,
+          "end": 66174,
+          "extraction": "notebook",
+          "page": 108
+        },
+        {
+          "start": 66176,
+          "end": 66514,
+          "extraction": "notebook",
+          "page": 109
+        },
+        {
+          "start": 66516,
+          "end": 68777,
+          "extraction": "notebook",
+          "page": 110
+        },
+        {
+          "start": 68779,
+          "end": 69418,
+          "extraction": "notebook",
+          "page": 111
+        },
+        {
+          "start": 69420,
+          "end": 69628,
+          "extraction": "notebook",
+          "page": 112
+        },
+        {
+          "start": 69630,
+          "end": 69913,
+          "extraction": "notebook",
+          "page": 113
+        },
+        {
+          "start": 69915,
+          "end": 70264,
+          "extraction": "notebook",
+          "page": 114
+        },
+        {
+          "start": 70266,
+          "end": 70663,
+          "extraction": "notebook",
+          "page": 115
+        },
+        {
+          "start": 70665,
+          "end": 71242,
+          "extraction": "notebook",
+          "page": 116
+        },
+        {
+          "start": 71244,
+          "end": 71546,
+          "extraction": "notebook",
+          "page": 117
+        },
+        {
+          "start": 71548,
+          "end": 72098,
+          "extraction": "notebook",
+          "page": 118
+        },
+        {
+          "start": 72100,
+          "end": 72479,
+          "extraction": "notebook",
+          "page": 119
+        },
+        {
+          "start": 72481,
+          "end": 72783,
+          "extraction": "notebook",
+          "page": 120
+        },
+        {
+          "start": 72785,
+          "end": 73162,
+          "extraction": "notebook",
+          "page": 121
+        },
+        {
+          "start": 73164,
+          "end": 73845,
+          "extraction": "notebook",
+          "page": 122
+        },
+        {
+          "start": 73847,
+          "end": 74361,
+          "extraction": "notebook",
+          "page": 123
+        },
+        {
+          "start": 74363,
+          "end": 74594,
+          "extraction": "notebook",
+          "page": 124
+        },
+        {
+          "start": 74596,
+          "end": 75225,
+          "extraction": "notebook",
+          "page": 125
+        },
+        {
+          "start": 75227,
+          "end": 75680,
+          "extraction": "notebook",
+          "page": 126
+        },
+        {
+          "start": 75682,
+          "end": 76210,
+          "extraction": "notebook",
+          "page": 127
+        },
+        {
+          "start": 76212,
+          "end": 76641,
+          "extraction": "notebook",
+          "page": 128
+        },
+        {
+          "start": 76643,
+          "end": 80262,
+          "extraction": "notebook",
+          "page": 129
+        },
+        {
+          "start": 80264,
+          "end": 81340,
+          "extraction": "notebook",
+          "page": 130
+        },
+        {
+          "start": 81342,
+          "end": 81739,
+          "extraction": "notebook",
+          "page": 131
+        },
+        {
+          "start": 81741,
+          "end": 82340,
+          "extraction": "notebook",
+          "page": 132
+        },
+        {
+          "start": 82342,
+          "end": 83030,
+          "extraction": "notebook",
+          "page": 133
+        },
+        {
+          "start": 83032,
+          "end": 83700,
+          "extraction": "notebook",
+          "page": 134
+        },
+        {
+          "start": 83702,
+          "end": 84118,
+          "extraction": "notebook",
+          "page": 135
+        },
+        {
+          "start": 84120,
+          "end": 89412,
+          "extraction": "notebook",
+          "page": 136
+        },
+        {
+          "start": 89414,
+          "end": 90676,
+          "extraction": "notebook",
+          "page": 137
+        },
+        {
+          "start": 90678,
+          "end": 91146,
+          "extraction": "notebook",
+          "page": 138
+        },
+        {
+          "start": 91148,
+          "end": 91820,
+          "extraction": "notebook",
+          "page": 139
+        },
+        {
+          "start": 91822,
+          "end": 92662,
+          "extraction": "notebook",
+          "page": 140
+        },
+        {
+          "start": 92664,
+          "end": 93666,
+          "extraction": "notebook",
+          "page": 141
+        },
+        {
+          "start": 93668,
+          "end": 93765,
+          "extraction": "notebook",
+          "page": 142
+        },
+        {
+          "start": 93767,
+          "end": 95424,
+          "extraction": "notebook",
+          "page": 143
+        },
+        {
+          "start": 95426,
+          "end": 95861,
+          "extraction": "notebook",
+          "page": 144
+        },
+        {
+          "start": 95863,
+          "end": 96291,
+          "extraction": "notebook",
+          "page": 145
+        },
+        {
+          "start": 96293,
+          "end": 96946,
+          "extraction": "notebook",
+          "page": 146
+        },
+        {
+          "start": 96948,
+          "end": 97709,
+          "extraction": "notebook",
+          "page": 147
+        },
+        {
+          "start": 97711,
+          "end": 98329,
+          "extraction": "notebook",
+          "page": 148
+        },
+        {
+          "start": 98331,
+          "end": 98931,
+          "extraction": "notebook",
+          "page": 149
+        },
+        {
+          "start": 98933,
+          "end": 99306,
+          "extraction": "notebook",
+          "page": 150
+        },
+        {
+          "start": 99308,
+          "end": 99595,
+          "extraction": "notebook",
+          "page": 151
+        },
+        {
+          "start": 99597,
+          "end": 99740,
+          "extraction": "notebook",
+          "page": 152
+        },
+        {
+          "start": 99742,
+          "end": 100003,
+          "extraction": "notebook",
+          "page": 153
+        },
+        {
+          "start": 100005,
+          "end": 100184,
+          "extraction": "notebook",
+          "page": 154
+        },
+        {
+          "start": 100186,
+          "end": 100743,
+          "extraction": "notebook",
+          "page": 155
+        },
+        {
+          "start": 100745,
+          "end": 101152,
+          "extraction": "notebook",
+          "page": 156
+        },
+        {
+          "start": 101154,
+          "end": 102002,
+          "extraction": "notebook",
+          "page": 157
+        },
+        {
+          "start": 102004,
+          "end": 102123,
+          "extraction": "notebook",
+          "page": 158
+        },
+        {
+          "start": 102125,
+          "end": 102579,
+          "extraction": "notebook",
+          "page": 159
+        },
+        {
+          "start": 102581,
+          "end": 103131,
+          "extraction": "notebook",
+          "page": 160
+        },
+        {
+          "start": 103133,
+          "end": 103477,
+          "extraction": "notebook",
+          "page": 161
+        },
+        {
+          "start": 103479,
+          "end": 103878,
+          "extraction": "notebook",
+          "page": 162
+        },
+        {
+          "start": 103880,
+          "end": 104215,
+          "extraction": "notebook",
+          "page": 163
+        },
+        {
+          "start": 104217,
+          "end": 104586,
+          "extraction": "notebook",
+          "page": 164
+        },
+        {
+          "start": 104588,
+          "end": 105319,
+          "extraction": "notebook",
+          "page": 165
+        },
+        {
+          "start": 105321,
+          "end": 105746,
+          "extraction": "notebook",
+          "page": 166
+        },
+        {
+          "start": 105748,
+          "end": 106610,
+          "extraction": "notebook",
+          "page": 167
+        },
+        {
+          "start": 106612,
+          "end": 106729,
+          "extraction": "notebook",
+          "page": 168
+        },
+        {
+          "start": 106731,
+          "end": 107115,
+          "extraction": "notebook",
+          "page": 169
+        },
+        {
+          "start": 107117,
+          "end": 107364,
+          "extraction": "notebook",
+          "page": 170
+        },
+        {
+          "start": 107366,
+          "end": 107576,
+          "extraction": "notebook",
+          "page": 171
+        },
+        {
+          "start": 107578,
+          "end": 108309,
+          "extraction": "notebook",
+          "page": 172
+        },
+        {
+          "start": 108311,
+          "end": 108769,
+          "extraction": "notebook",
+          "page": 173
+        },
+        {
+          "start": 108771,
+          "end": 109285,
+          "extraction": "notebook",
+          "page": 174
+        },
+        {
+          "start": 109287,
+          "end": 109928,
+          "extraction": "notebook",
+          "page": 175
+        },
+        {
+          "start": 109930,
+          "end": 110350,
+          "extraction": "notebook",
+          "page": 176
+        },
+        {
+          "start": 110352,
+          "end": 112393,
+          "extraction": "notebook",
+          "page": 177
+        },
+        {
+          "start": 112395,
+          "end": 113091,
+          "extraction": "notebook",
+          "page": 178
+        },
+        {
+          "start": 113093,
+          "end": 113450,
+          "extraction": "notebook",
+          "page": 179
+        },
+        {
+          "start": 113452,
+          "end": 113987,
+          "extraction": "notebook",
+          "page": 180
+        },
+        {
+          "start": 113989,
+          "end": 114462,
+          "extraction": "notebook",
+          "page": 181
+        },
+        {
+          "start": 114464,
+          "end": 117037,
+          "extraction": "notebook",
+          "page": 182
+        },
+        {
+          "start": 117039,
+          "end": 117403,
+          "extraction": "notebook",
+          "page": 183
+        },
+        {
+          "start": 117405,
+          "end": 118353,
+          "extraction": "notebook",
+          "page": 184
+        },
+        {
+          "start": 118355,
+          "end": 118787,
+          "extraction": "notebook",
+          "page": 185
+        },
+        {
+          "start": 118789,
+          "end": 120519,
+          "extraction": "notebook",
+          "page": 186
+        },
+        {
+          "start": 120521,
+          "end": 120851,
+          "extraction": "notebook",
+          "page": 187
+        },
+        {
+          "start": 120853,
+          "end": 121318,
+          "extraction": "notebook",
+          "page": 188
+        },
+        {
+          "start": 121320,
+          "end": 121577,
+          "extraction": "notebook",
+          "page": 189
+        },
+        {
+          "start": 121579,
+          "end": 122239,
+          "extraction": "notebook",
+          "page": 190
+        },
+        {
+          "start": 122241,
+          "end": 122871,
+          "extraction": "notebook",
+          "page": 191
+        },
+        {
+          "start": 122873,
+          "end": 123711,
+          "extraction": "notebook",
+          "page": 192
+        },
+        {
+          "start": 123713,
+          "end": 124183,
+          "extraction": "notebook",
+          "page": 193
+        },
+        {
+          "start": 124185,
+          "end": 124857,
+          "extraction": "notebook",
+          "page": 194
+        },
+        {
+          "start": 124859,
+          "end": 125277,
+          "extraction": "notebook",
+          "page": 195
+        },
+        {
+          "start": 125279,
+          "end": 126165,
+          "extraction": "notebook",
+          "page": 196
+        },
+        {
+          "start": 126167,
+          "end": 126614,
+          "extraction": "notebook",
+          "page": 197
+        },
+        {
+          "start": 126616,
+          "end": 127194,
+          "extraction": "notebook",
+          "page": 198
+        },
+        {
+          "start": 127196,
+          "end": 127830,
+          "extraction": "notebook",
+          "page": 199
+        },
+        {
+          "start": 127832,
+          "end": 128393,
+          "extraction": "notebook",
+          "page": 200
+        },
+        {
+          "start": 128395,
+          "end": 128784,
+          "extraction": "notebook",
+          "page": 201
+        },
+        {
+          "start": 128786,
+          "end": 132849,
+          "extraction": "notebook",
+          "page": 202
+        },
+        {
+          "start": 132851,
+          "end": 133972,
+          "extraction": "notebook",
+          "page": 203
+        },
+        {
+          "start": 133974,
+          "end": 134380,
+          "extraction": "notebook",
+          "page": 204
+        },
+        {
+          "start": 134382,
+          "end": 135053,
+          "extraction": "notebook",
+          "page": 205
+        },
+        {
+          "start": 135055,
+          "end": 135608,
+          "extraction": "notebook",
+          "page": 206
+        },
+        {
+          "start": 135610,
+          "end": 136264,
+          "extraction": "notebook",
+          "page": 207
+        },
+        {
+          "start": 136266,
+          "end": 141651,
+          "extraction": "notebook",
+          "page": 208
+        },
+        {
+          "start": 141653,
+          "end": 142970,
+          "extraction": "notebook",
+          "page": 209
+        },
+        {
+          "start": 142972,
+          "end": 143449,
+          "extraction": "notebook",
+          "page": 210
+        },
+        {
+          "start": 143451,
+          "end": 144190,
+          "extraction": "notebook",
+          "page": 211
+        },
+        {
+          "start": 144192,
+          "end": 145000,
+          "extraction": "notebook",
+          "page": 212
+        },
+        {
+          "start": 145002,
+          "end": 145398,
+          "extraction": "notebook",
+          "page": 213
+        },
+        {
+          "start": 145400,
+          "end": 147895,
+          "extraction": "notebook",
+          "page": 214
+        },
+        {
+          "start": 147897,
+          "end": 148591,
+          "extraction": "notebook",
+          "page": 215
+        },
+        {
+          "start": 148593,
+          "end": 148920,
+          "extraction": "notebook",
+          "page": 216
+        },
+        {
+          "start": 148922,
+          "end": 150890,
+          "extraction": "notebook",
+          "page": 217
+        },
+        {
+          "start": 150892,
+          "end": 151345,
+          "extraction": "notebook",
+          "page": 218
+        },
+        {
+          "start": 151347,
+          "end": 152254,
+          "extraction": "notebook",
+          "page": 219
+        },
+        {
+          "start": 152256,
+          "end": 152690,
+          "extraction": "notebook",
+          "page": 220
+        },
+        {
+          "start": 152692,
+          "end": 153504,
+          "extraction": "notebook",
+          "page": 221
+        },
+        {
+          "start": 153506,
+          "end": 154032,
+          "extraction": "notebook",
+          "page": 222
+        }
+      ]
+    }
+  ]
+}
