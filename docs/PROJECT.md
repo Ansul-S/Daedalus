@@ -3,6 +3,11 @@
 Reference document. Read when working on architecture or direction; skip for
 routine implementation.
 
+Settled scope and constraints live in `docs/PHASE-0.md`; the intended end-state
+product lives in `docs/FEATURES.md`; phase order lives in `docs/ROADMAP.md`.
+Where this document describes something as open that those have since settled,
+they win.
+
 ## Problem
 
 People preparing for AI/ML interviews study from material they've already
@@ -56,6 +61,12 @@ External knowledge isn't forbidden, but it must never be presented as coming
 from the uploaded documents. Where practical, generated questions and
 evaluations keep a reference back to the source chunks they came from.
 
+Open question: `docs/FEATURES.md` calls for the system to detect wrong or
+outdated source material and supply the correct answer instead. That requires
+adjudicating between the documents and the model's own knowledge, which is not
+the same operation as labelling content external, and it is not yet decided how
+that judgement would be made or distinguished from a hallucination.
+
 Example — material containing "Random Forest is an ensemble learning method that
 combines multiple decision trees" should be able to produce:
 
@@ -81,6 +92,9 @@ notebook metadata where useful.
 when their visual structure carries meaning (architecture diagrams, plots,
 tables).
 
+**Standalone code files** — `.py` and similar, where structure is carried by the
+code rather than by prose or headings.
+
 Across all formats, preserve enough structure to keep this relationship intact:
 
 ```
@@ -92,8 +106,14 @@ Heading → Concept → Explanation → Code → Output
 May eventually combine lexical retrieval, semantic retrieval, metadata
 filtering, and reranking.
 
-Candidate technologies under consideration — **none approved yet**: SQLite,
-FTS5, sqlite-vec, embedding models, rerankers.
+Decided as of 2026-08-29, for local zero-cost operation: embeddings from
+`BAAI/bge-m3`, with `all-MiniLM-L6-v2` retained as an ablation baseline.
+Generation and judging run on `qwen3:8b` locally; `llama3.2:3b` is a smoke-test
+model for pipeline debugging only. Measured settings are in `docs/PHASE-0.md`.
+
+Still open: the index and lexical layer (SQLite, FTS5, sqlite-vec and
+alternatives), whether a reranker earns its cost, and whether hybrid retrieval
+is justified by measured failure modes.
 
 Evaluate any proposed technology against: simplicity, performance,
 maintainability, explainability, local development constraints, deployment
