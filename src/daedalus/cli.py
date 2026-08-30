@@ -15,9 +15,9 @@ from pathlib import Path
 from daedalus.embedding import DEFAULT_MODEL, EmbeddingError, embed_texts
 from daedalus.ingestion.canonical import notebook_to_document
 from daedalus.ingestion.notebook import parse_notebook
-from daedalus.storage.database import DatabaseNotConfiguredError, connect
-from daedalus.storage.documents import document_exists, store_document
 from daedalus.retrieval.search import Candidate, pool_candidates
+from daedalus.storage.database import DatabaseNotConfiguredError, connect
+from daedalus.storage.documents import document_exists, parent_text, store_document
 from daedalus.storage.embeddings import DEFAULT_BATCH_SIZE, backfill_embeddings
 from daedalus.storage.queries import (
     QUERY_SOURCES,
@@ -33,10 +33,46 @@ from daedalus.storage.queries import (
 NOTEBOOK_SUFFIX = ".ipynb"
 
 #: Keystrokes accepted while labelling, mapped to the grade they record.
+#: A grade enters the reference set only through one of these keystrokes.
 GRADE_KEYS = {"0": 0, "1": 1, "2": 2}
 
-#: Characters shown around a chunk when it is longer than this many characters.
-PREVIEW_LIMIT = 900
+#: Characters of a chunk shown before it is truncated. Chosen against the
+#: corpus: median chunk length is about 418 characters and p90 about 1,188, so
+#: this shows most chunks whole while capping the rare very large one. The full
+#: text is always available with the "f" key, because the policy is to judge the
+#: complete content and never the preview alone.
+PREVIEW_LIMIT = 2000
+
+#: One-line meaning of each grade, shown on every prompt.
+GRADE_MEANINGS = (
+    "0 not relevant",
+    "1 partially answers",
+    "2 fully answers",
+)
+
+#: Shown once at the start of a session and again on demand with "?".
+POLICY_REMINDER = """\
+Judge only how useful this chunk's content is for answering the query.
+
+  0  not relevant       related topic or shared words, but does not help answer
+  1  partially answers  contributes part of the answer, or evidence for it
+  2  fully answers      content is sufficient to answer the query directly
+
+Code and prose are judged by the same standard. Do not downgrade a chunk for
+being code, and do not promote it for looking sophisticated. A signature with no
+meaningful body does not earn a 2 because its name matches the query.
+
+Ignore how the chunk was retrieved. The question is only whether the chunk
+helps answer the query.
+
+A truncated chunk is marked TRUNCATED; press f to read all of it before
+judging. When an output chunk is shown, the code that produced it appears above
+as context only — the grade belongs to the output, not to that code.
+
+s skips without recording anything; the candidate returns in a later session.
+
+Full policy: docs/LABELLING.md
+"""
 
 
 def notebook_paths(paths: Sequence[Path]) -> list[Path]:
@@ -178,22 +214,55 @@ def read_key(prompt: str) -> str:
 
 
 def show_candidate(
-    query_text: str, candidate: Candidate, position: int, total: int
+    query_text: str,
+    candidate: Candidate,
+    position: int,
+    total: int,
+    full: bool = False,
+    context: str | None = None,
 ) -> None:
-    """Print one candidate for judging."""
+    """Print one candidate for judging.
+
+    Which retrievers surfaced the candidate is deliberately not shown. The
+    reference set measures those retrievers, so a judgement influenced by them
+    would be measuring itself.
+
+    An output chunk is often meaningless read alone, so the code that produced
+    it is shown above as context. It is labelled as context and excluded from
+    the judgement: the grade belongs to the candidate.
+    """
     chunk = candidate.chunk
     heading = " > ".join(chunk.heading_path) or "(no heading)"
-    body = chunk.text.strip()
-    if len(body) > PREVIEW_LIMIT:
-        body = f"{body[:PREVIEW_LIMIT]}\n… [{len(chunk.text) - PREVIEW_LIMIT} more]"
 
     print("\n" + "=" * 78)
     print(f"QUERY: {query_text}")
     print(f"[{position}/{total}]  {chunk.kind}  {chunk.doc_id}:{chunk.ordinal}")
     print(f"SECTION: {heading}")
+
+    if context is not None:
+        print("-" * 78)
+        print("CONTEXT — the code that produced this output. NOT judged.")
+        print("-" * 78)
+        print(_body(context, full))
+
     print("-" * 78)
-    print(body)
+    if context is not None:
+        print("CANDIDATE — judge this:")
+        print("-" * 78)
+    print(_body(chunk.text, full))
     print("-" * 78)
+
+
+def _body(text: str, full: bool) -> str:
+    """Render chunk text, marking truncation explicitly when it applies."""
+    body = text.strip()
+    if full or len(body) <= PREVIEW_LIMIT:
+        return body
+    hidden = len(body) - PREVIEW_LIMIT
+    return (
+        f"{body[:PREVIEW_LIMIT]}\n"
+        f"[TRUNCATED — {hidden} more characters. Press f to read all before judging.]"
+    )
 
 
 def cmd_label(args: argparse.Namespace) -> int:
@@ -207,6 +276,8 @@ def cmd_label(args: argparse.Namespace) -> int:
         if not queries:
             print("nothing to label")
             return 0
+
+        print(POLICY_REMINDER)
 
         for query in queries:
             done = judged_pairs(connection, query.query_id)
@@ -224,12 +295,36 @@ def cmd_label(args: argparse.Namespace) -> int:
             ]
 
             for position, candidate in enumerate(pending, start=1):
-                show_candidate(query.text, candidate, position, len(pending))
-                key = read_key("grade  0 no  1 partial  2 yes  s skip  q quit > ")
+                context = parent_text(
+                    connection, candidate.chunk.doc_id, candidate.chunk.ordinal
+                )
+                full = False
+                while True:
+                    show_candidate(
+                        query.text,
+                        candidate,
+                        position,
+                        len(pending),
+                        full,
+                        context,
+                    )
+                    prompt = (
+                        "  ".join(GRADE_MEANINGS)
+                        + "   s skip   f full text   ? policy   q quit > "
+                    )
+                    key = read_key(prompt)
 
-                if key == "q":
-                    print("\nstopped")
-                    return 0
+                    if key == "q":
+                        print("\nstopped")
+                        return 0
+                    if key == "?":
+                        print("\n" + POLICY_REMINDER)
+                        continue
+                    if key == "f":
+                        full = True
+                        continue
+                    break
+
                 if key not in GRADE_KEYS:
                     continue
 

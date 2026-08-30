@@ -80,3 +80,27 @@ def delete_document(
     """Remove a document. Its chunks and their embeddings cascade away."""
     with connection.cursor() as cursor:
         cursor.execute("DELETE FROM documents WHERE doc_id = %s", (doc_id,))
+
+
+_PARENT_TEXT = """
+SELECT parent.text
+FROM chunks child
+JOIN chunks parent
+  ON parent.doc_id = child.doc_id AND parent.ordinal = child.parent_ordinal
+WHERE child.doc_id = %s AND child.ordinal = %s
+"""
+
+
+def parent_text(
+    connection: psycopg.Connection[tuple[object, ...]], doc_id: str, ordinal: int
+) -> str | None:
+    """Return the text of the chunk that produced this one, if it has one.
+
+    Only output chunks carry a parent. The text is used as context when judging
+    an output, which is often meaningless read alone, but the parent is never
+    itself the thing being judged.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(_PARENT_TEXT, (doc_id, ordinal))
+        row = cursor.fetchone()
+        return str(row[0]) if row else None
