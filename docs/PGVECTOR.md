@@ -857,6 +857,7 @@ so `%s` does not work for them. Use `psycopg.sql`:
 
 ```python
 from psycopg import sql
+
 connection.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(name)))
 ```
 
@@ -865,7 +866,7 @@ catches people out. Our segments hold tuples for immutability, so they must be
 converted:
 
 ```python
-list(segment.heading_path)   # -> text[]
+list(segment.heading_path)  # -> text[]
 ```
 
 Passing the tuple directly would attempt to build a composite value and fail.
@@ -1057,7 +1058,8 @@ def backfill_embeddings(connection, embed, model, batch_size=DEFAULT_BATCH_SIZE)
         inputs = [embedding_input(heading, text) for _, heading, text in batch]
         vectors = embed(inputs)
         total += store_embeddings(
-            connection, model,
+            connection,
+            model,
             list(zip([row[0] for row in batch], vectors, strict=True)),
         )
         connection.commit()
@@ -1142,14 +1144,17 @@ query = "How does BERT answer questions from a document?"
 vec = _vector_literal(embed_texts([query])[0])
 
 with connect() as conn, conn.cursor() as cur:
-    cur.execute("""
+    cur.execute(
+        """
         SELECT c.kind, array_to_string(c.heading_path,' > '),
                left(c.text, 68), round((e.embedding <=> %s::vector)::numeric, 4)
         FROM embeddings e JOIN chunks c ON c.id = e.chunk_id
         WHERE NOT ('instructor-answers' = ANY(c.tags))
         ORDER BY e.embedding <=> %s::vector
         LIMIT 5
-    """, (vec, vec))
+    """,
+        (vec, vec),
+    )
     for row in cur.fetchall():
         print(row)
 ```
