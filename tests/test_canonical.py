@@ -26,6 +26,10 @@ def convert(tmp_path: Path, cells: list[nbformat.NotebookNode], name: str = "n.i
     return notebook_to_document(parse_notebook(write_notebook(tmp_path / name, cells)))
 
 
+def raw(source: str) -> nbformat.NotebookNode:
+    return nbformat.v4.new_raw_cell(source)
+
+
 def test_document_id_depends_only_on_content() -> None:
     assert stable_document_id("same text") == stable_document_id("same text")
     assert stable_document_id("a") != stable_document_id("b")
@@ -152,3 +156,24 @@ def test_same_content_different_path_gives_same_id(tmp_path: Path) -> None:
 def test_non_output_segments_have_no_parent(tmp_path: Path, kind: SegmentKind) -> None:
     doc = convert(tmp_path, [md("# A"), code("x = 1", [stream("out")])])
     assert all(s.parent_ordinal is None for s in doc.segments if s.kind is kind)
+
+
+def test_blank_cells_do_not_affect_document_id(tmp_path: Path) -> None:
+    without = convert(tmp_path, [md("# A"), code("x = 1")], name="a.ipynb")
+    with_blank = convert(
+        tmp_path, [md("# A"), md("   \n"), code("x = 1")], name="b.ipynb"
+    )
+    assert without.doc_id == with_blank.doc_id
+
+
+def test_raw_cells_produce_no_segments(tmp_path: Path) -> None:
+    doc = convert(tmp_path, [md("# A"), raw("\\usepackage{amsmath}"), code("x = 1")])
+    assert [s.kind for s in doc.segments] == [SegmentKind.PROSE, SegmentKind.CODE]
+
+
+def test_raw_cells_do_not_affect_document_id(tmp_path: Path) -> None:
+    without = convert(tmp_path, [md("# A"), code("x = 1")], name="a.ipynb")
+    with_raw = convert(
+        tmp_path, [md("# A"), raw("preamble"), code("x = 1")], name="b.ipynb"
+    )
+    assert without.doc_id == with_raw.doc_id

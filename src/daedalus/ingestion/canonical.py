@@ -19,6 +19,11 @@ TRUNCATION_MARKER = "\n[output truncated]"
 #: Value recorded as `Document.source_format` for notebooks.
 SOURCE_FORMAT = "notebook"
 
+#: Cell types that carry study material. Raw cells are excluded: their content
+#: is marked by the notebook author as not for rendering, and is typically
+#: preamble or conversion directives rather than material to be studied.
+HANDLED_CELL_TYPES = ("markdown", "code")
+
 
 def stable_document_id(content: str) -> str:
     """Return a stable identifier derived from a document's content.
@@ -51,7 +56,9 @@ def notebook_to_document(parsed: ParsedNotebook) -> Document:
 
     Rules:
 
-    * Cells whose source is empty or whitespace-only are skipped entirely.
+    * Cells whose type is not in HANDLED_CELL_TYPES, and cells whose source is
+      empty or whitespace-only, are skipped entirely and do not contribute to
+      `doc_id`.
     * A markdown cell becomes one PROSE segment holding the cell source.
     * A code cell becomes one CODE segment holding the cell source, followed
       by one OUTPUT segment per kept output, in order.
@@ -71,7 +78,7 @@ def notebook_to_document(parsed: ParsedNotebook) -> Document:
     source_parts: list[str] = []
 
     for cell in parsed.cells:
-        if not cell.source.strip():
+        if cell.cell_type not in HANDLED_CELL_TYPES or not cell.source.strip():
             continue
 
         source_parts.append(cell.source)
