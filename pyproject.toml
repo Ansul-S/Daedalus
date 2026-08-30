@@ -5,6 +5,7 @@ description = "Interview-question generation grounded in the user's own study ma
 requires-python = ">=3.11"
 dependencies = [
     "nbformat>=5.10",
+    "psycopg[binary]>=3.3.4",
 ]
 
 [dependency-groups]
