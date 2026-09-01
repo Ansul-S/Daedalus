@@ -579,3 +579,88 @@ def test_per_query_cap_leaves_candidates_unjudged_not_zero(
 
     assert len(judged_pairs(connection, query_id)) == 1
     assert grade_totals(connection) == {2: 1}
+
+
+def test_regrade_offers_judged_candidates_again(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    prepare(connection, database_url, monkeypatch)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    connection.commit()
+
+    drive(monkeypatch, "000")
+    cli.main(["label", "--vector-k", "0", "--lexical-k", "3", "--random-k", "0"])
+    capsys.readouterr()
+    assert grade_totals(connection) == {0: 3}
+
+    drive(monkeypatch, "222")
+    cli.main(
+        [
+            "label",
+            "--vector-k",
+            "0",
+            "--lexical-k",
+            "3",
+            "--random-k",
+            "0",
+            "--regrade",
+            str(query_id),
+        ]
+    )
+    capsys.readouterr()
+
+    assert grade_totals(connection) == {2: 3}
+    assert len(judged_pairs(connection, query_id)) == 3
+
+
+def test_regrade_ignores_the_per_query_ceiling(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    prepare(connection, database_url, monkeypatch)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    connection.commit()
+
+    drive(monkeypatch, "000")
+    cli.main(["label", "--vector-k", "0", "--lexical-k", "3", "--random-k", "0"])
+    capsys.readouterr()
+
+    drive(monkeypatch, "111")
+    cli.main(
+        [
+            "label",
+            "--vector-k",
+            "0",
+            "--lexical-k",
+            "3",
+            "--random-k",
+            "0",
+            "--per-query",
+            "1",
+            "--regrade",
+            str(query_id),
+        ]
+    )
+    capsys.readouterr()
+
+    assert grade_totals(connection) == {1: 3}
+
+
+def test_regrade_rejects_an_unknown_query_id(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    prepare(connection, database_url, monkeypatch)
+    connection.commit()
+
+    assert cli.main(["label", "--regrade", "9999"]) == 1
+    assert "no query with id 9999" in capsys.readouterr().out

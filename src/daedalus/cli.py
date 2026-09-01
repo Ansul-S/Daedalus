@@ -270,9 +270,21 @@ def cmd_label(args: argparse.Namespace) -> int:
 
     Candidates already judged are skipped, so a session can be stopped and
     resumed. Each judgement is committed as it is made, for the same reason.
+
+    ``--regrade`` names one query and offers its whole pool again, including
+    candidates already graded, so a judgement made in error can be replaced.
+    The earlier grade is not shown: the second reading has to stand on its own.
     """
     with connect() as connection:
-        queries = [q for q in list_queries(connection) if q.judged < args.per_query]
+        if args.regrade is not None:
+            queries = [
+                q for q in list_queries(connection) if q.query_id == args.regrade
+            ]
+            if not queries:
+                print(f"no query with id {args.regrade}")
+                return 1
+        else:
+            queries = [q for q in list_queries(connection) if q.judged < args.per_query]
         if not queries:
             print("nothing to label")
             return 0
@@ -280,7 +292,9 @@ def cmd_label(args: argparse.Namespace) -> int:
         print(POLICY_REMINDER)
 
         for query in queries:
-            done = judged_pairs(connection, query.query_id)
+            done: set[tuple[str, int]] = set()
+            if args.regrade is None:
+                done = judged_pairs(connection, query.query_id)
             pooled = pool_candidates(
                 connection,
                 query.text,
@@ -391,6 +405,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=25,
         help="stop offering a query once it has this many judgements",
+    )
+    label.add_argument(
+        "--regrade",
+        type=int,
+        metavar="QUERY_ID",
+        help="offer one query's whole pool again, replacing its grades",
     )
     label.set_defaults(handler=cmd_label)
 
