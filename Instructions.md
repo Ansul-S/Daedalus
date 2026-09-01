@@ -364,9 +364,27 @@ worthless. Aim to skip rarely.
 
 ### Correcting a mistake
 
-Grade the same candidate again in a later session and the new grade replaces the
-old one. There is no undo during a session — if you fumble a key, note the
-`doc_id:ordinal` shown on screen and re-grade it later.
+There is no undo during a session. A normal session never offers a candidate you
+have already graded, so correcting one takes `--regrade`, which names a single
+query and offers its whole pool again:
+
+```bash
+uv run daedalus label --regrade 6
+```
+
+Every candidate for that query comes back, including the ones already graded, and
+the earlier grade is not shown — the second reading has to stand on its own. A new
+grade replaces the old one rather than adding to it, so the query's judgement count
+does not change. The `--per-query` ceiling is ignored, so a query that is already
+full can still be revisited.
+
+If you fumble a key, note the `doc_id:ordinal` shown on screen and re-grade that
+query later. Note that there is no way to target one candidate: you page through
+the whole pool to reach it.
+
+An unrecognised key does not record anything and moves to the next candidate, the
+same as `s`. Nothing is lost — an ungraded candidate is offered again in a later
+session — but the screen gives no sign that it happened.
 
 ### A query that turns out to be bad
 
