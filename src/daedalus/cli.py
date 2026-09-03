@@ -337,7 +337,15 @@ def cmd_label(args: argparse.Namespace) -> int:
                     if key == "f":
                         full = True
                         continue
-                    break
+                    if not key:
+                        print("\nstopped: input ended")
+                        return 0
+                    # An unrecognised key must not advance the candidate. Doing
+                    # so is indistinguishable from a deliberate skip, so a burst
+                    # of stray input would walk a whole pool leaving no trace.
+                    if key in GRADE_KEYS or key == "s":
+                        break
+                    print(f"\n{key!r} is not one of 0, 1, 2, s, f, ? or q.")
 
                 if key not in GRADE_KEYS:
                     continue
