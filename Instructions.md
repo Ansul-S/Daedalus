@@ -382,9 +382,14 @@ If you fumble a key, note the `doc_id:ordinal` shown on screen and re-grade that
 query later. Note that there is no way to target one candidate: you page through
 the whole pool to reach it.
 
-An unrecognised key does not record anything and moves to the next candidate, the
-same as `s`. Nothing is lost — an ungraded candidate is offered again in a later
-session — but the screen gives no sign that it happened.
+An unrecognised key records nothing and re-offers the same candidate, naming the
+key it saw. Only `0`, `1`, `2` and `s` move you on. That guard matters: a burst
+of stray input — a paste into the labelling window, or a stuck key — would
+otherwise walk the whole pool one candidate per character, recording whatever
+digits it happened to contain and leaving no sign of the rest.
+
+If the input ends — Ctrl-D, or a redirected file running out — the session stops
+rather than paging through what remains.
 
 ### A query that turns out to be bad
 
