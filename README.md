@@ -35,14 +35,16 @@ tested end to end. Question generation and answer evaluation are not built yet.
 | Local embedding via Ollama | working, tested |
 | Vector, lexical, and pooled retrieval | working, tested |
 | Command line interface | working, tested |
-| Reference set and labelling tool | working, tested — annotation not yet done |
+| Reference set and labelling tool | working, tested |
+| Hand-labelled reference set | complete — 50 queries, 1,064 judgements |
 | Retrieval quality | **not yet measured** |
 | Question generation | not started |
 | Answer evaluation | not started |
 
-**No retrieval quality figure has been measured.** Search returns plausible
-results, but "plausible" is not a number. Building the labelled reference set
-that would allow Recall@K to be reported honestly is the current phase.
+**No retrieval quality figure has been measured yet.** Search returns plausible
+results, but "plausible" is not a number. The labelled reference set that makes
+an honest Recall@K possible is now complete — 50 queries and 1,064 human
+judgements — and computing the metrics from it is the current phase.
 
 ---
 
@@ -99,6 +101,37 @@ Measured on this corpus, **only 12% of pooled candidates were found by more than
 one retriever**. They genuinely disagree, which is why a reference set built from
 one of them alone would produce an inflated recall figure.
 
+### The reference set is judged by hand
+
+Retrieval cannot be called good or bad without ground truth, so every pooled
+candidate was graded against a fixed policy — 0 not relevant, 1 partially
+relevant, 2 fully relevant. No grade was produced by a model, a score, or a
+heuristic. Pools hold 16 to 25 candidates per query.
+
+| | queries | judgements | 0 | 1 | 2 |
+|---|---|---|---|---|---|
+| Harvested from the corpus | 25 | 533 | 63.2% | 17.4% | 19.3% |
+| Written independently | 25 | 531 | 69.1% | 21.7% | 9.2% |
+| **Total** | **50** | **1,064** | 66.2% | 19.5% | 14.3% |
+
+The two halves exist to be compared. Harvested queries are taken verbatim from
+the material's own concept-check cells, so they share its vocabulary. Authored
+queries were written separately, asking the same material about itself in
+different words.
+
+The split already shows in the labels. Harvested queries average **4.1**
+fully-relevant chunks each; authored queries average **2.0**. The material
+answers its own concept checks in dedicated instructor-answer cells that each
+serve five to eight questions at once, while an independently phrased question
+is usually answered in one or two places. The authored half therefore carries a
+sparser relevance signal, and should be the stricter test of ranking.
+
+Three authored queries have no fully-relevant chunk at all. Each asks why the
+material does one thing rather than another, in a case where it does the thing
+without ever explaining why — leaving the implementation as the best available
+evidence, which the policy grades a 1. They are kept: a query the corpus cannot
+fully answer is real information about the corpus.
+
 ---
 
 ## Prerequisites
@@ -109,7 +142,7 @@ one of them alone would produce an inflated recall figure.
 | uv | any recent |
 | PostgreSQL | 18.3 |
 | pgvector | 0.8.6 |
-| Ollama | 0.32.3 |
+| Ollama | 0.33.2 |
 | bge-m3 | 1024 dimensions |
 
 Everything runs locally. There are no paid services and no API keys.
@@ -211,7 +244,7 @@ whose chunk no longer exists.
 ## Development
 
 ```bash
-uv run pytest -q          # 135 tests
+uv run pytest -q          # 140 tests
 uv run ruff check .
 uv run ruff format .
 uv run mypy src/
