@@ -162,6 +162,48 @@ def test_label_quits_on_q(
     assert "stopped" in capsys.readouterr().out
 
 
+def test_label_reprompts_on_an_unrecognised_key(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A stray key re-offers the same candidate instead of advancing past it."""
+    prepare(connection, database_url, monkeypatch)
+    add_query(connection, "reader embeddings trees", "authored")
+    connection.commit()
+    drive(monkeypatch, "x2")
+
+    assert (
+        cli.main(["label", "--vector-k", "0", "--lexical-k", "1", "--random-k", "0"])
+        == 0
+    )
+
+    assert sum(grade_totals(connection).values()) == 1
+    assert "not one of" in capsys.readouterr().out
+
+
+def test_label_stops_when_input_ends(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Exhausted input ends the session rather than skipping what remains."""
+    prepare(connection, database_url, monkeypatch)
+    add_query(connection, "reader embeddings trees", "authored")
+    connection.commit()
+    drive(monkeypatch, "")
+
+    assert (
+        cli.main(["label", "--vector-k", "0", "--lexical-k", "2", "--random-k", "0"])
+        == 0
+    )
+
+    assert sum(grade_totals(connection).values()) == 0
+    assert "input ended" in capsys.readouterr().out
+
+
 def test_label_skips_already_judged_candidates(
     connection: Connection,
     database_url: str,
