@@ -12,21 +12,32 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+import psycopg
+
 from daedalus.embedding import DEFAULT_MODEL, EmbeddingError, embed_texts
 from daedalus.ingestion.canonical import notebook_to_document
 from daedalus.ingestion.notebook import parse_notebook
-from daedalus.retrieval.search import Candidate, pool_candidates
+from daedalus.retrieval.search import Candidate, Chunk, pool_candidates
 from daedalus.storage.database import DatabaseNotConfiguredError, connect
-from daedalus.storage.documents import document_exists, parent_text, store_document
+from daedalus.storage.documents import (
+    chunks_at,
+    document_exists,
+    parent_text,
+    store_document,
+)
 from daedalus.storage.embeddings import DEFAULT_BATCH_SIZE, backfill_embeddings
 from daedalus.storage.queries import (
     QUERY_SOURCES,
+    Query,
     add_query,
+    candidate_refs,
     grade_totals,
     judged_pairs,
     list_queries,
     record_judgement,
 )
+
+Connection = psycopg.Connection[tuple[object, ...]]
 
 #: File extensions the ingester recognises, mapped to nothing yet beyond
 #: notebooks. Other formats join this as their parsers are written.
@@ -265,8 +276,64 @@ def _body(text: str, full: bool) -> str:
     )
 
 
+def pending_candidates(
+    connection: Connection,
+    query: Query,
+    args: argparse.Namespace,
+    done: set[tuple[str, int]],
+) -> list[Candidate]:
+    """Return the candidates for one query that still need judging.
+
+    The pool is the live draw from the vector, lexical and random retrievers
+    unioned with whatever is recorded in the candidates table. The recorded half
+    matters because a candidate surfaced by a retriever that no longer runs --
+    or that never ran here, such as an ablation -- would otherwise be
+    unreachable, and its absence would be silently read as irrelevance.
+
+    Sources are not carried onto recorded-only candidates. Nothing in the
+    labelling interface may reveal which retriever found a chunk.
+    """
+    pooled = pool_candidates(
+        connection,
+        query.text,
+        lambda texts: embed_texts(texts, model=args.model),
+        args.model,
+        vector_k=args.vector_k,
+        lexical_k=args.lexical_k,
+        random_k=args.random_k,
+    )
+    pending = [c for c in pooled if (c.chunk.doc_id, c.chunk.ordinal) not in done]
+
+    seen = {(c.chunk.doc_id, c.chunk.ordinal) for c in pooled}
+    extra = sorted(candidate_refs(connection, query.query_id) - seen - done)
+    for doc_id, ordinal, kind, text, heading_path in chunks_at(connection, extra):
+        pending.append(
+            Candidate(
+                chunk=Chunk(
+                    chunk_id=0,
+                    doc_id=doc_id,
+                    ordinal=ordinal,
+                    kind=kind,
+                    text=text,
+                    heading_path=tuple(heading_path),
+                ),
+                sources=frozenset(),
+            )
+        )
+    return pending
+
+
 def cmd_label(args: argparse.Namespace) -> int:
     """Judge pooled candidates for each query, one at a time.
+
+    A query is offered when it has a candidate without a judgement, not when its
+    judgement count is below some number. Those differ once the pool holds
+    candidates from more than the three original retrievers: counting would stop
+    offering a query that still had unjudged material in it.
+
+    ``--per-query`` caps how many judgements one query may receive in a single
+    session. It is a stopping rule for the person labelling, not a definition of
+    which candidates are eligible.
 
     Candidates already judged are skipped, so a session can be stopped and
     resumed. Each judgement is committed as it is made, for the same reason.
@@ -277,38 +344,38 @@ def cmd_label(args: argparse.Namespace) -> int:
     """
     with connect() as connection:
         if args.regrade is not None:
-            queries = [
+            selected = [
                 q for q in list_queries(connection) if q.query_id == args.regrade
             ]
-            if not queries:
+            if not selected:
                 print(f"no query with id {args.regrade}")
                 return 1
         else:
-            queries = [q for q in list_queries(connection) if q.judged < args.per_query]
-        if not queries:
+            selected = list_queries(connection)
+
+        work: list[tuple[Query, list[Candidate]]] = []
+        for query in selected:
+            done: set[tuple[str, int]] = set()
+            if args.regrade is None:
+                done = judged_pairs(connection, query.query_id)
+            pending = pending_candidates(connection, query, args, done)
+            if pending:
+                work.append((query, pending))
+
+        if not work:
             print("nothing to label")
             return 0
 
         print(POLICY_REMINDER)
 
-        for query in queries:
-            done: set[tuple[str, int]] = set()
-            if args.regrade is None:
-                done = judged_pairs(connection, query.query_id)
-            pooled = pool_candidates(
-                connection,
-                query.text,
-                lambda texts: embed_texts(texts, model=args.model),
-                args.model,
-                vector_k=args.vector_k,
-                lexical_k=args.lexical_k,
-                random_k=args.random_k,
-            )
-            pending = [
-                c for c in pooled if (c.chunk.doc_id, c.chunk.ordinal) not in done
-            ]
-
+        for query, pending in work:
+            recorded = 0
             for position, candidate in enumerate(pending, start=1):
+                # The cap is a stopping rule for a normal session. A regrade has
+                # to offer the whole pool: stopping halfway would leave a query
+                # part regraded against two different readings.
+                if args.regrade is None and recorded >= args.per_query:
+                    break
                 context = parent_text(
                     connection, candidate.chunk.doc_id, candidate.chunk.ordinal
                 )
@@ -358,6 +425,7 @@ def cmd_label(args: argparse.Namespace) -> int:
                     GRADE_KEYS[key],
                 )
                 connection.commit()
+                recorded += 1
 
         totals = grade_totals(connection)
 
@@ -412,7 +480,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--per-query",
         type=int,
         default=25,
-        help="stop offering a query once it has this many judgements",
+        help="record at most this many judgements for one query per session",
     )
     label.add_argument(
         "--regrade",
