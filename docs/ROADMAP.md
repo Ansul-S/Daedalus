@@ -125,3 +125,88 @@ Third-party papers and course material, 7.3 MB of binaries. Kept in
 `.gitignore`. Limitation: the reference set and any measured result must record
 which corpus version produced it, since the corpus is not versioned with the
 code.
+
+### 2026-09-05 — Metrics hand-written, validated against trec_eval 9.0.8
+
+Recall, precision, reciprocal rank and NDCG are implemented in
+`src/daedalus/evaluation/metrics.py` rather than taken from a library, so that
+every definition is visible in the repository and none of the evaluation logic
+sits behind a dependency.
+
+The implementation was cross-checked once against `pytrec_eval` 0.5, which
+compiles the reference `trec_eval` 9.0.8 C source from
+`usnistgov/trec_eval`. The comparison covered 7 hand-built fixtures, 3,000
+randomised pools, and 2,000 rankings drawn from the real reference set — 54,000
+metric comparisons on the real data alone — across both unjudged policies, both
+relevance thresholds, and K in 1, 3, 5, 7, 10.
+
+`pytrec_eval` is a validation tool only. It is not a runtime dependency and not
+a development dependency; it was installed into a throwaway virtual environment
+and is absent from `pyproject.toml`. It builds cleanly from source on
+macOS/arm64 (Apple M4, Apple clang 21), but it declares no dependency on numpy
+despite importing it, and its build downloads the trec_eval source over the
+network rather than vendoring it.
+
+What agrees exactly:
+
+- **Gain is linear.** `m_ndcg.c` assigns `gain = (double) i` for relevance level
+  `i`, and `m_ndcg_cut.c` uses the raw relevance level directly. Gains 0, 1, 2
+  are trec_eval's own default, not a local invention. The exponential
+  `2 ** g - 1` convention is not what trec_eval does.
+- **The discount is the same.** trec_eval divides by `log2(i + 2)` with `i`
+  counted from zero, which is `log2(rank + 1)`.
+- **IDCG comes from the complete judged set and is truncated at K.**
+  `m_ndcg_cut.c` walks the relevance levels of the whole qrels and normalises at
+  each cutoff. Note that the uncut `ndcg` measure does not truncate the ideal;
+  `ndcg_cut.K` is the comparable measure.
+- **Unjudged means non-relevant, and the alternative is a documented flag.**
+  A retrieved document absent from the qrels is assigned `RELVALUE_NONPOOL (-1)`
+  in `form_res_rels.c`, which is the "zero" policy. trec_eval's
+  `judged_docs_only_flag` (the `-J` option) instead drops unjudged documents and
+  closes up the ranks, which is the "skip" policy. `pytrec_eval` hard-codes that
+  flag off and cannot express "skip"; the cross-check emulated it by filtering
+  the run.
+- Reciprocal rank agrees in every case compared, and recall agrees on every
+  value it defines.
+
+Three differences, all deliberate:
+
+1. **Precision denominator.** trec_eval always divides by K, including when the
+   run is shorter than K. This implementation divides by the number of positions
+   actually available, `min(k, len)`, so a retriever is not charged for
+   positions holding nothing and, under "skip", is not charged for the unjudged
+   positions the policy just removed. Verified across 60,000 precision
+   comparisons that the numerators are identical in every differing case, so the
+   divergence is the denominator alone.
+2. **Recall of a query with no relevant document returns `None`,** where
+   trec_eval returns 0.0 via an early return in `m_recall.c`. Recall is
+   undefined there, and averaging it in as zero would understate every system.
+   On the reference set this affects only q41, q45 and q51, and only at
+   threshold 2.
+3. **NDCG returns `None` when the ideal gain is zero,** where trec_eval returns
+   0.0. No query in the reference set is affected: all 50 carry at least one
+   grade 1, so every query is measurable under graded NDCG.
+
+Limitation: the comparison used synthetic rankings over real judgements, not the
+output of a retriever, so it validates the metric arithmetic and not the harness
+that will feed it.
+
+### 2026-09-05 — K = 10 verified as the judged-pool ceiling
+
+Pooling took the top 10 from vector search and the top 10 from lexical search,
+so K = 10 was expected to be the largest cut-off at which every result of either
+retriever is judged. That was an assumption about how pooling had run, not a
+measured fact, and metrics computed past a retriever's judged horizon silently
+count unjudged chunks as irrelevant.
+
+Measured, for all 50 queries against the 1,064 judgements: the bge-m3 vector
+retriever's top 10 is inside the judged pool 500 times out of 500, and lexical
+search's top 10 is inside the judged pool 500 times out of 500. Both are 100.00%
+with no query falling short.
+
+K = 10 is therefore an empirically clean ceiling for the two retrievers that
+built the pool, and evaluation cut-offs of 1, 3, 5, 7 and 10 all sit inside it.
+
+Limitation: this holds only for retrievers that contributed to the pool. A
+challenger that did not contribute has no such guarantee, and its overlap has to
+be measured separately before its results can be interpreted.
