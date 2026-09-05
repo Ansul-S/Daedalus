@@ -15,7 +15,7 @@ retrieval figure it reports.
 
 | File | Purpose |
 |---|---|
-| `reference_set.sql` | `pg_dump --data-only` of `queries` and `judgements`. The restore path. |
+| `reference_set.sql` | `pg_dump --data-only` of `queries`, `judgements` and `candidates`. The restore path. |
 | `reference_set.json` | The same data, sorted and pretty-printed, with a counts manifest. The readable, diffable record. |
 
 Both are kept because they do different jobs. The SQL restores exactly,
@@ -38,6 +38,8 @@ Candidates were pooled from three retrievers — vector search over `bge-m3`
 embeddings (k=10), PostgreSQL full-text search (k=10), and a random sample
 (k=5) — then de-duplicated and presented in an order derived from a hash of the
 query and chunk id, never in any retriever's ranking.
+
+That pool was later widened; see **The candidate pool** below.
 
 **Harvested** queries are taken verbatim from the corpus's own concept-check
 cells, so they share its vocabulary. **Authored** queries were written
@@ -104,7 +106,8 @@ Both sides produced `97592f650ab368f4ec55688b7d521e10`.
 ## Regenerating
 
 ```bash
-pg_dump -p 5434 -h /tmp -d daedalus --data-only --table=queries --table=judgements \
+pg_dump -p 5434 -h /tmp -d daedalus --data-only \
+  --table=queries --table=judgements --table=candidates \
   > reference-set/reference_set.sql
 ```
 
@@ -116,6 +119,57 @@ a fresh random `\restrict` token on each run, and the JSON carries a
 canonical for anything published.** Labelling is complete, so the export is
 effectively frozen — but re-export after any change, or the repository will
 report numbers the data no longer supports.
+
+---
+
+## The candidate pool
+
+Until 2026-09-05 the pool was implicit: whatever `pool_candidates()` recomputed
+from the vector, lexical and random retrievers. That was reproducible because
+the random draw is seeded on the query text, and it was verified — recomputing
+all 50 pools reproduces the 1,064 judged pairs with no mismatch.
+
+It stopped being sufficient when candidates were added from retrievers that did
+not build it. The pool is therefore now recorded in the `candidates` table, one
+row per `(query_id, doc_id, ordinal, source)`, so a chunk surfaced by several
+retrievers keeps all of its provenance.
+
+```
+vector            500      bge-m3 over heading path + text, k=10
+lexical           500      PostgreSQL full-text search, k=10
+random            250      seeded on the query text, k=5, unranked
+bge-m3-noheading  500      bge-m3 over chunk text alone, k=10
+all-minilm        500      all-MiniLM-L6-v2 over heading path + text, k=10
+                 ----
+                 2250      provenance rows
+                 1422      distinct candidates
+```
+
+The two challenger sources were added to remove a bias, not to change the
+sample. Metrics are computed over the judged pool, so a candidate nobody looked
+at scores zero by default — not because it is irrelevant, but because it was
+never assessed. The original pool was built by `bge-m3` and lexical search, so
+those two are fully judged at k=10 (500/500 each, measured). The challengers
+contributed nothing to it, and their measured coverage was **76.60%** for
+`bge-m3-noheading` and **48.60%** for `all-minilm`. Comparing them on that basis
+would have penalised them for chunks that were never judged.
+
+Both challenger rankings are reproducible: the models are bitwise deterministic
+across repeated calls and across batch boundaries, ties are broken on
+`(doc_id, ordinal)`, and no query had a similarity tie spanning the rank-10
+boundary. The rankings were computed in memory; **no challenger embedding is
+stored, and the production `bge-m3` vectors were not touched.** If challenger
+embeddings are ever persisted they take the distinct identities named above,
+because `bge-m3` and `bge-m3-noheading` are the same model over different input
+and must not share a key.
+
+Completeness is now the `unjudged_candidates` view being empty. It previously
+required recomputing every pool with the embedding model, which could not see
+candidates the original retrievers no longer produce.
+
+`scripts/backfill_candidates.py` populates the table. It is insert-only and
+idempotent, and it refuses to run if the recomputed pool does not account for
+every existing judgement.
 
 ---
 
