@@ -18,10 +18,13 @@ from daedalus.storage.database import DATABASE_URL_ENV
 from daedalus.storage.documents import store_document
 from daedalus.storage.queries import (
     add_query,
+    candidate_refs,
     grade_totals,
     judged_pairs,
     list_queries,
+    record_candidates,
     record_judgement,
+    unjudged_candidate_counts,
 )
 
 Connection = psycopg.Connection[tuple[object, ...]]
@@ -706,3 +709,192 @@ def test_regrade_rejects_an_unknown_query_id(
 
     assert cli.main(["label", "--regrade", "9999"]) == 1
     assert "no query with id 9999" in capsys.readouterr().out
+
+
+# --- the persisted candidate pool ---------------------------------------------
+
+
+def test_record_candidates_is_idempotent(connection: Connection) -> None:
+    """A backfill has to be safe to re-run; the second pass must write nothing."""
+    seed_corpus(connection)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    rows = [(query_id, "d1", 0, "vector", 1), (query_id, "d1", 1, "lexical", 2)]
+
+    assert record_candidates(connection, rows) == 2
+    assert record_candidates(connection, rows) == 0
+    assert candidate_refs(connection, query_id) == {("d1", 0), ("d1", 1)}
+
+
+def test_one_candidate_keeps_a_row_per_source(connection: Connection) -> None:
+    """Provenance survives: a chunk found by two retrievers is two rows, one pair."""
+    seed_corpus(connection)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    record_candidates(
+        connection,
+        [(query_id, "d1", 0, "vector", 1), (query_id, "d1", 0, "all-minilm", 4)],
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT count(*) FROM candidates")
+        row = cursor.fetchone()
+    assert row is not None and row[0] == 2
+    assert candidate_refs(connection, query_id) == {("d1", 0)}
+
+
+def test_unjudged_candidate_counts_tracks_the_backlog(connection: Connection) -> None:
+    seed_corpus(connection)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    record_candidates(
+        connection,
+        [(query_id, "d1", 0, "vector", 1), (query_id, "d1", 1, "vector", 2)],
+    )
+    assert unjudged_candidate_counts(connection) == {query_id: 2}
+
+    record_judgement(connection, query_id, "d1", 0, 2)
+    assert unjudged_candidate_counts(connection) == {query_id: 1}
+
+    record_judgement(connection, query_id, "d1", 1, 0)
+    assert unjudged_candidate_counts(connection) == {}
+
+
+def test_a_recorded_candidate_is_offered_even_if_no_retriever_finds_it(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The ablation case: a chunk pooled by a retriever that is not running."""
+    prepare(connection, database_url, monkeypatch)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    record_candidates(connection, [(query_id, "d1", 2, "all-minilm", 1)])
+    connection.commit()
+    drive(monkeypatch, "2")
+
+    cli.main(["label", "--vector-k", "0", "--lexical-k", "0", "--random-k", "0"])
+
+    assert judged_pairs(connection, query_id) == {("d1", 2)}
+
+
+def test_a_recorded_candidate_already_judged_is_not_offered(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    prepare(connection, database_url, monkeypatch)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    record_candidates(connection, [(query_id, "d1", 2, "all-minilm", 1)])
+    record_judgement(connection, query_id, "d1", 2, 1)
+    connection.commit()
+
+    assert (
+        cli.main(["label", "--vector-k", "0", "--lexical-k", "0", "--random-k", "0"])
+        == 0
+    )
+    assert "nothing to label" in capsys.readouterr().out
+
+
+def test_eligibility_is_unjudged_candidates_not_the_judgement_count(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A query well past the per-query cap is still offered if work remains.
+
+    Counting judgements would stop offering it, leaving the candidate unjudged
+    and, at scoring time, silently indistinguishable from irrelevant.
+    """
+    prepare(connection, database_url, monkeypatch)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    record_judgement(connection, query_id, "d1", 0, 0)
+    record_judgement(connection, query_id, "d1", 1, 0)
+    record_candidates(connection, [(query_id, "d1", 2, "bge-m3-noheading", 3)])
+    connection.commit()
+    drive(monkeypatch, "1")
+
+    cli.main(
+        [
+            "label",
+            "--vector-k",
+            "0",
+            "--lexical-k",
+            "0",
+            "--random-k",
+            "0",
+            "--per-query",
+            "1",
+        ]
+    )
+
+    assert ("d1", 2) in judged_pairs(connection, query_id)
+
+
+def test_per_query_caps_judgements_made_in_one_session(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Two candidates offered, cap of one, so the second is left unjudged."""
+    prepare(connection, database_url, monkeypatch)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    connection.commit()
+    drive(monkeypatch, "22")
+
+    cli.main(
+        [
+            "label",
+            "--vector-k",
+            "0",
+            "--lexical-k",
+            "3",
+            "--random-k",
+            "0",
+            "--per-query",
+            "1",
+        ]
+    )
+
+    assert len(judged_pairs(connection, query_id)) == 1
+
+
+def test_recorded_candidates_carry_no_provenance(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A recorded candidate reaches the loop with no sources attached.
+
+    Asserted on the candidate itself rather than only on what is printed:
+    show_candidate does not render sources today, so a display-only check would
+    pass even if the retriever name were carried through.
+    """
+    prepare(connection, database_url, monkeypatch)
+    query_id = add_query(connection, "reader embeddings trees", "authored")
+    assert query_id is not None
+    record_candidates(connection, [(query_id, "d1", 2, "all-minilm", 1)])
+    connection.commit()
+
+    args = cli.build_parser().parse_args(
+        ["label", "--vector-k", "0", "--lexical-k", "0", "--random-k", "0"]
+    )
+    query = next(q for q in list_queries(connection) if q.query_id == query_id)
+    pending = cli.pending_candidates(connection, query, args, set())
+
+    assert [c.chunk.ordinal for c in pending] == [2]
+    assert pending[0].sources == frozenset()
+
+    drive(monkeypatch, "0")
+    cli.main(["label", "--vector-k", "0", "--lexical-k", "0", "--random-k", "0"])
+    out = capsys.readouterr().out
+    for name in ("all-minilm", "bge-m3-noheading", "vector", "lexical", "random"):
+        assert name not in out
