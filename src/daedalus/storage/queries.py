@@ -1,7 +1,8 @@
-"""The labelled reference set: queries and relevance judgements."""
+"""The labelled reference set: queries, candidate pools, and judgements."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import cast
 
@@ -27,6 +28,12 @@ INSERT INTO judgements (query_id, doc_id, ordinal, grade)
 VALUES (%s, %s, %s, %s)
 ON CONFLICT (query_id, doc_id, ordinal) DO UPDATE
 SET grade = EXCLUDED.grade, judged_at = now()
+"""
+
+_INSERT_CANDIDATE = """
+INSERT INTO candidates (query_id, doc_id, ordinal, source, rank)
+VALUES (%s, %s, %s, %s, %s)
+ON CONFLICT (query_id, doc_id, ordinal, source) DO NOTHING
 """
 
 
@@ -105,4 +112,51 @@ def grade_totals(connection: Connection) -> dict[int, int]:
     """Return how many judgements exist at each grade."""
     with connection.cursor() as cursor:
         cursor.execute("SELECT grade, count(*) FROM judgements GROUP BY grade")
+        return {cast("int", row[0]): cast("int", row[1]) for row in cursor.fetchall()}
+
+
+def record_candidates(
+    connection: Connection, rows: Sequence[tuple[int, str, int, str, int | None]]
+) -> int:
+    """Record candidate provenance as (query_id, doc_id, ordinal, source, rank).
+
+    Rows already present are left untouched rather than updated, so recording
+    the same pool twice is a no-op and a backfill can be re-run safely. The rank
+    is the position the source surfaced the candidate at, or None for a source
+    that has no meaningful order, such as the random sample.
+
+    Returns the number of rows actually inserted.
+    """
+    if not rows:
+        return 0
+    with connection.cursor() as cursor:
+        cursor.executemany(_INSERT_CANDIDATE, rows)
+        return cursor.rowcount
+
+
+def candidate_refs(connection: Connection, query_id: int) -> set[tuple[str, int]]:
+    """Return the distinct (doc_id, ordinal) pairs recorded for this query.
+
+    Distinct, because one chunk may have been surfaced by several retrievers and
+    is still only one thing to judge.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT DISTINCT doc_id, ordinal FROM candidates WHERE query_id = %s",
+            (query_id,),
+        )
+        return {(cast("str", row[0]), cast("int", row[1])) for row in cursor.fetchall()}
+
+
+def unjudged_candidate_counts(connection: Connection) -> dict[int, int]:
+    """Return how many recorded candidates still lack a judgement, per query.
+
+    An empty result means the recorded pool is fully judged. This replaces
+    recomputing every pool and comparing, which needed the embedding model and
+    could not see candidates the original retrievers no longer produce.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT query_id, count(*) FROM unjudged_candidates GROUP BY query_id"
+        )
         return {cast("int", row[0]): cast("int", row[1]) for row in cursor.fetchall()}

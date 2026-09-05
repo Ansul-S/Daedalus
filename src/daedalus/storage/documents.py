@@ -8,6 +8,9 @@ rather than overwriting the old one.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import cast
+
 import psycopg
 
 from daedalus.document import Document
@@ -104,3 +107,37 @@ def parent_text(
         cursor.execute(_PARENT_TEXT, (doc_id, ordinal))
         row = cursor.fetchone()
         return str(row[0]) if row else None
+
+
+# Postgres will not take an array of anonymous composites as a parameter, so
+# the pairs are passed as two parallel arrays and rejoined with unnest.
+_CHUNKS_AT = """
+SELECT c.doc_id, c.ordinal, c.kind, c.text, c.heading_path
+FROM chunks c
+JOIN unnest(%s::text[], %s::integer[]) AS want(doc_id, ordinal)
+  ON want.doc_id = c.doc_id AND want.ordinal = c.ordinal
+"""
+
+
+def chunks_at(
+    connection: psycopg.Connection[tuple[object, ...]],
+    refs: Sequence[tuple[str, int]],
+) -> list[tuple[str, int, str, str, list[str]]]:
+    """Return the stored chunks for the given (doc_id, ordinal) pairs.
+
+    Used to display a candidate recorded in the pool that no current retriever
+    surfaces, which has no chunk attached to it. A pair naming a chunk that no
+    longer exists is simply absent from the result rather than an error; that is
+    the orphan case orphaned_judgements already reports.
+    """
+    if not refs:
+        return []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            _CHUNKS_AT,
+            ([doc_id for doc_id, _ in refs], [ordinal for _, ordinal in refs]),
+        )
+        return [
+            cast("tuple[str, int, str, str, list[str]]", row)
+            for row in cursor.fetchall()
+        ]
