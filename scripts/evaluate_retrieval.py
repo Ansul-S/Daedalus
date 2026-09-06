@@ -33,6 +33,7 @@ from daedalus.evaluation.harness import (
     load_grades,
     load_queries,
     macro_mean,
+    paired_bootstrap,
     run_retriever,
 )
 from daedalus.retrieval.search import lexical_search, vector_search
@@ -50,6 +51,11 @@ THRESHOLDS = (1, 2)
 
 #: Deepest ranking requested. Equal to max(KS) by design, not by coincidence.
 DEPTH = max(KS)
+
+#: Metrics whose pairwise differences are printed. Every metric is written to
+#: the JSON, but printing all of them across six pairs would be a wall of
+#: intervals inviting exactly the cherry-picking this experiment must not do.
+HEADLINE = ("ndcg@10", "ndcg@5", "rr_t1", "r@10_t1", "r@10_t2")
 
 #: (label, storage key for the embeddings, model to call for the query vector)
 VECTOR_VARIANTS = (
@@ -119,6 +125,71 @@ def report(
     return rows
 
 
+def pairwise(
+    scored: dict[str, dict[int, dict[str, float | None]]],
+) -> dict[str, object]:
+    """Paired differences between every pair of retrievers.
+
+    Paired rather than a comparison of two independent intervals: all four run
+    over the same queries, a query hard for one tends to be hard for all, and
+    pairing removes that shared variation from the difference.
+    """
+    labels = list(scored)
+    out: dict[str, object] = {}
+
+    print(f"\n{'=' * 78}")
+    print("PAIRWISE DIFFERENCES (paired bootstrap, 95%, 10,000 resamples)")
+    print("=" * 78)
+    print("  An interval excluding zero means the sample supports a difference")
+    print("  in that direction. It is not a p-value, and with 6 pairs per metric")
+    print("  the family-wise error rate is well above 5% -- read a single")
+    print("  marginal interval accordingly.")
+
+    for metric in HEADLINE:
+        print(f"\n  {metric}")
+        print(f"    {'A - B':44} {'diff':>8} {'95% CI':>20}  n")
+        for i, first in enumerate(labels):
+            for second in labels[i + 1 :]:
+                result = paired_bootstrap(scored[first], scored[second], metric)
+                key = f"{first} - {second} :: {metric}"
+                if result is None:
+                    print(f"    {first + ' - ' + second:44} {'undefined':>8}")
+                    out[key] = None
+                    continue
+                mark = " *" if result.separable else ""
+                print(
+                    f"    {first + ' - ' + second:44} {result.difference:8.4f} "
+                    f"[{result.low:8.4f}, {result.high:8.4f}]  {result.n}{mark}"
+                )
+                out[key] = {
+                    "difference": result.difference,
+                    "ci": [result.low, result.high],
+                    "n": result.n,
+                    "separable": result.separable,
+                }
+
+    # Everything, not just the headline, goes to the artifact.
+    for metric in sorted({m for s in scored.values() for q in s.values() for m in q}):
+        for i, first in enumerate(labels):
+            for second in labels[i + 1 :]:
+                key = f"{first} - {second} :: {metric}"
+                if key in out:
+                    continue
+                result = paired_bootstrap(scored[first], scored[second], metric)
+                out[key] = (
+                    None
+                    if result is None
+                    else {
+                        "difference": result.difference,
+                        "ci": [result.low, result.high],
+                        "n": result.n,
+                        "separable": result.separable,
+                    }
+                )
+    print("\n  * interval excludes zero")
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -155,9 +226,11 @@ def main() -> int:
             "depth": DEPTH,
             "variants": {},
         }
+        scored: dict[str, dict[int, dict[str, float | None]]] = {}
         for label, retriever in retrievers:
             rankings = run_retriever(queries, retriever)
             per_query = evaluate(rankings, grades, KS, args.unjudged, THRESHOLDS)
+            scored[label] = per_query
             variants = artifact["variants"]
             assert isinstance(variants, dict)
             variants[label] = {
@@ -170,6 +243,8 @@ def main() -> int:
                     for query_id, ranking in rankings.items()
                 },
             }
+
+        artifact["pairwise"] = pairwise(scored)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(artifact, indent=1, sort_keys=True))
