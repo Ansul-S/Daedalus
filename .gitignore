@@ -7,3 +7,6 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 dist/
+
+# Evaluation output. Untracked until a result is validated for publication.
+results/
