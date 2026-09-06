@@ -210,3 +210,35 @@ built the pool, and evaluation cut-offs of 1, 3, 5, 7 and 10 all sit inside it.
 Limitation: this holds only for retrievers that contributed to the pool. A
 challenger that did not contribute has no such guarantee, and its overlap has to
 be measured separately before its results can be interpreted.
+
+### 2026-09-06 — Production retrieval keeps the heading prefix (null result)
+
+Four retrieval variants were scored against the 1,422-judgement reference set:
+`bge-m3` over heading path plus chunk text (production), `bge-m3` over chunk
+text alone, `all-MiniLM-L6-v2` over the production input, and PostgreSQL
+full-text search. Full numbers and provenance in `results/`.
+
+`bge-m3` and lexical search separate clearly — +0.1234 NDCG@10, 95% paired
+bootstrap [0.059, 0.188] — and both `bge-m3` variants separate from
+`all-minilm` by a similar margin.
+
+Two comparisons do **not** separate, and both are recorded as null results
+rather than as findings:
+
+- **The heading prefix makes no measurable difference.** `bge-m3` against
+  `bge-m3-noheading` is −0.0110 NDCG@10 [−0.050, +0.025], and exactly 0.0000
+  recall@10 at threshold 1 [−0.043, +0.042]. Production keeps the prefix: an
+  inseparable difference is not a reason to change a working configuration, and
+  the result says nothing about whether the prefix helps on other material.
+- **MiniLM is not shown to be worse than lexical search.** −0.0145 NDCG@10
+  [−0.093, +0.067]. Neither is characterised as better.
+
+Alternatives considered: dropping the prefix to simplify the embedding input,
+which the measurement gives no support for either way. Limitation: 50 queries
+over one three-notebook corpus, and six pairwise comparisons per metric, so the
+family-wise error rate is well above 5% and a single marginal interval carries
+little weight.
+
+Hybrid retrieval remains deferred. Lexical and vector separating on aggregate
+scores is not on its own evidence that fusing them would help; that needs
+per-query complementarity, which is a separate diagnostic.
