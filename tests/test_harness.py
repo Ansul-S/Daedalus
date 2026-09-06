@@ -15,6 +15,7 @@ from daedalus.evaluation.harness import (
     load_grades,
     load_queries,
     macro_mean,
+    paired_bootstrap,
     run_retriever,
     score_ranking,
 )
@@ -190,3 +191,111 @@ def test_run_retriever_calls_once_per_query(connection: Connection) -> None:
     rankings = run_retriever(load_queries(connection), retriever)
     assert seen == ["one", "two"]
     assert rankings == {first: [("d1", 3)], second: [("d1", 3)]}
+
+
+# --- paired bootstrap ---------------------------------------------------------
+
+
+def test_paired_bootstrap_is_reproducible_for_a_fixed_seed() -> None:
+    a = {i: {"m": float(i % 5) / 4} for i in range(30)}
+    b = {i: {"m": float(i % 3) / 2} for i in range(30)}
+    first = paired_bootstrap(a, b, "m", resamples=500, seed=11)
+    second = paired_bootstrap(a, b, "m", resamples=500, seed=11)
+    assert first == second
+
+
+def test_paired_bootstrap_reports_the_mean_difference() -> None:
+    a = {i: {"m": 0.8} for i in range(20)}
+    b = {i: {"m": 0.5} for i in range(20)}
+    result = paired_bootstrap(a, b, "m", resamples=500, seed=1)
+    assert result is not None
+    assert result.difference == pytest.approx(0.3)
+    assert result.n == 20
+
+
+def test_identical_retrievers_are_not_separable() -> None:
+    a = {i: {"m": float(i % 4) / 3} for i in range(20)}
+    result = paired_bootstrap(a, a, "m", resamples=500, seed=1)
+    assert result is not None
+    assert result.difference == pytest.approx(0.0)
+    assert result.separable is False
+
+
+def test_a_consistent_small_edge_is_separable_when_paired() -> None:
+    """The case unpaired intervals get wrong.
+
+    Per-query scores vary widely, but the first retriever beats the second on
+    every single query by the same small margin. Pairing cancels the shared
+    variation and sees the edge; two independent intervals would overlap
+    heavily and call it inseparable.
+    """
+    b = {i: {"m": (i % 10) / 10} for i in range(50)}
+    a = {i: {"m": (i % 10) / 10 + 0.02} for i in range(50)}
+
+    paired = paired_bootstrap(a, b, "m", resamples=2000, seed=5)
+    assert paired is not None
+    assert paired.separable is True
+    assert paired.low > 0.0
+
+    a_low, a_high = bootstrap_ci(a, "m", resamples=2000, seed=5)  # type: ignore[misc]
+    b_low, b_high = bootstrap_ci(b, "m", resamples=2000, seed=5)  # type: ignore[misc]
+    assert a_low < b_high  # the unpaired intervals overlap
+    assert (paired.high - paired.low) < (a_high - a_low)
+
+
+def test_paired_bootstrap_uses_only_queries_both_define() -> None:
+    a = {1: {"m": 1.0}, 2: {"m": 1.0}, 3: {"m": None}}
+    b = {1: {"m": 0.0}, 2: {"m": 0.0}, 3: {"m": 0.0}}
+    result = paired_bootstrap(a, b, "m", resamples=200, seed=1)
+    assert result is not None
+    assert result.n == 2
+    assert result.difference == pytest.approx(1.0)
+
+
+def test_paired_bootstrap_needs_two_shared_queries() -> None:
+    a = {1: {"m": 1.0}, 2: {"m": None}}
+    b = {1: {"m": 0.0}, 2: {"m": 0.0}}
+    assert paired_bootstrap(a, b, "m", resamples=100) is None
+    assert paired_bootstrap({}, {}, "m", resamples=100) is None
+
+
+def test_paired_difference_is_antisymmetric() -> None:
+    a = {i: {"m": float(i % 5) / 4} for i in range(20)}
+    b = {i: {"m": float(i % 3) / 2} for i in range(20)}
+    forward = paired_bootstrap(a, b, "m", resamples=500, seed=2)
+    backward = paired_bootstrap(b, a, "m", resamples=500, seed=2)
+    assert forward is not None and backward is not None
+    assert forward.difference == pytest.approx(-backward.difference)
+    assert forward.separable == backward.separable
+
+
+def test_a_consistent_deficit_is_also_separable() -> None:
+    """The negative direction, which a one-sided check on the interval misses."""
+    a = {i: {"m": (i % 10) / 10} for i in range(50)}
+    b = {i: {"m": (i % 10) / 10 + 0.02} for i in range(50)}
+    result = paired_bootstrap(a, b, "m", resamples=2000, seed=5)
+    assert result is not None
+    assert result.difference < 0.0
+    assert result.high < 0.0
+    assert result.separable is True
+
+
+def test_paired_interval_has_width_when_the_differences_vary() -> None:
+    """A bootstrap that failed to resample would collapse to a zero-width point.
+
+    That degenerate interval passes every other assertion here -- it still
+    brackets the estimate and still excludes zero when the mean does -- so the
+    width itself has to be checked.
+    """
+    a = {i: {"m": 1.0 if i % 2 else 0.0} for i in range(40)}
+    b = {i: {"m": 0.0 if i % 2 else 1.0} for i in range(40)}
+    result = paired_bootstrap(a, b, "m", resamples=2000, seed=4)
+    assert result is not None
+    assert result.high - result.low > 0.1
+    assert result.low < result.difference < result.high
+
+
+def test_unpaired_interval_has_width_when_the_scores_vary() -> None:
+    values = {i: {"m": 1.0 if i % 2 else 0.0} for i in range(40)}
+    low, high = bootstrap_ci(values, "m", resamples=2000, seed=4)  # type: ignore[misc]
+    assert high - low > 0.1
