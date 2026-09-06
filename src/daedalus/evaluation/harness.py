@@ -23,6 +23,7 @@ from __future__ import annotations
 import random
 import statistics
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import cast
 
 import psycopg
@@ -189,3 +190,79 @@ def bootstrap_ci(
     low = means[int(tail * resamples)]
     high = means[min(int((1.0 - tail) * resamples), resamples - 1)]
     return (low, high)
+
+
+@dataclass(frozen=True)
+class PairedDifference:
+    """One retriever's advantage over another on a metric, with its interval.
+
+    `n` is the number of queries where both retrievers define the metric, which
+    is the only set on which a difference exists. It can be smaller than either
+    retriever's own n.
+    """
+
+    metric: str
+    difference: float
+    low: float
+    high: float
+    n: int
+
+    @property
+    def separable(self) -> bool:
+        """Whether the interval excludes zero at the confidence it was built at.
+
+        Not a p-value and not a claim of practical significance. It says the
+        sample supports a difference in a direction, nothing more.
+        """
+        return self.low > 0.0 or self.high < 0.0
+
+
+def paired_bootstrap(
+    first: Mapping[int, Scores],
+    second: Mapping[int, Scores],
+    metric: str,
+    resamples: int = DEFAULT_RESAMPLES,
+    seed: int = DEFAULT_SEED,
+    confidence: float = 0.95,
+) -> PairedDifference | None:
+    """Bootstrap the difference between two retrievers on the same queries.
+
+    Both retrievers are scored on every resample of the *same* query ids, so the
+    query-to-query variation that they share cancels out of the difference. That
+    is the whole point of pairing here: these four retrievers run over one
+    corpus and one query set, and a query that is hard for one tends to be hard
+    for all of them. Comparing two independent per-retriever intervals throws
+    that away and will call real differences inseparable, because each interval
+    is dominated by variation the comparison does not care about.
+
+    Only queries where both retrievers define the metric are used; a difference
+    against an undefined value has no meaning. Returns None when fewer than two
+    such queries exist.
+    """
+    shared = sorted(
+        query_id
+        for query_id in set(first) & set(second)
+        if first[query_id].get(metric) is not None
+        and second[query_id].get(metric) is not None
+    )
+    if len(shared) < 2:
+        return None
+
+    deltas = {
+        query_id: cast("float", first[query_id][metric])
+        - cast("float", second[query_id][metric])
+        for query_id in shared
+    }
+    rng = random.Random(seed)
+    means: list[float] = []
+    for _ in range(resamples):
+        means.append(statistics.fmean([deltas[rng.choice(shared)] for _ in shared]))
+    means.sort()
+    tail = (1.0 - confidence) / 2.0
+    return PairedDifference(
+        metric=metric,
+        difference=statistics.fmean(deltas.values()),
+        low=means[int(tail * resamples)],
+        high=means[min(int((1.0 - tail) * resamples), resamples - 1)],
+        n=len(shared),
+    )
