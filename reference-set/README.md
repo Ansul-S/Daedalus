@@ -1,6 +1,6 @@
 # Reference set
 
-The hand-labelled ground truth for retrieval evaluation: 50 queries and 1,064
+The hand-labelled ground truth for retrieval evaluation: 50 queries and 1,422
 relevance judgements, every one made by a person against the fixed policy in
 `docs/LABELLING.md`.
 
@@ -30,8 +30,14 @@ merely asserted.
 
 ```
 queries:    50     25 harvested (ids 2–26), 25 authored (ids 27–51)
-judgements: 1064   16–25 per query
-grades:     0=704 (66.2%)   1=208 (19.5%)   2=152 (14.3%)
+judgements: 1422   19–37 per query
+grades:     0=964 (67.8%)   1=277 (19.5%)   2=181 (12.7%)
+
+               judgements      0        1        2     grade 2 per query
+original           1064      66.2%    19.5%    14.3%         3.0
+expansion           358      72.6%    19.3%     8.1%         0.6
+harvested (2-26)    712      64.9%    17.8%    17.3%         4.9
+authored (27-51)    710      70.7%    21.1%     8.2%         2.3
 ```
 
 Candidates were pooled from three retrievers — vector search over `bge-m3`
@@ -101,7 +107,11 @@ psql -p 5434 -h /tmp -d daedalus -v ON_ERROR_STOP=1 -f reference-set/reference_s
 
 The restore was verified rather than assumed: loaded into a throwaway database
 and compared against the live one with an md5 over every query and judgement.
-Both sides produced `97592f650ab368f4ec55688b7d521e10`.
+Re-verified on 2026-09-06 after the pool expansion: the regenerated dump was
+loaded into a throwaway database built from `migrations/` and matched the live
+one exactly — judgements `4920b9e2b936d238ae61f4eb96b87ae1`, candidates
+`0e698dd6641015ab25a4626613c0b4d4`, `queries_id_seq` at 51, and
+`unjudged_candidates` empty on both sides.
 
 ## Regenerating
 
@@ -175,7 +185,7 @@ every existing judgement.
 
 ## Provenance
 
-The set is not 1,064 judgements entered cleanly in one pass, and it would be
+The set is not 1,422 judgements entered cleanly in one pass, and it would be
 dishonest to present it that way. Every departure is recorded here.
 
 | Queries | What happened |
@@ -185,12 +195,33 @@ dishonest to present it that way. Every departure is recorded here.
 | 27 | An audit after labelling found the one chunk that answered the query graded 0, at presentation position 16 of 19. Regraded 16/3/0 → 15/3/1. |
 | 39 | Annotator-initiated regrade. It also recovered 7 candidates that a silent-skip defect had passed over, taking the query from 18 judgements to its full pool of 25. |
 | 49, 50 | 12 judgements written by a text paste into a live session — 11 of them inside 2.2 ms. **Deleted**, not regraded, because no human judgement was ever made. Both queries were then labelled normally. |
-| 48 | One mis-keyed grade on `38209c124d221c11:17` corrected by direct SQL update from 1 to 0. This is the only judgement in the set not entered through the labelling tool. |
+| 48 | One mis-keyed grade on `38209c124d221c11:17` corrected by direct SQL update from 1 to 0, on 2026-09-03. |
+| 3 | One mis-keyed grade on `38209c124d221c11:218` corrected by direct SQL update from 1 to 2, on 2026-09-06 during the expansion pass. |
+
+Queries 48 and 3 hold the only two judgements in the set not entered through
+the labelling tool. Both were annotator-initiated corrections of a keypress the
+annotator identified as wrong, and in both cases `judged_at` was deliberately
+left at the original value so the timing record, and the burst analysis built
+on it, stay honest.
+
+### The pool expansion, 2026-09-06
+
+358 candidates were added to the pool from two retrievers that had not
+contributed to it, and labelled in one pass of 149.9 minutes — median 11.0s
+per judgement, mean 14.2s, across all 50 queries. The original 1,064
+judgements were not re-read, not re-graded and not modified; their checksum
+`74de7b8f1fc4285bea2312ca125676b6` is unchanged before and after.
+
+One judgement in the pass follows its predecessor by under two seconds
+(q46, 1.995s). It sits between neighbours of 16.8s and 10.1s, and the next
+fastest gaps in the pass are 2.85s and 3.00s, so it reads as one quick
+decision rather than the start of a burst. Recorded here rather than
+dismissed.
 
 The defect behind the query 39 shortfall — an unrecognised keypress advancing
 silently, indistinguishable from a deliberate skip — was fixed before the last
 ten queries were labelled. No judgement recorded after that fix has a gap under
 two seconds.
 
-Across the whole set, 16 of 1,064 judgements follow the previous one by under
+Across the whole set, 17 of 1,422 judgements follow the previous one by under
 two seconds, the fastest at 0.87 s. All are isolated, and all predate the fix.
