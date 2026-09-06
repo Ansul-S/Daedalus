@@ -243,3 +243,26 @@ def test_lexical_search_of_only_stop_words_matches_nothing(
 ) -> None:
     seed(connection)
     assert lexical_search(connection, "the a of and", limit=5) == []
+
+
+def test_vector_search_breaks_ties_deterministically(
+    connection: Connection,
+) -> None:
+    """Chunks at identical distance must come back in a fixed order.
+
+    Without a tie-break the order is whatever the query plan produces, so a
+    measured ranking could differ between runs of the same code on the same
+    data.
+    """
+    seed(connection, {i: [1.0, 0.0] for i in range(5)})
+
+    first = [c.chunk_id for c in vector_search(connection, [1.0, 0.0], MODEL, 5)]
+    for _ in range(5):
+        assert [
+            c.chunk_id for c in vector_search(connection, [1.0, 0.0], MODEL, 5)
+        ] == first
+
+    ordered = vector_search(connection, [1.0, 0.0], MODEL, 5)
+    assert [(c.doc_id, c.ordinal) for c in ordered] == sorted(
+        (c.doc_id, c.ordinal) for c in ordered
+    )

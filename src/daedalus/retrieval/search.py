@@ -28,11 +28,15 @@ RANDOM = "random"
 
 _COLUMNS = "c.id, c.doc_id, c.ordinal, c.kind, c.text, c.heading_path"
 
+# Ties are broken on (doc_id, ordinal) so the ranking is reproducible. Distance
+# ties are rare but reachable -- two chunks with identical text embed
+# identically -- and without a tie-break the order of those rows is whatever the
+# plan happens to produce, which would make a measured result unrepeatable.
 _VECTOR_SEARCH = f"""
 SELECT {_COLUMNS}
 FROM chunks c
 JOIN embeddings e ON e.chunk_id = c.id AND e.model = %s
-ORDER BY e.embedding <=> %s::vector
+ORDER BY e.embedding <=> %s::vector, c.doc_id, c.ordinal
 LIMIT %s
 """
 
