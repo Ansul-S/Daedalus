@@ -64,7 +64,7 @@ def connection(
     with psycopg.connect(database_url) as conn:
         conn.execute(
             "TRUNCATE documents, chunks, embeddings, queries, judgements, "
-            "questions RESTART IDENTITY CASCADE"
+            "questions, question_rejections RESTART IDENTITY CASCADE"
         )
         conn.commit()
         yield conn
