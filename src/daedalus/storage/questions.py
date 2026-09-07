@@ -24,10 +24,25 @@ QUESTION_TYPES = ("conceptual", "explanation", "comparison", "code_reasoning")
 #: Requested difficulty levels, easiest first.
 DIFFICULTIES = ("easy", "medium", "hard")
 
-#: The three rubrics named by the protocol. Their levels are deliberately not
-#: constrained: the rubrics are written later in the phase, and fixing their
-#: values here would pre-empt that work.
-RUBRICS = ("groundedness", "relevance", "difficulty")
+#: The three rubrics named by the protocol, and the scale each one uses. Frozen
+#: in docs/PHASE-6-RUBRICS.md and enforced by the database; repeated here so a
+#: bad value is named before it reaches a constraint.
+RUBRIC_VALUES = {
+    "groundedness": ("0", "1", "2"),
+    "relevance": ("0", "1", "2"),
+    "difficulty": ("easy", "medium", "hard", "unusable"),
+}
+
+RUBRICS = tuple(RUBRIC_VALUES)
+
+#: How a question failed groundedness. Support failure means the material needed
+#: is absent from the section; citation failure means it exists but was not among
+#: the chunks the question cited. See docs/PHASE-6-RUBRICS.md section 3.
+FAILURE_MODES = ("support", "citation")
+
+#: Groundedness grades that require a failure mode. A grade 2 question has
+#: neither failure, and relevance and difficulty have none by construction.
+GROUNDEDNESS_FAILING_GRADES = ("0", "1")
 
 _INSERT_QUESTION = """
 INSERT INTO questions
@@ -44,10 +59,12 @@ VALUES (%s, %s, %s, %s, %s)
 """
 
 _UPSERT_LABEL = """
-INSERT INTO question_labels (question_id, rubric, value)
-VALUES (%s, %s, %s)
+INSERT INTO question_labels (question_id, rubric, value, failure_mode)
+VALUES (%s, %s, %s, %s)
 ON CONFLICT (question_id, rubric) DO UPDATE
-SET value = EXCLUDED.value, labelled_at = now()
+SET value = EXCLUDED.value,
+    failure_mode = EXCLUDED.failure_mode,
+    labelled_at = now()
 """
 
 _INSERT_JUDGE_SCORE = """
@@ -224,21 +241,59 @@ def list_questions(connection: Connection) -> list[StoredQuestion]:
 
 
 def record_label(
-    connection: Connection, question_id: int, rubric: str, value: str
+    connection: Connection,
+    question_id: int,
+    rubric: str,
+    value: str,
+    failure_mode: str | None = None,
 ) -> None:
     """Record a human rubric label, replacing any earlier label for that rubric.
 
-    Values are not validated against a level set: the rubrics are written later
-    in the phase, and rejecting a level here would mean guessing what they will
-    say.
+    The value must be on that rubric's frozen scale, and `failure_mode` is
+    required exactly where the groundedness rubric defines one
+    — grades 0 and 1 — and must be absent everywhere else. The database enforces
+    the same rule; it is checked here first so a mistake names itself rather
+    than surfacing as a constraint violation.
     """
     if rubric not in RUBRICS:
         raise ValueError(f"rubric must be one of {RUBRICS}, got {rubric!r}")
-    if not value.strip():
-        raise ValueError("label value is empty")
+    if value not in RUBRIC_VALUES[rubric]:
+        raise ValueError(
+            f"{rubric} value must be one of {RUBRIC_VALUES[rubric]}, got {value!r}"
+        )
+    if failure_mode is not None and failure_mode not in FAILURE_MODES:
+        raise ValueError(
+            f"failure_mode must be one of {FAILURE_MODES}, got {failure_mode!r}"
+        )
+
+    needs_mode = rubric == "groundedness" and value in GROUNDEDNESS_FAILING_GRADES
+    if needs_mode and failure_mode is None:
+        raise ValueError(
+            f"groundedness grade {value} requires a failure_mode "
+            f"(one of {FAILURE_MODES})"
+        )
+    if not needs_mode and failure_mode is not None:
+        raise ValueError(
+            f"failure_mode is only recorded for groundedness grades "
+            f"{GROUNDEDNESS_FAILING_GRADES}, not {rubric} {value!r}"
+        )
 
     with connection.cursor() as cursor:
-        cursor.execute(_UPSERT_LABEL, (question_id, rubric, value))
+        cursor.execute(_UPSERT_LABEL, (question_id, rubric, value, failure_mode))
+
+
+def failure_mode_counts(connection: Connection) -> dict[str, int]:
+    """Return how many groundedness failures were of each mode.
+
+    Reported as a breakdown of the grade 0 and grade 1 items. It changes no
+    rate; it says what the failures were made of.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT failure_mode, count(*) FROM question_labels "
+            "WHERE failure_mode IS NOT NULL GROUP BY failure_mode"
+        )
+        return {cast("str", row[0]): cast("int", row[1]) for row in cursor.fetchall()}
 
 
 def record_judge_score(
