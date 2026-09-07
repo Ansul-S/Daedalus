@@ -11,7 +11,10 @@ import psycopg
 import pytest
 
 from daedalus.storage.questions import (
+    FAILURE_MODES,
+    RUBRIC_VALUES,
     GeneratedQuestion,
+    failure_mode_counts,
     labels_for,
     list_questions,
     question_counts,
@@ -146,18 +149,16 @@ def test_invalid_fields_are_rejected(
 def test_human_labels_and_judge_scores_stay_separate(connection: Connection) -> None:
     question_id = record_question(connection, build_question())
 
-    record_label(connection, question_id, "groundedness", "supported")
-    record_judge_score(
-        connection, question_id, "groundedness", "unsupported", "qwen3:8b", "j-v1"
-    )
+    record_label(connection, question_id, "groundedness", "2")
+    record_judge_score(connection, question_id, "groundedness", "0", "qwen3:8b", "j-v1")
 
-    assert labels_for(connection, question_id) == {"groundedness": "supported"}
+    assert labels_for(connection, question_id) == {"groundedness": "2"}
 
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT value FROM judge_scores WHERE question_id = %s", (question_id,)
         )
-        assert cursor.fetchall() == [("unsupported",)]
+        assert cursor.fetchall() == [("0",)]
 
 
 def test_relabelling_replaces_the_earlier_label(connection: Connection) -> None:
@@ -193,15 +194,15 @@ def test_an_unknown_rubric_is_rejected(connection: Connection) -> None:
     question_id = record_question(connection, build_question())
 
     with pytest.raises(ValueError, match="rubric must be one of"):
-        record_label(connection, question_id, "vibes", "good")
+        record_label(connection, question_id, "vibes", "2")
 
 
 def test_deleting_a_question_removes_its_sources_labels_and_scores(
     connection: Connection,
 ) -> None:
     question_id = record_question(connection, build_question())
-    record_label(connection, question_id, "relevance", "yes")
-    record_judge_score(connection, question_id, "relevance", "yes", "qwen3:8b", "j-v1")
+    record_label(connection, question_id, "relevance", "2")
+    record_judge_score(connection, question_id, "relevance", "2", "qwen3:8b", "j-v1")
 
     with connection.cursor() as cursor:
         cursor.execute("DELETE FROM questions WHERE id = %s", (question_id,))
@@ -226,3 +227,209 @@ def test_sections_and_counts_report_what_is_stored(connection: Connection) -> No
         ("abc123", ("B",)),
     }
     assert question_counts(connection) == {"conceptual": 1, "explanation": 1}
+
+
+def test_a_failing_groundedness_grade_records_its_failure_mode(
+    connection: Connection,
+) -> None:
+    question_id = record_question(connection, build_question())
+
+    record_label(connection, question_id, "groundedness", "0", "support")
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT value, failure_mode FROM question_labels "
+            "WHERE question_id = %s AND rubric = 'groundedness'",
+            (question_id,),
+        )
+        assert cursor.fetchone() == ("0", "support")
+
+
+@pytest.mark.parametrize("grade", ["0", "1"])
+def test_a_failing_groundedness_grade_without_a_mode_is_rejected(
+    connection: Connection, grade: str
+) -> None:
+    question_id = record_question(connection, build_question())
+
+    with pytest.raises(ValueError, match="requires a failure_mode"):
+        record_label(connection, question_id, "groundedness", grade)
+
+
+def test_a_passing_groundedness_grade_must_not_carry_a_mode(
+    connection: Connection,
+) -> None:
+    question_id = record_question(connection, build_question())
+
+    with pytest.raises(ValueError, match="only recorded for groundedness"):
+        record_label(connection, question_id, "groundedness", "2", "support")
+
+
+@pytest.mark.parametrize(
+    ("rubric", "value"), [("relevance", "2"), ("difficulty", "easy")]
+)
+def test_other_rubrics_must_not_carry_a_failure_mode(
+    connection: Connection, rubric: str, value: str
+) -> None:
+    question_id = record_question(connection, build_question())
+
+    with pytest.raises(ValueError, match="only recorded for groundedness"):
+        record_label(connection, question_id, rubric, value, "citation")
+
+
+def test_an_unknown_failure_mode_is_rejected(connection: Connection) -> None:
+    question_id = record_question(connection, build_question())
+
+    with pytest.raises(ValueError, match="failure_mode must be one of"):
+        record_label(connection, question_id, "groundedness", "0", "vibes")
+
+
+def test_a_grade_two_label_stores_a_null_failure_mode(connection: Connection) -> None:
+    question_id = record_question(connection, build_question())
+
+    record_label(connection, question_id, "groundedness", "2")
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT failure_mode FROM question_labels WHERE question_id = %s",
+            (question_id,),
+        )
+        assert cursor.fetchone() == (None,)
+
+
+def test_relabelling_replaces_the_failure_mode_too(connection: Connection) -> None:
+    question_id = record_question(connection, build_question())
+
+    record_label(connection, question_id, "groundedness", "0", "support")
+    record_label(connection, question_id, "groundedness", "1", "citation")
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT value, failure_mode FROM question_labels WHERE question_id = %s",
+            (question_id,),
+        )
+        assert cursor.fetchone() == ("1", "citation")
+
+
+def test_relabelling_upward_clears_the_failure_mode(connection: Connection) -> None:
+    """A question re-judged as fully supported no longer has a failure."""
+    question_id = record_question(connection, build_question())
+
+    record_label(connection, question_id, "groundedness", "0", "support")
+    record_label(connection, question_id, "groundedness", "2")
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT value, failure_mode FROM question_labels WHERE question_id = %s",
+            (question_id,),
+        )
+        assert cursor.fetchone() == ("2", None)
+
+
+def test_the_database_rejects_a_mode_the_application_would_have_caught(
+    connection: Connection,
+) -> None:
+    """The constraint is the guarantee; the Python check is only the message."""
+    question_id = record_question(connection, build_question())
+
+    with connection.cursor() as cursor, pytest.raises(psycopg.errors.CheckViolation):
+        cursor.execute(
+            "INSERT INTO question_labels (question_id, rubric, value, failure_mode) "
+            "VALUES (%s, 'groundedness', '0', NULL)",
+            (question_id,),
+        )
+
+
+def test_the_database_rejects_an_unknown_mode(connection: Connection) -> None:
+    question_id = record_question(connection, build_question())
+
+    with connection.cursor() as cursor, pytest.raises(psycopg.errors.CheckViolation):
+        cursor.execute(
+            "INSERT INTO question_labels (question_id, rubric, value, failure_mode) "
+            "VALUES (%s, 'groundedness', '0', 'nonsense')",
+            (question_id,),
+        )
+
+
+def test_failure_modes_are_counted_for_reporting(connection: Connection) -> None:
+    ids = record_questions(
+        connection,
+        [
+            build_question(selection_rank=1, heading_path=("A",)),
+            build_question(selection_rank=2, heading_path=("B",)),
+            build_question(selection_rank=3, heading_path=("C",)),
+        ],
+    )
+    record_label(connection, ids[0], "groundedness", "0", "support")
+    record_label(connection, ids[1], "groundedness", "1", "citation")
+    record_label(connection, ids[2], "groundedness", "2")
+
+    assert failure_mode_counts(connection) == {"support": 1, "citation": 1}
+
+
+def test_the_failure_modes_are_what_the_rubrics_declare() -> None:
+    assert FAILURE_MODES == ("support", "citation")
+
+
+@pytest.mark.parametrize(
+    ("rubric", "value"),
+    [
+        ("groundedness", "3"),
+        ("groundedness", "zero"),
+        ("relevance", "yes"),
+        ("difficulty", "trivial"),
+        ("difficulty", "2"),
+    ],
+)
+def test_a_value_off_the_rubric_scale_is_rejected(
+    connection: Connection, rubric: str, value: str
+) -> None:
+    question_id = record_question(connection, build_question())
+
+    with pytest.raises(ValueError, match="value must be one of"):
+        record_label(connection, question_id, rubric, value)
+
+
+def test_the_database_rejects_an_off_scale_value(connection: Connection) -> None:
+    """A mistyped grade must not slip past 006 as a missing failure mode."""
+    question_id = record_question(connection, build_question())
+
+    with connection.cursor() as cursor, pytest.raises(psycopg.errors.CheckViolation):
+        cursor.execute(
+            "INSERT INTO question_labels (question_id, rubric, value) "
+            "VALUES (%s, 'groundedness', 'zero')",
+            (question_id,),
+        )
+
+
+@pytest.mark.parametrize("value", ["easy", "medium", "hard", "unusable"])
+def test_every_difficulty_level_is_accepted(connection: Connection, value: str) -> None:
+    question_id = record_question(connection, build_question())
+
+    record_label(connection, question_id, "difficulty", value)
+
+    assert labels_for(connection, question_id) == {"difficulty": value}
+
+
+def test_judge_scores_are_not_constrained_to_the_scale(
+    connection: Connection,
+) -> None:
+    """Off-scale judge output is a finding to record, not a write to reject."""
+    question_id = record_question(connection, build_question())
+
+    record_judge_score(
+        connection, question_id, "groundedness", "mostly grounded", "qwen3:8b", "j-v1"
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT value FROM judge_scores WHERE question_id = %s", (question_id,)
+        )
+        assert cursor.fetchone() == ("mostly grounded",)
+
+
+def test_the_scales_are_what_the_rubrics_declare() -> None:
+    assert RUBRIC_VALUES == {
+        "groundedness": ("0", "1", "2"),
+        "relevance": ("0", "1", "2"),
+        "difficulty": ("easy", "medium", "hard", "unusable"),
+    }
