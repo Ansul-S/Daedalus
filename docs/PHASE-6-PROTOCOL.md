@@ -459,8 +459,13 @@ detection is excluded from this definition.
 
 Reported alongside it, so the denominator is never mistaken for the whole corpus:
 
-- 300 of 337 eligible sections selected
-- 337 of 408 sections eligible (56 thin, 15 prose-free)
+- **300 of 337** eligible sections selected — 89.0%
+- **337 of 408** sections eligible — 82.6% (56 thin, 15 prose-free)
+- **300 of 408** sections generated from — 73.5%
+
+The third is the product of the first two and is the most conservative statement
+of how much of the corpus this benchmark touches. All three are reported
+together; structural coverage is never quoted without them.
 
 **Quality rates** — groundedness, interview relevance, and difficulty agreement,
 each from the human labels, each as a rate with a confidence interval.
@@ -548,8 +553,10 @@ open question remains open.
 *eligible* sections; the approved benchmark generates from 300 of the 337. A
 denominator of 337 would cap coverage at 88.7% for a reason unrelated to
 generator quality. Structural coverage is therefore reported over the **300
-selected** sections, with 300/337 and 337/408 always reported beside it. This is
-a definitional narrowing of the approved decision, surfaced here for the record.
+selected** sections, with 300/337, 337/408 and 300/408 always reported beside it
+(section 14). This narrowing was surfaced for approval and approved on
+2026-09-07; it is recorded here because it changes the meaning of a figure the
+project will report.
 
 **6. `docs/PHASE-0.md` requires the supporting chunk to appear in the top-K
 retrieved results so retrieval can be reported as Recall@K.** No Recall@K is
