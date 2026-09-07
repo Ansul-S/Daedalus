@@ -283,6 +283,31 @@ Model configuration is binding from `docs/PHASE-0.md`:
 Reached over `urllib`, exactly as `src/daedalus/embedding.py` does. **No new
 dependency.**
 
+The prompt wording is versioned. `PROMPT_VERSION` is stored with every question
+and every rejection, and `params_hash` covers the model, the system prompt, the
+schema and every decoding option, so output produced under one contract can
+never be silently pooled with output produced under another. The current
+contract is **`p6-v2`**, `params_hash 257d63813c72d12de6f79c5f9b623240`. See
+the amendment in section 18 for why `p6-v1` was withdrawn.
+
+### How chunks are labelled to the model
+
+The document is stated once per section and each chunk is labelled by its
+ordinal alone:
+
+```
+SECTION: <heading path>
+DOCUMENT: <doc_id>
+
+--- chunk 230 (SEED) [prose] ---
+```
+
+`cited_ordinals` therefore asks for the integer after the word `chunk`. This is
+a presentation rule only: internal provenance remains `(doc_id, ordinal)`
+everywhere, and section 3 step 4's requirement that every chunk be labelled with
+its `(doc_id, ordinal)` is satisfied with the document at section level and the
+ordinal per chunk.
+
 `temperature` and a per-section `seed` are set so a run reproduces exactly.
 Sampling diversity is not needed: each question comes from a different context,
 so diversity is supplied by the corpus rather than by the sampler. A low
@@ -563,3 +588,86 @@ retrieved results so retrieval can be reported as Recall@K.** No Recall@K is
 reported in this phase, for the reason that document itself gives. Retrieval
 quality is already measured in `results/`, against the independently labelled
 Phase 4 reference set.
+
+---
+
+## 18. Amendment, 2026-09-07 — the `p6-v1` citation-label defect
+
+This section is added after the protocol was first committed and before any
+valid question was generated. It records a defect in the generation contract,
+its correction, and the removal of the outcomes it produced.
+
+### What was wrong
+
+Under `p6-v1`, `render_context` labelled every chunk as
+`[8665cdee5bd3aba6:230]` — the document identifier and the ordinal fused into
+one bracket — while the response schema asked for `cited_ordinals` as a list of
+integers. Nothing told the model which part of that label was the integer.
+
+A five-section integration run against `qwen3:8b` on 2026-09-07 rejected **all
+five** responses under `unknown_citation`. The model resolved the ambiguity by
+coercing the composite label into a number: rank 1 returned
+`[8665796555534642, 8665796555534643, 8665796555534644]`, rank 2 returned
+`[38209]` — the leading digits of its document identifier — and rank 5 returned
+`[8665]`.
+
+The questions themselves were sound and the grounding quotes matched verbatim.
+Every other check would have passed. The failure was in the contract, not in
+the generator.
+
+### The correction
+
+`PROMPT_VERSION` moves from `p6-v1` to `p6-v2`, and `params_hash` from
+`8cb743f74c764b1a00f23e2e3baba62e` to `257d63813c72d12de6f79c5f9b623240`.
+
+The change is confined to the presentation layer: the document is stated once
+per section, chunks are labelled `--- chunk 230 (SEED) [prose] ---`, the system
+prompt says to cite the chunk number and not the document identifier, and the
+available chunk numbers are listed in the request. **Internal provenance is
+unchanged** — `(doc_id, ordinal)` remains the key in `question_sources`,
+`question_rejections` and everywhere else.
+
+No threshold, seed, draw, type mapping, difficulty rotation, context budget or
+decoding option was touched. Nothing was tuned in response to a measured
+quality result, because no question had been measured.
+
+### Outcomes removed
+
+The five `p6-v1` rejections were deleted from `question_rejections`. They were
+produced by a defective harness contract rather than by a generator failing a
+fair test, and leaving them would have put a floor of 5/300 on the reported
+rejection rate that measured the defect rather than the generator.
+
+This is **not** quality-based regeneration. No question was inspected and
+discarded for being poor; no output was selected from repeated attempts. The
+full record of what was removed:
+
+| rank | document | section | reason | cited |
+|---|---|---|---|---|
+| 1 | `8665cdee5bd3aba6` | 5.4 Why This Is Fine-Tuning Ready > Instructor-Only Answers: Chunking Long PDF Text | `unknown_citation` | 8665796555534642, 8665796555534643, 8665796555534644 |
+| 2 | `38209c124d221c11` | Section 9: Building a RAG Prompt from Retrieved Chunks > Instructor-Only Answers | `unknown_citation` | 38209 |
+| 3 | `38209c124d221c11` | Section 7: Creating Embeddings for Sentence-Aware Chunks > 7.2 Semantic Meaning in Vector Space | `unknown_citation` | 3820912412211115 |
+| 4 | `38209c124d221c11` | Section 9: Building a RAG Prompt from Retrieved Chunks > 9.1 Why Prompt Construction Matters | `unknown_citation` | 3820912412211123 |
+| 5 | `8665cdee5bd3aba6` | Section 3: Building a Reusable Manual Extractive QnA Function > Span Selection Idea | `unknown_citation` | 8665 |
+
+All five carried `model qwen3:8b`, `prompt_version p6-v1`,
+`params_hash 8cb743f74c764b1a00f23e2e3baba62e`.
+
+Those five sections return to the outstanding set and are generated from once,
+under `p6-v2`, like every other section. The final benchmark contains `p6-v2`
+output only; no `p6-v1` outcome counts toward it.
+
+### A second defect fixed at the same time
+
+`question_rejections.raw_response` was written as `NULL` for every rejection:
+the runner had no access to the response body once validation had reduced it to
+a reason. Diagnosing the defect above therefore required calling the model a
+second time, which is exactly what that column exists to avoid. Every rejection
+now stores the exact body that produced it.
+
+### What this amendment does not license
+
+The pre-registration still stands. A defect in the harness may be fixed before
+measurement and recorded here. A disappointing measured result may not be
+answered by changing the contract — that still requires a new protocol committed
+in advance and a fresh run recorded separately, as section 16 says.
