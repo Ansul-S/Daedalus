@@ -4,7 +4,7 @@ Direction, not a work queue. **Do not implement phases automatically.** Each
 phase starts when I say it starts. This document is revised as the project
 develops; phases and their order are not fixed.
 
-**Current phase:** Phase 5 — Retrieval
+**Current phase:** Phase 5 — Retrieval — complete. Phase 6 not started.
 
 Keep this line accurate. It's the fastest way for a new session to know where
 things stand.
@@ -61,11 +61,27 @@ The set is exported to `reference-set/` and restores into an empty database.
 See `docs/LABELLING.md` for the grading policy and `Instructions.md` for the
 procedure.
 
-## Phase 5 — Retrieval
+## Phase 5 — Retrieval — complete
 
 Lexical retrieval, then semantic retrieval, then hybrid *only if the measured
 failure modes justify it*. Evaluate each against the Phase 4 reference set
 before adding the next.
+
+**Delivered:** lexical and `bge-m3` vector retrieval, a hand-written metrics
+module cross-checked against `trec_eval` 9.0.8, and an evaluation harness with
+paired bootstrap intervals. The judged pool was expanded to 1,422 judgements so
+that every retriever compared has 100% top-10 coverage and no reported number
+depends on the unjudged policy.
+
+Two frozen benchmarks in `results/`: a four-way comparison of `bge-m3`,
+`bge-m3-noheading`, `all-minilm` and lexical search, and a pre-registered hybrid
+experiment. Production retrieval is `bge-m3` vector search over heading path
+plus chunk text, NDCG@10 0.6127.
+
+Hybrid was the conditional in this phase's own scope, and the condition was not
+met: reciprocal rank fusion against production `bge-m3` came out at −0.0183
+NDCG@10 [−0.0525, +0.0184], a null result. It is not in the production path.
+Three of the phase's comparisons are nulls and are recorded as nulls.
 
 ## Phase 6 — Question generation
 
@@ -242,3 +258,53 @@ little weight.
 Hybrid retrieval remains deferred. Lexical and vector separating on aggregate
 scores is not on its own evidence that fusing them would help; that needs
 per-query complementarity, which is a separate diagnostic.
+
+### 2026-09-07 — Production retrieval stays vector-only; hybrid is a null result
+
+Reciprocal rank fusion of `bge-m3` vector search and lexical search was scored
+against the 1,422-judgement reference set under a protocol committed before the
+run. Full numbers and provenance in `results/`.
+
+**NDCG@10, hybrid minus `bge-m3` production: −0.0183, 95% paired bootstrap
+[−0.0525, +0.0184], n = 50, unjudged policy `zero`.** The interval includes
+zero, so this is a null result: the fusion is not shown to be better than
+production vector search, and not shown to be worse. All three variants had zero
+unjudged candidates in the top 10, so `zero` and `skip` give identical numbers
+here.
+
+The method was pre-registered rather than described afterwards.
+`docs/HYBRID-PROTOCOL.md` fixed the fusion rule, `k = 60`, depth 10 in and out,
+unweighted, the baseline, NDCG@10 as the *single* primary outcome, and the rule
+for reading the interval — and was committed as `59e5918` roughly 21 hours
+before the run that produced the result. The constants live in
+`scripts/evaluate_hybrid.py` with no command-line override and a test fails if
+they drift from the protocol. The point was to make the decision rule
+uncheatable: with one metric named in advance, a null cannot be quietly traded
+for whichever of two dozen secondary numbers happened to clear zero.
+
+Nothing was changed in response to the result. `k` was not adjusted, weights
+were not added, depth was not altered, the primary metric was not switched, and
+no second variant was run. The six secondary comparisons against the baseline
+are recorded in `results/README.md` as descriptive only; none of them separates
+from zero either, so the primary null is not an isolated one.
+
+**Decision: production retrieval stays `bge-m3` vector search alone.** Hybrid
+retrieval was always conditional — Phase 5 says "hybrid *only if the measured
+failure modes justify it*" — and the measurement does not justify it. Adding a
+second retriever, a fusion step and a tuning constant to the production path
+needs evidence of a gain, and there is none.
+
+Alternatives considered: the complementarity diagnostic run beforehand showed a
+genuine per-query difference between the two retrievers — 36 of 50 queries have
+each contributing unique relevant chunks, and an oracle union recall of 0.7958
+against 0.5832 for vector alone. That was the reason to test fusion at all. It
+is an upper bound on what any fusion could reach, not a prediction, and RRF at
+these settings did not approach it. The gap between the two is the finding worth
+carrying forward: complementarity that a rank-only fusion cannot convert.
+
+Limitation: this tests one fusion rule at one setting on 50 queries over one
+three-notebook corpus. A weighted fusion, a different `k`, a deeper input, or a
+score-based rather than rank-based combination might behave differently, and
+none of them was tried — deliberately, because trying them after seeing this
+result and reporting the best one would destroy the pre-registration. Any future
+attempt needs its own protocol committed in advance.
