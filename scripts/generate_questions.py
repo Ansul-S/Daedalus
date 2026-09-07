@@ -197,16 +197,23 @@ def main() -> int:
                 params_hash=params_hash(),
             )
         else:
-            report = run(
-                connection,
-                selected,
-                limit=args.limit,
-                on_progress=lambda o: print(
-                    f"  rank {o.selection_rank:>3}  {o.outcome:9}"
-                    f"{'  ' + o.reason if o.reason else ''}",
+
+            def progress(outcome: SectionOutcome) -> None:
+                """Report a section and commit it before moving on.
+
+                Committing per section is what makes the skip-on-rerun design
+                usable. Holding the whole walk in one transaction would discard
+                every completed section if the process died partway, and the
+                rerun would then have nothing to skip.
+                """
+                print(
+                    f"  rank {outcome.selection_rank:>3}  {outcome.outcome:9}"
+                    f"{'  ' + outcome.reason if outcome.reason else ''}",
                     flush=True,
-                ),
-            )
+                )
+                connection.commit()
+
+            report = run(connection, selected, limit=args.limit, on_progress=progress)
 
         artifact = build_artifact(
             report,
