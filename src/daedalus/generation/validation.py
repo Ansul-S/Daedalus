@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from daedalus.generation.context import SectionContext
 from daedalus.generation.selection import SelectedSection
@@ -51,10 +51,17 @@ _WHITESPACE = re.compile(r"\s+")
 
 @dataclass(frozen=True)
 class Rejection:
-    """A response that failed a check, with why."""
+    """A response that failed a check, with why, and the response itself.
+
+    `raw` carries the exact body the model returned. It is the evidence for the
+    reason: without it, understanding why a response was rejected means calling
+    the model again, which is both slow and — with a fixed decoding seed —
+    still not guaranteed to reproduce the same body if anything else changed.
+    """
 
     reason: str
     detail: str
+    raw: str = ""
 
 
 @dataclass(frozen=True)
@@ -118,9 +125,26 @@ def validate_response(
 ) -> GeneratedQuestion | Rejection:
     """Check one raw response against the protocol, returning it or a rejection.
 
-    The checks run in the order the protocol lists them so that a response
-    failing several is reported under the first, which keeps rejection counts
-    comparable rather than dependent on evaluation order.
+    Every rejection carries the raw response that produced it, so a stored
+    rejection can be understood later without calling the model again.
+    """
+    result = _check(payload, selected, context, model, prompt_version, params_hash)
+    return replace(result, raw=payload) if isinstance(result, Rejection) else result
+
+
+def _check(
+    payload: str,
+    selected: SelectedSection,
+    context: SectionContext,
+    model: str,
+    prompt_version: str,
+    params_hash: str,
+) -> GeneratedQuestion | Rejection:
+    """Run the seven checks in the order the protocol lists them.
+
+    The order matters: a response failing several is reported under the first,
+    which keeps rejection counts comparable rather than dependent on evaluation
+    order.
     """
     try:
         parsed = json.loads(payload)

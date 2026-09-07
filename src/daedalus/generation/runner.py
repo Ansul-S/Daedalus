@@ -241,7 +241,7 @@ def _attempt(
             selected.rank,
             result.reason,
             result.detail,
-            None,
+            result.raw,
             model,
             PROMPT_VERSION,
             params_hash(),

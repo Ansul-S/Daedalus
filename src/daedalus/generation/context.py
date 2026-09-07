@@ -207,15 +207,25 @@ def section_context(
 def render_context(context: SectionContext) -> str:
     """Render the context block shown to the generator.
 
-    Each chunk carries its (doc_id, ordinal) so a citation can be checked
-    against what was actually supplied, and the seed is marked so the model is
-    told which chunk the question must be about. This renders the context block
-    only; the instructions around it belong to the prompt.
+    The document is stated once for the whole section and each chunk is labelled
+    by its ordinal alone, as `chunk 230`. An earlier version fused the two into
+    `[8665cdee5bd3aba6:230]`, which gave the model no way to tell which part was
+    the integer ordinal the contract asks for; it responded by mangling the whole
+    label into a number and every citation was rejected. The pair
+    (doc_id, ordinal) still identifies every chunk — doc_id at section level,
+    ordinal per chunk — and internal provenance is unchanged.
+
+    This renders the context block only; the instructions around it belong to
+    the prompt.
     """
-    lines = [f"SECTION: {' > '.join(context.heading_path)}", ""]
+    lines = [
+        f"SECTION: {' > '.join(context.heading_path)}",
+        f"DOCUMENT: {context.doc_id}",
+        "",
+    ]
     for chunk in context.chunks:
         marker = " (SEED)" if chunk.is_seed else ""
-        label = f"[{context.doc_id}:{chunk.ordinal}] {chunk.kind}{marker}"
+        label = f"--- chunk {chunk.ordinal}{marker} [{chunk.kind}] ---"
         body = chunk.text + (f" {TRUNCATION_MARKER}" if chunk.truncated else "")
         lines.extend((label, body, ""))
     return "\n".join(lines).rstrip() + "\n"

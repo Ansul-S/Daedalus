@@ -18,7 +18,7 @@ from daedalus.generation.context import SectionContext, render_context
 from daedalus.generation.selection import Section, selection_hash
 
 #: Identifies the prompt wording a question was produced under.
-PROMPT_VERSION = "p6-v1"
+PROMPT_VERSION = "p6-v2"
 
 #: Generation model and decoding options. Protocol section 7, itself binding
 #: from the measured configuration in docs/PHASE-0.md.
@@ -101,9 +101,10 @@ from outside it, and do not invent scenarios, datasets, numbers or systems \
 that the material does not mention.
 4. A question that can be answered by copying a sentence from the material \
 has failed. Require understanding.
-5. cited_ordinals must list the ordinals of the chunks the question relies \
-on. It must include the SEED chunk's ordinal, and every ordinal must be one \
-that appears in the supplied material.
+5. cited_ordinals must list the chunk numbers the question relies on, as \
+plain integers. Each chunk is labelled "--- chunk N ---"; cite N, not the \
+document identifier. It must include the SEED chunk's number, and every \
+number must be one that appears in the supplied material.
 6. grounding_quote must be copied word for word from one of the chunks you \
 cited. Do not paraphrase it, do not shorten it with ellipses, and do not \
 quote a chunk you did not cite.
@@ -125,6 +126,7 @@ def build_messages(
     if difficulty not in DIFFICULTY_INSTRUCTIONS:
         raise ValueError(f"unknown difficulty {difficulty!r}")
 
+    available = ", ".join(str(chunk.ordinal) for chunk in context.chunks)
     user = f"""\
 MATERIAL
 
@@ -137,8 +139,10 @@ question_type: {question_type}
 difficulty: {difficulty}
 {DIFFICULTY_INSTRUCTIONS[difficulty]}
 
-The SEED chunk is [{context.doc_id}:{context.seed_ordinal}]. Your question \
-must be about it, and {context.seed_ordinal} must appear in cited_ordinals.
+The SEED chunk is chunk {context.seed_ordinal}. Your question must be about \
+it, and cited_ordinals must contain {context.seed_ordinal}.
+
+Chunk numbers available: {available}
 """
 
     return [
