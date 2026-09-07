@@ -307,3 +307,104 @@ def record_questions(
 ) -> list[int]:
     """Store several questions, returning their ids in order."""
     return [record_question(connection, question) for question in questions]
+
+
+_INSERT_REJECTION = """
+INSERT INTO question_rejections
+    (doc_id, heading_path, selection_rank, reason, detail, raw_response,
+     model, prompt_version, params_hash)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (doc_id, heading_path) DO NOTHING
+"""
+
+
+@dataclass(frozen=True)
+class RecordedRejection:
+    """A response discarded by a deterministic check, and why."""
+
+    doc_id: str
+    heading_path: tuple[str, ...]
+    selection_rank: int
+    reason: str
+    detail: str
+
+
+def record_rejection(
+    connection: Connection,
+    doc_id: str,
+    heading_path: Sequence[str],
+    selection_rank: int,
+    reason: str,
+    detail: str,
+    raw_response: str | None,
+    model: str,
+    prompt_version: str,
+    params_hash: str,
+) -> bool:
+    """Record that a section's response failed a check, returning whether it was new.
+
+    An existing rejection is left untouched rather than replaced. The protocol
+    forbids regenerating a rejected section, so the first outcome is the one
+    that counts and a later run must not overwrite it.
+    """
+    if not reason.strip():
+        raise ValueError("rejection reason is empty")
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            _INSERT_REJECTION,
+            (
+                doc_id,
+                list(heading_path),
+                selection_rank,
+                reason,
+                detail,
+                raw_response,
+                model,
+                prompt_version,
+                params_hash,
+            ),
+        )
+        return cursor.rowcount == 1
+
+
+def rejected_sections(connection: Connection) -> set[tuple[str, tuple[str, ...]]]:
+    """Return the sections whose response was rejected.
+
+    Together with sections_with_questions this is what makes a rerun safe: a
+    section appearing in either set has had its one attempt.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT doc_id, heading_path FROM question_rejections")
+        return {
+            (cast("str", row[0]), tuple(cast("list[str]", row[1])))
+            for row in cursor.fetchall()
+        }
+
+
+def rejection_counts(connection: Connection) -> dict[str, int]:
+    """Return how many sections were rejected under each reason."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT reason, count(*) FROM question_rejections GROUP BY reason"
+        )
+        return {cast("str", row[0]): cast("int", row[1]) for row in cursor.fetchall()}
+
+
+def list_rejections(connection: Connection) -> list[RecordedRejection]:
+    """Return every recorded rejection in selection order."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT doc_id, heading_path, selection_rank, reason, detail "
+            "FROM question_rejections ORDER BY selection_rank"
+        )
+        return [
+            RecordedRejection(
+                doc_id=cast("str", row[0]),
+                heading_path=tuple(cast("list[str]", row[1])),
+                selection_rank=cast("int", row[2]),
+                reason=cast("str", row[3]),
+                detail=cast("str", row[4]),
+            )
+            for row in cursor.fetchall()
+        ]
