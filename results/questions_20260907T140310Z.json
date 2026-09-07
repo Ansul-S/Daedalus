@@ -1,0 +1,3615 @@
+{
+  "dry_run": false,
+  "failures_by_reason": {},
+  "generated_at": "2026-09-07T14:03:10.373255+00:00",
+  "outcomes": [
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "5.4 Why This Is Fine-Tuning Ready",
+        "Instructor-Only Answers: Chunking Long PDF Text"
+      ],
+      "outcome": "skipped",
+      "question_id": null,
+      "reason": "already_attempted",
+      "selection_rank": 1
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "skipped",
+      "question_id": null,
+      "reason": "already_attempted",
+      "selection_rank": 2
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "7.2 Semantic Meaning in Vector Space"
+      ],
+      "outcome": "skipped",
+      "question_id": null,
+      "reason": "already_attempted",
+      "selection_rank": 3
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.1 Why Prompt Construction Matters"
+      ],
+      "outcome": "skipped",
+      "question_id": null,
+      "reason": "already_attempted",
+      "selection_rank": 4
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 3: Building a Reusable Manual Extractive QnA Function",
+        "Span Selection Idea"
+      ],
+      "outcome": "skipped",
+      "question_id": null,
+      "reason": "already_attempted",
+      "selection_rank": 5
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [256]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "Bridge to the Next Section"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 6
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "2.4 Why This Prepares Us for Fine-Tuning"
+      ],
+      "outcome": "accepted",
+      "question_id": 5,
+      "reason": null,
+      "selection_rank": 7
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 11: FAISS Introduction and First Vector Index",
+        "Theory / Intuition"
+      ],
+      "outcome": "accepted",
+      "question_id": 6,
+      "reason": null,
+      "selection_rank": 8
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "5.4 Why This Is Fine-Tuning Ready",
+        "Instructor-Only Answers: Chunking Long PDF Text",
+        "Answer 4"
+      ],
+      "outcome": "accepted",
+      "question_id": 7,
+      "reason": null,
+      "selection_rank": 9
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.4 How This Becomes a RAG Project",
+        "Current System vs RAG System"
+      ],
+      "outcome": "accepted",
+      "question_id": 8,
+      "reason": null,
+      "selection_rank": 10
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [289, 301]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Observation / Interpretation"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 11
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [177, 178, 180]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "Observation"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 12
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 6: Why Brute-force QnA Is Not Scalable",
+        "Observation / Interpretation"
+      ],
+      "outcome": "accepted",
+      "question_id": 9,
+      "reason": null,
+      "selection_rank": 13
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.7 Final Project Summary",
+        "Instructor-Only Answers: Final Project Summary and Future Roadmap"
+      ],
+      "outcome": "accepted",
+      "question_id": 10,
+      "reason": null,
+      "selection_rank": 14
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 10: Loading FLAN-T5 and Generating Grounded Answers",
+        "10.2 Why FLAN-T5?"
+      ],
+      "outcome": "accepted",
+      "question_id": 11,
+      "reason": null,
+      "selection_rank": 15
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 12,
+      "reason": null,
+      "selection_rank": 16
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader",
+        "Version 1: Simple and Explainable `retrieve_then_answer()`"
+      ],
+      "outcome": "accepted",
+      "question_id": 13,
+      "reason": null,
+      "selection_rank": 17
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports",
+        "3.2 Important Colab Note"
+      ],
+      "outcome": "accepted",
+      "question_id": 14,
+      "reason": null,
+      "selection_rank": 18
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [206]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader",
+        "Modern AI Systems Connection"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 19
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.5 Function Explanation"
+      ],
+      "outcome": "accepted",
+      "question_id": 15,
+      "reason": null,
+      "selection_rank": 20
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [6]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Key Distinctions"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 21
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [126]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 7: Text Embeddings and Semantic Meaning",
+        "Observation / Interpretation"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 22
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "Full Notebook Workflow"
+      ],
+      "outcome": "accepted",
+      "question_id": 16,
+      "reason": null,
+      "selection_rank": 23
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [100]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 24
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 7: Text Embeddings and Semantic Meaning",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 17,
+      "reason": null,
+      "selection_rank": 25
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 18,
+      "reason": null,
+      "selection_rank": 26
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings",
+        "Theory / Intuition"
+      ],
+      "outcome": "accepted",
+      "question_id": 19,
+      "reason": null,
+      "selection_rank": 27
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [37]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.8 Encoder-Decoder Models"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 28
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 6: Why Brute-force QnA Is Not Scalable",
+        "The Core Problem"
+      ],
+      "outcome": "accepted",
+      "question_id": 20,
+      "reason": null,
+      "selection_rank": 29
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.6 Decoder-Only Models"
+      ],
+      "outcome": "accepted",
+      "question_id": 21,
+      "reason": null,
+      "selection_rank": 30
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "1.5 Why Retriever + Reader Was Powerful"
+      ],
+      "outcome": "accepted",
+      "question_id": 22,
+      "reason": null,
+      "selection_rank": 31
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.3 How This Becomes a Fine-Tuning Project"
+      ],
+      "outcome": "accepted",
+      "question_id": 23,
+      "reason": null,
+      "selection_rank": 32
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [198, 199]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.4 Mathematical Framing"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 33
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "From Extractive PDF QnA to Retrieval-Based Document QnA using Embeddings, FAISS, and BERT Reader",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 24,
+      "reason": null,
+      "selection_rank": 34
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "4.4 Function Explanation"
+      ],
+      "outcome": "accepted",
+      "question_id": 25,
+      "reason": null,
+      "selection_rank": 35
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 5: Improved Brute-force QnA Over All Chunks"
+      ],
+      "outcome": "accepted",
+      "question_id": 26,
+      "reason": null,
+      "selection_rank": 36
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "5.8 Optimized / Better Cleaning Discussion"
+      ],
+      "outcome": "accepted",
+      "question_id": 27,
+      "reason": null,
+      "selection_rank": 37
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "Concept Check Questions: Lecture Workflow"
+      ],
+      "outcome": "accepted",
+      "question_id": 28,
+      "reason": null,
+      "selection_rank": 38
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [258, 268]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "Observation / Interpretation"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 39
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [306]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Modern AI Systems Connection"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 40
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [24, 25]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 1: Colab Setup and Library Verification",
+        "Libraries Required for This Lecture"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 41
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "6.3 Inspect Top-k Answers for One Question",
+        "Observation: Why Top-k Inspection Matters"
+      ],
+      "outcome": "accepted",
+      "question_id": 29,
+      "reason": null,
+      "selection_rank": 42
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 6: Asking Questions Over PDF Chunks and Ranking Answers",
+        "Observation: Ranked Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 30,
+      "reason": null,
+      "selection_rank": 43
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 6: Why Brute-force QnA Is Not Scalable",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 31,
+      "reason": null,
+      "selection_rank": 44
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [24]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "1.9 Important Teaching Distinction"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 45
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [90]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "4.5 Debugging Empty or Weak Extraction"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 46
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 32,
+      "reason": null,
+      "selection_rank": 47
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 3: Building a Reusable Manual Extractive QnA Function",
+        "Why We Need a Reusable Function"
+      ],
+      "outcome": "accepted",
+      "question_id": 33,
+      "reason": null,
+      "selection_rank": 48
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 6: Asking Questions Over PDF Chunks and Ranking Answers",
+        "Observation: Function Design"
+      ],
+      "outcome": "accepted",
+      "question_id": 34,
+      "reason": null,
+      "selection_rank": 49
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 7: Text Embeddings and Semantic Meaning",
+        "Loading an Embedding Model"
+      ],
+      "outcome": "accepted",
+      "question_id": 35,
+      "reason": null,
+      "selection_rank": 50
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [36]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.7 Mathematical Framing: Decoder Generation"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 51
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [59]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports",
+        "3.4 Mathematical View of the Tools"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 52
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [226]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.11 Debugging Checklist"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 53
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.9 Mathematical Framing: Encoder-Decoder Generation"
+      ],
+      "outcome": "accepted",
+      "question_id": 36,
+      "reason": null,
+      "selection_rank": 54
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [188]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader",
+        "Mathematical Framing"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 55
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "7.1 Why Do We Need Embeddings?"
+      ],
+      "outcome": "accepted",
+      "question_id": 37,
+      "reason": null,
+      "selection_rank": 56
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 7: Failure Case Analysis and Limitations of Extractive Document QnA",
+        "Why Failure Analysis Is Important"
+      ],
+      "outcome": "accepted",
+      "question_id": 38,
+      "reason": null,
+      "selection_rank": 57
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 39,
+      "reason": null,
+      "selection_rank": 58
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks"
+      ],
+      "outcome": "accepted",
+      "question_id": 40,
+      "reason": null,
+      "selection_rank": 59
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [1]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "From Pretrained BERT-Style Inference to Fine-Tuning Readiness"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 60
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "Modern AI Systems Connection"
+      ],
+      "outcome": "accepted",
+      "question_id": 41,
+      "reason": null,
+      "selection_rank": 61
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "4.2 First PDF-Based QnA Using Selected Pages",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 42,
+      "reason": null,
+      "selection_rank": 62
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 43,
+      "reason": null,
+      "selection_rank": 63
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.4 Add a Minimum Score Threshold",
+        "Observation: Threshold-Based Output"
+      ],
+      "outcome": "accepted",
+      "question_id": 44,
+      "reason": null,
+      "selection_rank": 64
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 3: Building a Reusable Manual Extractive QnA Function",
+        "Important Improvement"
+      ],
+      "outcome": "accepted",
+      "question_id": 45,
+      "reason": null,
+      "selection_rank": 65
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.2 Three Major Transformer Model Families"
+      ],
+      "outcome": "accepted",
+      "question_id": 46,
+      "reason": null,
+      "selection_rank": 66
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 47,
+      "reason": null,
+      "selection_rank": 67
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Model Strategy"
+      ],
+      "outcome": "accepted",
+      "question_id": 48,
+      "reason": null,
+      "selection_rank": 68
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [213]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 11: FAISS Introduction and First Vector Index"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 69
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [281]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Mathematical Framing"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 70
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "4.2 First PDF-Based QnA Using Selected Pages",
+        "Instructor-Only Answers: Uploading and Reading a PDF Page-Wise"
+      ],
+      "outcome": "accepted",
+      "question_id": 49,
+      "reason": null,
+      "selection_rank": 71
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 50,
+      "reason": null,
+      "selection_rank": 72
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "6.2 Why Sentence-Aware Chunks Help RAG"
+      ],
+      "outcome": "accepted",
+      "question_id": 51,
+      "reason": null,
+      "selection_rank": 73
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "From Extractive PDF QnA to Retrieval-Based Document QnA using Embeddings, FAISS, and BERT Reader",
+        "Main Story of This Masterclass"
+      ],
+      "outcome": "accepted",
+      "question_id": 52,
+      "reason": null,
+      "selection_rank": 74
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [87, 90, 91]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 6: Why Brute-force QnA Is Not Scalable",
+        "Mathematical Framing"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 75
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [8, 9]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "Why This Project Is Fine-Tuning Ready"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 76
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 53,
+      "reason": null,
+      "selection_rank": 77
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.12 Connection to RAG"
+      ],
+      "outcome": "accepted",
+      "question_id": 54,
+      "reason": null,
+      "selection_rank": 78
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually"
+      ],
+      "outcome": "accepted",
+      "question_id": 55,
+      "reason": null,
+      "selection_rank": 79
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [344, 345]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.6 Recommended Next Lecture Path"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 80
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "5.2 Why Remove Special Tokens?"
+      ],
+      "outcome": "accepted",
+      "question_id": 56,
+      "reason": null,
+      "selection_rank": 81
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings",
+        "Observation / Interpretation"
+      ],
+      "outcome": "accepted",
+      "question_id": 57,
+      "reason": null,
+      "selection_rank": 82
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "1.10 Optimized Thinking"
+      ],
+      "outcome": "accepted",
+      "question_id": 58,
+      "reason": null,
+      "selection_rank": 83
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 1: Colab Setup and Library Verification",
+        "Final Observation: Environment Is Ready"
+      ],
+      "outcome": "accepted",
+      "question_id": 59,
+      "reason": null,
+      "selection_rank": 84
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit"
+      ],
+      "outcome": "accepted",
+      "question_id": 60,
+      "reason": null,
+      "selection_rank": 85
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 61,
+      "reason": null,
+      "selection_rank": 86
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.6 Why We Limit Context Length"
+      ],
+      "outcome": "accepted",
+      "question_id": 62,
+      "reason": null,
+      "selection_rank": 87
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.6 Main Failure Modes of Our Current System",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 63,
+      "reason": null,
+      "selection_rank": 88
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "6.3 Chunk Size and Sentence Overlap"
+      ],
+      "outcome": "accepted",
+      "question_id": 64,
+      "reason": null,
+      "selection_rank": 89
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Step 2: Build Manual Top-k Retriever"
+      ],
+      "outcome": "accepted",
+      "question_id": 65,
+      "reason": null,
+      "selection_rank": 90
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "From Extractive PDF QnA to Retrieval-Based Document QnA using Embeddings, FAISS, and BERT Reader",
+        "Masterclass Roadmap"
+      ],
+      "outcome": "accepted",
+      "question_id": 66,
+      "reason": null,
+      "selection_rank": 91
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "Bridge to the Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 67,
+      "reason": null,
+      "selection_rank": 92
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [248]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.8 Simple Prompt vs Strict Prompt"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 93
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "Observation"
+      ],
+      "outcome": "accepted",
+      "question_id": 68,
+      "reason": null,
+      "selection_rank": 94
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [128, 129]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "6.5 Sentence Splitter Explanation"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 95
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 69,
+      "reason": null,
+      "selection_rank": 96
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 6: Why Brute-force QnA Is Not Scalable",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 70,
+      "reason": null,
+      "selection_rank": 97
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 4: Robust BERT-Style Extractive QnA Reader"
+      ],
+      "outcome": "accepted",
+      "question_id": 71,
+      "reason": null,
+      "selection_rank": 98
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.6 Recommended Next Lecture Path",
+        "Next Class Roadmap: Manual RAG"
+      ],
+      "outcome": "accepted",
+      "question_id": 72,
+      "reason": null,
+      "selection_rank": 99
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [257]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 10: Loading FLAN-T5 and Generating Grounded Answers"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 100
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [34]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.5 Why BERT-Style QnA Extracts Spans"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 101
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [172, 174]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "4.1 Extract Only Selected Pages"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 102
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 3: Building a Reusable Manual Extractive QnA Function"
+      ],
+      "outcome": "accepted",
+      "question_id": 73,
+      "reason": null,
+      "selection_rank": 103
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "4.2 First PDF-Based QnA Using Selected Pages",
+        "Concept Check Questions: Uploading and Reading a PDF Page-Wise"
+      ],
+      "outcome": "accepted",
+      "question_id": 74,
+      "reason": null,
+      "selection_rank": 104
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Limitations / Teaching Caution"
+      ],
+      "outcome": "accepted",
+      "question_id": 75,
+      "reason": null,
+      "selection_rank": 105
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [55]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports",
+        "3.3 Why These Imports Are Needed"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 106
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [83]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 5: Improved Brute-force QnA Over All Chunks",
+        "Important Teaching Note"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 107
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [100]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 6: Why Brute-force QnA Is Not Scalable",
+        "Important Realization"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 108
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "Compare Manual Retriever and FAISS Retriever"
+      ],
+      "outcome": "accepted",
+      "question_id": 76,
+      "reason": null,
+      "selection_rank": 109
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Compare Three QnA Approaches"
+      ],
+      "outcome": "accepted",
+      "question_id": 77,
+      "reason": null,
+      "selection_rank": 110
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 78,
+      "reason": null,
+      "selection_rank": 111
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "Observation"
+      ],
+      "outcome": "accepted",
+      "question_id": 79,
+      "reason": null,
+      "selection_rank": 112
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.2 What Students Should Realize"
+      ],
+      "outcome": "accepted",
+      "question_id": 80,
+      "reason": null,
+      "selection_rank": 113
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 81,
+      "reason": null,
+      "selection_rank": 114
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.4 Grounded Prompt Design"
+      ],
+      "outcome": "accepted",
+      "question_id": 82,
+      "reason": null,
+      "selection_rank": 115
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports",
+        "Observation"
+      ],
+      "outcome": "accepted",
+      "question_id": 83,
+      "reason": null,
+      "selection_rank": 116
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [7]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Expected Final Pipeline"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 117
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "Bridge to the Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 84,
+      "reason": null,
+      "selection_rank": 118
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.6 Recommended Next Lecture Path",
+        "Later Class Roadmap: Fine-Tuning"
+      ],
+      "outcome": "accepted",
+      "question_id": 85,
+      "reason": null,
+      "selection_rank": 119
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 5: Chunking Long PDF Text for Document QnA",
+        "Why Chunking Is Needed"
+      ],
+      "outcome": "accepted",
+      "question_id": 86,
+      "reason": null,
+      "selection_rank": 120
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.13 Optimized Thinking"
+      ],
+      "outcome": "accepted",
+      "question_id": 87,
+      "reason": null,
+      "selection_rank": 121
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [217]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.7 How to Interpret Retrieval Scores"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 122
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [154, 155]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "7.4 Embedding Model Choice"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 123
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader"
+      ],
+      "outcome": "accepted",
+      "question_id": 88,
+      "reason": null,
+      "selection_rank": 124
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Learning Objectives"
+      ],
+      "outcome": "accepted",
+      "question_id": 89,
+      "reason": null,
+      "selection_rank": 125
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "Concept Check Questions: Loading the Pretrained QnA Model"
+      ],
+      "outcome": "accepted",
+      "question_id": 90,
+      "reason": null,
+      "selection_rank": 126
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports",
+        "3.1 Why Setup Matters"
+      ],
+      "outcome": "accepted",
+      "question_id": 91,
+      "reason": null,
+      "selection_rank": 127
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [30]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.1 The Core Question"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 128
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "Project Goal"
+      ],
+      "outcome": "accepted",
+      "question_id": 92,
+      "reason": null,
+      "selection_rank": 129
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 11: FAISS Introduction and First Vector Index",
+        "Observation / Interpretation"
+      ],
+      "outcome": "accepted",
+      "question_id": 93,
+      "reason": null,
+      "selection_rank": 130
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Step 5: Create a Retrieval Summary Table"
+      ],
+      "outcome": "accepted",
+      "question_id": 94,
+      "reason": null,
+      "selection_rank": 131
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.5 Function Explanation"
+      ],
+      "outcome": "accepted",
+      "question_id": 95,
+      "reason": null,
+      "selection_rank": 132
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "1.3 Previous Pipeline"
+      ],
+      "outcome": "accepted",
+      "question_id": 96,
+      "reason": null,
+      "selection_rank": 133
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 7: Text Embeddings and Semantic Meaning",
+        "Why Embeddings Help Retrieval"
+      ],
+      "outcome": "accepted",
+      "question_id": 97,
+      "reason": null,
+      "selection_rank": 134
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.4 How This Becomes a RAG Project",
+        "RAG Workflow"
+      ],
+      "outcome": "accepted",
+      "question_id": 98,
+      "reason": null,
+      "selection_rank": 135
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Masterclass Roadmap",
+        "Phase 6: Building the RAG Pipeline"
+      ],
+      "outcome": "accepted",
+      "question_id": 99,
+      "reason": null,
+      "selection_rank": 136
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [84]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 6: Why Brute-force QnA Is Not Scalable"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 137
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity"
+      ],
+      "outcome": "accepted",
+      "question_id": 100,
+      "reason": null,
+      "selection_rank": 138
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.6 Main Failure Modes of Our Current System",
+        "Instructor-Only Answers: Failure Case Analysis"
+      ],
+      "outcome": "accepted",
+      "question_id": 101,
+      "reason": null,
+      "selection_rank": 139
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 102,
+      "reason": null,
+      "selection_rank": 140
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.8 Retrieval Failure vs No Answer in Document"
+      ],
+      "outcome": "accepted",
+      "question_id": 103,
+      "reason": null,
+      "selection_rank": 141
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 104,
+      "reason": null,
+      "selection_rank": 142
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "5.6 Debugging Cleaning Problems"
+      ],
+      "outcome": "accepted",
+      "question_id": 105,
+      "reason": null,
+      "selection_rank": 143
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [263]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "What Changed and Why?"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 144
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.9 Important Teaching Distinction"
+      ],
+      "outcome": "accepted",
+      "question_id": 106,
+      "reason": null,
+      "selection_rank": 145
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.7 Prompt Quality Checklist"
+      ],
+      "outcome": "accepted",
+      "question_id": 107,
+      "reason": null,
+      "selection_rank": 146
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "6.2 Ask Multiple Questions from the Same PDF",
+        "Observation: Multi-Question Document QnA"
+      ],
+      "outcome": "accepted",
+      "question_id": 108,
+      "reason": null,
+      "selection_rank": 147
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "7.9 Optimized / Better Embedding Discussion"
+      ],
+      "outcome": "accepted",
+      "question_id": 109,
+      "reason": null,
+      "selection_rank": 148
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 3: Building a Reusable Manual Extractive QnA Function",
+        "Observation: Context Quality Matters"
+      ],
+      "outcome": "accepted",
+      "question_id": 110,
+      "reason": null,
+      "selection_rank": 149
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "Version 1: Simple FAISS Semantic Retriever"
+      ],
+      "outcome": "accepted",
+      "question_id": 111,
+      "reason": null,
+      "selection_rank": 150
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.11 Important Clarification"
+      ],
+      "outcome": "accepted",
+      "question_id": 112,
+      "reason": null,
+      "selection_rank": 151
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "4.2 What PyMuPDF Does"
+      ],
+      "outcome": "accepted",
+      "question_id": 113,
+      "reason": null,
+      "selection_rank": 152
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 10: Loading FLAN-T5 and Generating Grounded Answers",
+        "10.1 Why Do We Need a Generative Model?"
+      ],
+      "outcome": "accepted",
+      "question_id": 114,
+      "reason": null,
+      "selection_rank": 153
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "7.10 Debugging Checklist"
+      ],
+      "outcome": "accepted",
+      "question_id": 115,
+      "reason": null,
+      "selection_rank": 154
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "4.2 First PDF-Based QnA Using Selected Pages",
+        "Important Limitation"
+      ],
+      "outcome": "accepted",
+      "question_id": 116,
+      "reason": null,
+      "selection_rank": 155
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "5.1 Check Token Length of Chunks",
+        "Observation: Word Length vs Token Length"
+      ],
+      "outcome": "accepted",
+      "question_id": 117,
+      "reason": null,
+      "selection_rank": 156
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 118,
+      "reason": null,
+      "selection_rank": 157
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.3 How This Becomes a Fine-Tuning Project",
+        "Fine-Tuning Data Structure"
+      ],
+      "outcome": "accepted",
+      "question_id": 119,
+      "reason": null,
+      "selection_rank": 158
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.1 Why Do We Need FAISS?"
+      ],
+      "outcome": "accepted",
+      "question_id": 120,
+      "reason": null,
+      "selection_rank": 159
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [3]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "From Extractive PDF QnA to Retrieval-Based Document QnA using Embeddings, FAISS, and BERT Reader",
+        "Important Distinctions"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 160
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.3 Similarity Choice"
+      ],
+      "outcome": "accepted",
+      "question_id": 121,
+      "reason": null,
+      "selection_rank": 161
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 5: Chunking Long PDF Text for Document QnA",
+        "Chunking Idea"
+      ],
+      "outcome": "accepted",
+      "question_id": 122,
+      "reason": null,
+      "selection_rank": 162
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [18]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "1.4 Mathematical Framing of Retrieval"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 163
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [151, 152]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 4: Uploading and Reading a PDF Document Page-Wise",
+        "Teaching Strategy for the BERT Paper"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 164
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "7.6 Function Explanation"
+      ],
+      "outcome": "accepted",
+      "question_id": 123,
+      "reason": null,
+      "selection_rank": 165
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "6.8 Optimized / Better Chunking Discussion"
+      ],
+      "outcome": "accepted",
+      "question_id": 124,
+      "reason": null,
+      "selection_rank": 166
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 7: Failure Case Analysis and Limitations of Extractive Document QnA"
+      ],
+      "outcome": "accepted",
+      "question_id": 125,
+      "reason": null,
+      "selection_rank": 167
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 126,
+      "reason": null,
+      "selection_rank": 168
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [0]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "From Extractive PDF QnA to Retrieval-Based Document QnA using Embeddings, FAISS, and BERT Reader"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 169
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 2: Upload PDF and Extract Page-wise Text"
+      ],
+      "outcome": "accepted",
+      "question_id": 127,
+      "reason": null,
+      "selection_rank": 170
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "Bridge to the Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 128,
+      "reason": null,
+      "selection_rank": 171
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "What Is Extractive Question Answering?"
+      ],
+      "outcome": "accepted",
+      "question_id": 129,
+      "reason": null,
+      "selection_rank": 172
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [87, 93]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "Observation"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 173
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Step 4: Compare Retrieval for Multiple Questions"
+      ],
+      "outcome": "accepted",
+      "question_id": 130,
+      "reason": null,
+      "selection_rank": 174
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 3: Building a Reusable Manual Extractive QnA Function",
+        "Concept Check Questions: Reusable Manual Extractive QnA Function"
+      ],
+      "outcome": "accepted",
+      "question_id": 131,
+      "reason": null,
+      "selection_rank": 175
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "Observation: QnA Output Shape"
+      ],
+      "outcome": "accepted",
+      "question_id": 132,
+      "reason": null,
+      "selection_rank": 176
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.3 Encoder-Only Models"
+      ],
+      "outcome": "accepted",
+      "question_id": 133,
+      "reason": null,
+      "selection_rank": 177
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "Observation"
+      ],
+      "outcome": "accepted",
+      "question_id": 134,
+      "reason": null,
+      "selection_rank": 178
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 135,
+      "reason": null,
+      "selection_rank": 179
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 1: Fresh Colab Setup and Required Imports"
+      ],
+      "outcome": "accepted",
+      "question_id": 136,
+      "reason": null,
+      "selection_rank": 180
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "System View"
+      ],
+      "outcome": "accepted",
+      "question_id": 137,
+      "reason": null,
+      "selection_rank": 181
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [181]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Important Teaching Distinction"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 182
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 138,
+      "reason": null,
+      "selection_rank": 183
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [196]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.2 What FAISS Does"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 184
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 7: Text Embeddings and Semantic Meaning",
+        "Theory / Intuition"
+      ],
+      "outcome": "accepted",
+      "question_id": 139,
+      "reason": null,
+      "selection_rank": 185
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.2 Test a Question Whose Answer May Not Be Present"
+      ],
+      "outcome": "accepted",
+      "question_id": 140,
+      "reason": null,
+      "selection_rank": 186
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "Observation: First Manual QnA Result"
+      ],
+      "outcome": "accepted",
+      "question_id": 141,
+      "reason": null,
+      "selection_rank": 187
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 3: Building a Reusable Manual Extractive QnA Function",
+        "3.5 Teaching Link: Why We Need Chunking Later"
+      ],
+      "outcome": "accepted",
+      "question_id": 142,
+      "reason": null,
+      "selection_rank": 188
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 143,
+      "reason": null,
+      "selection_rank": 189
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [136, 137]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings",
+        "Mathematical Framing"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 190
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "Teaching Note: Why Parameter Count Matters"
+      ],
+      "outcome": "accepted",
+      "question_id": 144,
+      "reason": null,
+      "selection_rank": 191
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "Important Benchmark Note"
+      ],
+      "outcome": "accepted",
+      "question_id": 145,
+      "reason": null,
+      "selection_rank": 192
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "6.4 Add a Simple Answer Quality Filter",
+        "Instructor-Only Answers: QnA Over PDF Chunks"
+      ],
+      "outcome": "accepted",
+      "question_id": 146,
+      "reason": null,
+      "selection_rank": 193
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [3]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Masterclass Roadmap"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 194
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 11: FAISS Introduction and First Vector Index",
+        "What Changed and Why?"
+      ],
+      "outcome": "accepted",
+      "question_id": 147,
+      "reason": null,
+      "selection_rank": 195
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.6 Function Explanation"
+      ],
+      "outcome": "accepted",
+      "question_id": 148,
+      "reason": null,
+      "selection_rank": 196
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "Observation"
+      ],
+      "outcome": "accepted",
+      "question_id": 149,
+      "reason": null,
+      "selection_rank": 197
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "Bridge to the Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 150,
+      "reason": null,
+      "selection_rank": 198
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 8: Final Project Summary, Fine-Tuning Bridge, and RAG Roadmap",
+        "8.1 Final System Workflow"
+      ],
+      "outcome": "accepted",
+      "question_id": 151,
+      "reason": null,
+      "selection_rank": 199
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 1: Colab Setup and Library Verification"
+      ],
+      "outcome": "accepted",
+      "question_id": 152,
+      "reason": null,
+      "selection_rank": 200
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.2 What Goes Inside a RAG Prompt?"
+      ],
+      "outcome": "accepted",
+      "question_id": 153,
+      "reason": null,
+      "selection_rank": 201
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 5: Chunking Long PDF Text for Document QnA"
+      ],
+      "outcome": "accepted",
+      "question_id": 154,
+      "reason": null,
+      "selection_rank": 202
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader",
+        "Observation / Interpretation"
+      ],
+      "outcome": "accepted",
+      "question_id": 155,
+      "reason": null,
+      "selection_rank": 203
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "6.4 Add a Simple Answer Quality Filter",
+        "Concept Check Questions: QnA Over PDF Chunks"
+      ],
+      "outcome": "accepted",
+      "question_id": 156,
+      "reason": null,
+      "selection_rank": 204
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [171, 172]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "7.7 Why Normalize Embeddings?"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 205
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 157,
+      "reason": null,
+      "selection_rank": 206
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.7 Final Project Summary",
+        "Concept Check Questions: Final Project Summary and Future Roadmap"
+      ],
+      "outcome": "accepted",
+      "question_id": 158,
+      "reason": null,
+      "selection_rank": 207
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "Bridge to the Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 159,
+      "reason": null,
+      "selection_rank": 208
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [290]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Version 2: Better `faiss_retrieve_then_answer()`"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 209
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [122]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 210
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [101]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 6: Why Brute-force QnA Is Not Scalable",
+        "New Architecture"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 211
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "Observation: Tokenizer Information"
+      ],
+      "outcome": "accepted",
+      "question_id": 160,
+      "reason": null,
+      "selection_rank": 212
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [157]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Mathematical Framing"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 213
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.2 Test a Question Whose Answer May Not Be Present",
+        "Observation: Unsupported Question"
+      ],
+      "outcome": "accepted",
+      "question_id": 161,
+      "reason": null,
+      "selection_rank": 214
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [197, 198, 199]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader",
+        "Version 2: Better `retrieve_then_answer()` with Combined Scoring"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 215
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "6.4 Mathematical Framing"
+      ],
+      "outcome": "accepted",
+      "question_id": 162,
+      "reason": null,
+      "selection_rank": 216
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "1.2 The Retriever + Reader Architecture"
+      ],
+      "outcome": "accepted",
+      "question_id": 163,
+      "reason": null,
+      "selection_rank": 217
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.10 Optimized / Better Prompting Discussion"
+      ],
+      "outcome": "accepted",
+      "question_id": 164,
+      "reason": null,
+      "selection_rank": 218
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [212]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader",
+        "Bridge to Next Section"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 219
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 8: Final Project Summary, Fine-Tuning Bridge, and RAG Roadmap"
+      ],
+      "outcome": "accepted",
+      "question_id": 165,
+      "reason": null,
+      "selection_rank": 220
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks"
+      ],
+      "outcome": "accepted",
+      "question_id": 166,
+      "reason": null,
+      "selection_rank": 221
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.5 How This Becomes an LLM-Based Document QnA System",
+        "Extractive QnA vs LLM-Based QnA"
+      ],
+      "outcome": "accepted",
+      "question_id": 167,
+      "reason": null,
+      "selection_rank": 222
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.5 How This Becomes an LLM-Based Document QnA System"
+      ],
+      "outcome": "accepted",
+      "question_id": 168,
+      "reason": null,
+      "selection_rank": 223
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.3 Compare Answerable and Unsupported Questions",
+        "Observation: Confidence Is Not Correctness"
+      ],
+      "outcome": "accepted",
+      "question_id": 169,
+      "reason": null,
+      "selection_rank": 224
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [1]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "From Extractive PDF QnA to Retrieval-Based Document QnA using Embeddings, FAISS, and BERT Reader",
+        "How This Notebook Will Be Taught"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 225
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "Connection With Transformer Encoder"
+      ],
+      "outcome": "accepted",
+      "question_id": 170,
+      "reason": null,
+      "selection_rank": 226
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "Bridge to the Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 171,
+      "reason": null,
+      "selection_rank": 227
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "1.1 The Problem We Had Earlier"
+      ],
+      "outcome": "accepted",
+      "question_id": 172,
+      "reason": null,
+      "selection_rank": 228
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 173,
+      "reason": null,
+      "selection_rank": 229
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [305]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Important Timing Note"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 230
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.10 Model Family Comparison"
+      ],
+      "outcome": "accepted",
+      "question_id": 174,
+      "reason": null,
+      "selection_rank": 231
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.7 Final Project Summary"
+      ],
+      "outcome": "accepted",
+      "question_id": 175,
+      "reason": null,
+      "selection_rank": 232
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "4.2 First PDF-Based QnA Using Selected Pages",
+        "Observation: PDF-Based QnA on Selected Pages"
+      ],
+      "outcome": "accepted",
+      "question_id": 176,
+      "reason": null,
+      "selection_rank": 233
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 177,
+      "reason": null,
+      "selection_rank": 234
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [145, 146]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 4: Uploading and Reading a PDF Document Page-Wise"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 235
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 7: Text Embeddings and Semantic Meaning",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 178,
+      "reason": null,
+      "selection_rank": 236
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 179,
+      "reason": null,
+      "selection_rank": 237
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [230]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 238
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Bridge to the Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 180,
+      "reason": null,
+      "selection_rank": 239
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 181,
+      "reason": null,
+      "selection_rank": 240
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "Model Choice"
+      ],
+      "outcome": "accepted",
+      "question_id": 182,
+      "reason": null,
+      "selection_rank": 241
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.4 Add a Minimum Score Threshold",
+        "Teaching Note: Thresholds Are Heuristics"
+      ],
+      "outcome": "accepted",
+      "question_id": 183,
+      "reason": null,
+      "selection_rank": 242
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 6: Asking Questions Over PDF Chunks and Ranking Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 184,
+      "reason": null,
+      "selection_rank": 243
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "6.2 Ask Multiple Questions from the Same PDF"
+      ],
+      "outcome": "accepted",
+      "question_id": 185,
+      "reason": null,
+      "selection_rank": 244
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 1: Colab Setup and Library Verification",
+        "Why This Setup Is Different From the Previous Notebook"
+      ],
+      "outcome": "accepted",
+      "question_id": 186,
+      "reason": null,
+      "selection_rank": 245
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "5.7 Why We Do Not Remove All Special Characters"
+      ],
+      "outcome": "accepted",
+      "question_id": 187,
+      "reason": null,
+      "selection_rank": 246
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 11: FAISS Introduction and First Vector Index",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 188,
+      "reason": null,
+      "selection_rank": 247
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings",
+        "Important Distinction"
+      ],
+      "outcome": "accepted",
+      "question_id": 189,
+      "reason": null,
+      "selection_rank": 248
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Theory / Intuition"
+      ],
+      "outcome": "accepted",
+      "question_id": 190,
+      "reason": null,
+      "selection_rank": 249
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports",
+        "Concept Check"
+      ],
+      "outcome": "accepted",
+      "question_id": 191,
+      "reason": null,
+      "selection_rank": 250
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader"
+      ],
+      "outcome": "accepted",
+      "question_id": 192,
+      "reason": null,
+      "selection_rank": 251
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "The Main Story"
+      ],
+      "outcome": "accepted",
+      "question_id": 193,
+      "reason": null,
+      "selection_rank": 252
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [49]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 253
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text"
+      ],
+      "outcome": "accepted",
+      "question_id": 194,
+      "reason": null,
+      "selection_rank": 254
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [259, 260]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever",
+        "Version 2: Better FAISS Retriever"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 255
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 195,
+      "reason": null,
+      "selection_rank": 256
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Version 1: Simple `faiss_retrieve_then_answer_simple()`"
+      ],
+      "outcome": "accepted",
+      "question_id": 196,
+      "reason": null,
+      "selection_rank": 257
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [280]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "Theory / Intuition"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 258
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.6 Main Failure Modes of Our Current System",
+        "Concept Check Questions: Failure Case Analysis"
+      ],
+      "outcome": "accepted",
+      "question_id": 197,
+      "reason": null,
+      "selection_rank": 259
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.4 How This Becomes a RAG Project"
+      ],
+      "outcome": "accepted",
+      "question_id": 198,
+      "reason": null,
+      "selection_rank": 260
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [252]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 12: Build a Clean FAISS Semantic Retriever"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 261
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [145]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "6.7 Debugging Checklist"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 262
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate"
+      ],
+      "outcome": "accepted",
+      "question_id": 199,
+      "reason": null,
+      "selection_rank": 263
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "7.6 Main Failure Modes of Our Current System",
+        "How Future Lectures Will Improve This"
+      ],
+      "outcome": "accepted",
+      "question_id": 200,
+      "reason": null,
+      "selection_rank": 264
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [103]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 5: Text Cleaning Pipeline with Special Token Removal",
+        "5.3 Cleaning Strategy"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 265
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 13: Combine FAISS Retriever with BERT Reader",
+        "What Changed and Why?"
+      ],
+      "outcome": "accepted",
+      "question_id": 201,
+      "reason": null,
+      "selection_rank": 266
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "Observation: What We Loaded"
+      ],
+      "outcome": "accepted",
+      "question_id": 202,
+      "reason": null,
+      "selection_rank": 267
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 10: Combine Manual Retriever with BERT Reader",
+        "Theory / Intuition"
+      ],
+      "outcome": "accepted",
+      "question_id": 203,
+      "reason": null,
+      "selection_rank": 268
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "Observation"
+      ],
+      "outcome": "accepted",
+      "question_id": 204,
+      "reason": null,
+      "selection_rank": 269
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [215]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 11: FAISS Introduction and First Vector Index",
+        "Mathematical Framing"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 270
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Instructor-Only Answers"
+      ],
+      "outcome": "accepted",
+      "question_id": 205,
+      "reason": null,
+      "selection_rank": 271
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [104]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 2: Loading the Pretrained QnA Tokenizer and Model Manually",
+        "Bridge to Next Section"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 272
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [153]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 7: Creating Embeddings for Sentence-Aware Chunks",
+        "7.3 Mathematical Framing"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 273
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "4.3 Mathematical Framing"
+      ],
+      "outcome": "accepted",
+      "question_id": 206,
+      "reason": null,
+      "selection_rank": 274
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports",
+        "3.5 Optimized / Better Setup Discussion"
+      ],
+      "outcome": "accepted",
+      "question_id": 207,
+      "reason": null,
+      "selection_rank": 275
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 8: Building FAISS Index and Retrieving Top-k Chunks",
+        "8.9 Important Teaching Note"
+      ],
+      "outcome": "accepted",
+      "question_id": 208,
+      "reason": null,
+      "selection_rank": 276
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [33]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 2: Why BERT Extracts but Does Not Generate",
+        "2.4 Mathematical Framing: Encoder Attention"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 277
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "5.4 Why This Is Fine-Tuning Ready"
+      ],
+      "outcome": "accepted",
+      "question_id": 209,
+      "reason": null,
+      "selection_rank": 278
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [147]",
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings",
+        "Vector Search View"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 279
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA",
+        "1.8 Thought Experiment"
+      ],
+      "outcome": "accepted",
+      "question_id": 210,
+      "reason": null,
+      "selection_rank": 280
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "4.1 Why Page-Wise Extraction Matters"
+      ],
+      "outcome": "accepted",
+      "question_id": 211,
+      "reason": null,
+      "selection_rank": 281
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 9: Building a RAG Prompt from Retrieved Chunks",
+        "9.11 Debugging Checklist"
+      ],
+      "outcome": "accepted",
+      "question_id": 212,
+      "reason": null,
+      "selection_rank": 282
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 6: Sentence-Aware Chunking with Metadata",
+        "Observation"
+      ],
+      "outcome": "accepted",
+      "question_id": 213,
+      "reason": null,
+      "selection_rank": 283
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Functions We Will Build"
+      ],
+      "outcome": "accepted",
+      "question_id": 214,
+      "reason": null,
+      "selection_rank": 284
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 9: Build Manual Semantic Retriever using Top-k Cosine Similarity",
+        "Observation / Interpretation"
+      ],
+      "outcome": "accepted",
+      "question_id": 215,
+      "reason": null,
+      "selection_rank": 285
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 7: Text Embeddings and Semantic Meaning",
+        "Mathematical Framing"
+      ],
+      "outcome": "accepted",
+      "question_id": 216,
+      "reason": null,
+      "selection_rank": 286
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "4.2 First PDF-Based QnA Using Selected Pages",
+        "Observation: Why Long Context Is a Problem"
+      ],
+      "outcome": "accepted",
+      "question_id": 217,
+      "reason": null,
+      "selection_rank": 287
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "From Extractive PDF QnA to Retrieval-Based Document QnA using Embeddings, FAISS, and BERT Reader",
+        "Learning Objectives"
+      ],
+      "outcome": "accepted",
+      "question_id": 218,
+      "reason": null,
+      "selection_rank": 288
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "6.4 Add a Simple Answer Quality Filter",
+        "Bridge to Next Section"
+      ],
+      "outcome": "accepted",
+      "question_id": 219,
+      "reason": null,
+      "selection_rank": 289
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 10: Loading FLAN-T5 and Generating Grounded Answers",
+        "10.3 Mathematical Framing"
+      ],
+      "outcome": "accepted",
+      "question_id": 220,
+      "reason": null,
+      "selection_rank": 290
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Section 4: Uploading and Reading a PDF Document Page-Wise",
+        "Important PDF Requirement"
+      ],
+      "outcome": "accepted",
+      "question_id": 221,
+      "reason": null,
+      "selection_rank": 291
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 3: Colab Setup, Library Installation, and Imports",
+        "3.6 Debugging Checklist"
+      ],
+      "outcome": "accepted",
+      "question_id": 222,
+      "reason": null,
+      "selection_rank": 292
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "8.3 How This Becomes a Fine-Tuning Project",
+        "Observation: Why Answer Start Matters"
+      ],
+      "outcome": "accepted",
+      "question_id": 223,
+      "reason": null,
+      "selection_rank": 293
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [0]",
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 294
+    },
+    {
+      "detail": null,
+      "doc_id": "0ed93313f216978b",
+      "heading_path": [
+        "Section 8: Cosine Similarity for Comparing Text Embeddings"
+      ],
+      "outcome": "accepted",
+      "question_id": 224,
+      "reason": null,
+      "selection_rank": 295
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "From Retriever-Reader PDF QnA to Generative RAG Assistant using LLMs and Streamlit",
+        "Why Are We Starting a New Notebook?"
+      ],
+      "outcome": "accepted",
+      "question_id": 225,
+      "reason": null,
+      "selection_rank": 296
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "5.4 Why This Is Fine-Tuning Ready",
+        "Concept Check Questions: Chunking Long PDF Text"
+      ],
+      "outcome": "accepted",
+      "question_id": 226,
+      "reason": null,
+      "selection_rank": 297
+    },
+    {
+      "detail": null,
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 4: Uploading PDF and Extracting Page-Wise Text",
+        "4.6 Optimized / Better Extraction Discussion"
+      ],
+      "outcome": "accepted",
+      "question_id": 227,
+      "reason": null,
+      "selection_rank": 298
+    },
+    {
+      "detail": null,
+      "doc_id": "8665cdee5bd3aba6",
+      "heading_path": [
+        "Document Reading and Question Answering using Hugging Face Transformers",
+        "Instructor-Only Answers: Lecture Workflow",
+        "Answer 4"
+      ],
+      "outcome": "accepted",
+      "question_id": 228,
+      "reason": null,
+      "selection_rank": 299
+    },
+    {
+      "detail": "quote not found verbatim in cited chunks [14]",
+      "doc_id": "38209c124d221c11",
+      "heading_path": [
+        "Section 1: Recap of Retriever + Reader PDF QnA"
+      ],
+      "outcome": "rejected",
+      "question_id": null,
+      "reason": "quote_not_found",
+      "selection_rank": 300
+    }
+  ],
+  "parameters": {
+    "min_prose_chars": 300,
+    "model": "qwen3:8b",
+    "nonprose_budget_chars": 2000,
+    "num_predict": 400,
+    "params_hash": "257d63813c72d12de6f79c5f9b623240",
+    "prompt_version": "p6-v2",
+    "selection_seed": "phase6-selection-20260907",
+    "selection_size": 300,
+    "temperature": 0.3
+  },
+  "protocol": "docs/PHASE-6-PROTOCOL.md",
+  "rejections_by_reason": {
+    "quote_not_found": 71
+  },
+  "rejections_in_store": {
+    "quote_not_found": 72
+  },
+  "requested": {
+    "difficulty": {
+      "easy": 100,
+      "hard": 100,
+      "medium": 100
+    },
+    "types": {
+      "code_reasoning": 50,
+      "comparison": 40,
+      "conceptual": 128,
+      "explanation": 82
+    }
+  },
+  "run": {
+    "accepted": 224,
+    "attempted": 295,
+    "failed": 0,
+    "rejected": 71,
+    "skipped": 5
+  },
+  "sections": {
+    "eligible": 337,
+    "eligible_of_total": 0.826,
+    "prose_free": 15,
+    "selected": 300,
+    "selected_of_eligible": 0.8902,
+    "selected_of_total": 0.7353,
+    "thin": 56,
+    "total": 408
+  }
+}

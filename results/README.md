@@ -257,3 +257,142 @@ Reproduce with:
 ```bash
 uv run python scripts/evaluate_hybrid.py --unjudged zero
 ```
+
+---
+
+## `questions_20260907T140310Z.json`
+
+The Phase 6 question generation run: one question attempted for each of the 300
+sections in the frozen draw. Protocol `docs/PHASE-6-PROTOCOL.md`, contract
+`p6-v2`, `params_hash 257d63813c72d12de6f79c5f9b623240`.
+
+This artifact records **generation**, not quality. No question in it has been
+judged. The groundedness, interview-relevance and difficulty rates the phase
+exists to produce come from the human-labelled benchmark, which is separate work
+and is not reported here.
+
+### Outcome
+
+| outcome | sections |
+|---|---|
+| accepted | **228** |
+| rejected | **72** |
+| transport failure | 0 |
+| total | 300 |
+
+All 300 selected sections carry exactly one outcome; none was attempted twice.
+Every stored row is `p6-v2` — no output from the withdrawn `p6-v1` contract
+contributes (see protocol section 18).
+
+Coverage context, always reported together: 300 of 337 eligible sections
+selected (89.0%), 337 of 408 sections eligible (82.6%), 300 of 408 generated
+from (73.5%).
+
+Accepted questions by requested type and difficulty:
+
+| type | easy | medium | hard | total |
+|---|---|---|---|---|
+| conceptual | 34 | 39 | 33 | 106 |
+| explanation | 19 | 20 | 20 | 59 |
+| code_reasoning | 10 | 14 | 10 | 34 |
+| comparison | 13 | 8 | 8 | 29 |
+
+### Every rejection was the quote check
+
+All 72 rejections were `quote_not_found`. There were **no** schema violations,
+no type or difficulty mismatches, no unknown citations, and no transport
+failures across 295 model calls. The model conformed to every part of the
+contract except reproducing its quotation verbatim.
+
+Rejection rate by requested type and difficulty:
+
+| type | rate | difficulty | rate |
+|---|---|---|---|
+| code_reasoning | 16/50 = 32.0% | easy | 24/100 = 24.0% |
+| explanation | 23/82 = 28.0% | medium | 19/100 = 19.0% |
+| comparison | 11/40 = 27.5% | hard | 29/100 = 29.0% |
+| conceptual | 22/128 = 17.2% | | |
+
+These are observed counts on 300 sections of one corpus, not established
+effects. No significance test was run and none is claimed.
+
+### What the 72 rejections were — corrected diagnostic
+
+Every rejection stores the exact response that produced it, so the 72 were
+classified by string matching against their own section, with no further model
+calls.
+
+**A first pass of this analysis was wrong and was discarded.** It classified
+matches by longest contiguous common substring, which misread quotes where the
+model had removed spaces inside LaTeX — `$$\text{Question}\rightarrow` against a
+source reading `$$ \text{Question} \rightarrow` is the same text, and was
+counted as absent from the material. The classifier was rebuilt around
+whitespace-insensitive matching and an overall similarity ratio. The figures
+below are from the corrected version.
+
+| classification | n | share of rejections |
+|---|---|---|
+| not traceable to the material | 45 | 62.5% |
+| code-fence artifact | 11 | 15.3% |
+| whitespace only | 8 | 11.1% |
+| reworded from the material | 6 | 8.3% |
+| markdown-marker artifact | 1 | 1.4% |
+| quoted an uncited chunk | 1 | 1.4% |
+
+Twelve rejections (16.7%) trace to ingestion artifacts — stray markdown fences
+and heading markers the notebook parser left embedded in prose. Eight more
+(11.1%) differ from their source by whitespace alone.
+
+### The untraceable quotes
+
+The 45 quotes in the first row were checked against **every chunk in the corpus**,
+not only their own section:
+
+```
+found verbatim elsewhere in the corpus:  0
+found nowhere in the corpus at all:      45
+similarity to best-matching chunk:       median 0.198, max 0.481
+```
+
+They are not misattributions or quotes lifted from a neighbouring section. The
+model produced plausible prose in the register of the material and presented it
+as a verbatim quotation.
+
+**Stated precisely: on this corpus, with `qwen3:8b` under the `p6-v2` contract,
+45 of 300 attempted sections (15.0%) yielded a `grounding_quote` that appears
+nowhere in the 925 chunks.**
+
+That figure is the rate at which one field of one contract was fabricated, on
+one corpus, at one model size, with one prompt. It is **not** a general
+hallucination rate for the model, and it says nothing about how often the
+*questions* are ungrounded — a question can be sound while its stated quotation
+is invented, and the reverse. Nothing here should be quoted as a hallucination
+measurement.
+
+What it does support is narrower and firmer: the verbatim-quote rule is not
+ceremony. It removed 45 questions whose stated evidence did not exist, and a
+fabricated quotation is precisely the failure a judge reading the question alone
+would be least likely to catch.
+
+The classification thresholds (similarity 0.90 and 0.55) are chosen, not
+measured. The 45-of-45 corpus-wide absence is a string-matching fact and does
+not depend on them; the split between "reworded" and "not traceable" does.
+
+### Provenance
+
+- Contract `p6-v2` throughout, one question per section, no regeneration and no
+  repair. A rejected section was never retried.
+- Rejections carry their raw response, which is what made this diagnostic
+  possible without calling the model again.
+- Phase 5 store unchanged: 1,422 judgements, checksum
+  `4920b9e2b936d238ae61f4eb96b87ae1`, 925 chunks, 2,775 embeddings.
+- The classification script is not committed; it is a diagnostic, and its inputs
+  are the stored responses rather than anything derived.
+
+Reproduce the generation with:
+
+```bash
+uv run python scripts/generate_questions.py
+```
+
+Completed sections are skipped, so on the current store this is a no-op.
