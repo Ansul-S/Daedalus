@@ -18,6 +18,7 @@ from daedalus.generation.client import GenerationError
 from daedalus.generation.prompt import (
     GENERATION_MODEL,
     KEEP_ALIVE,
+    PROMPT_VERSION,
     RESPONSE_SCHEMA,
     THINK,
     generation_seed,
@@ -145,7 +146,7 @@ def test_questions_persist_with_their_full_provenance(stored: Connection) -> Non
             "SELECT model, prompt_version, params_hash FROM questions "
             "WHERE selection_rank = 1"
         )
-        assert cursor.fetchone() == (GENERATION_MODEL, "p6-v1", params_hash())
+        assert cursor.fetchone() == (GENERATION_MODEL, PROMPT_VERSION, params_hash())
 
 
 def test_sections_are_visited_in_rank_order(stored: Connection) -> None:
@@ -183,6 +184,49 @@ def test_a_validation_failure_is_recorded_as_a_rejection(stored: Connection) -> 
     assert report.rejection_counts() == {"type_mismatch": 1}
     assert rejection_counts(stored) == {"type_mismatch": 1}
     assert [r.selection_rank for r in list_rejections(stored)] == [1]
+
+
+def test_a_rejection_persists_the_raw_model_response(stored: Connection) -> None:
+    """Evidence for the reason, so a rejection needs no second model call."""
+    body = good_body(1, "comparison", "easy")
+    chat = Chat(body, good_body(3, "explanation", "medium"))
+
+    run(stored, selection(), chat_fn=chat)
+
+    with stored.cursor() as cursor:
+        cursor.execute(
+            "SELECT raw_response FROM question_rejections WHERE selection_rank = 1"
+        )
+        row = cursor.fetchone()
+    assert row is not None
+    assert row[0] == body
+
+
+def test_an_unparsable_response_persists_verbatim(stored: Connection) -> None:
+    chat = Chat("<<not json>>", good_body(3, "explanation", "medium"))
+
+    run(stored, selection(), chat_fn=chat)
+
+    with stored.cursor() as cursor:
+        cursor.execute(
+            "SELECT reason, raw_response FROM question_rejections "
+            "WHERE selection_rank = 1"
+        )
+        assert cursor.fetchone() == ("unparsable", "<<not json>>")
+
+
+def test_no_rejection_is_stored_without_its_evidence(stored: Connection) -> None:
+    run(
+        stored,
+        selection(),
+        chat_fn=Chat("not json", json.dumps({"question": "q"})),
+    )
+
+    with stored.cursor() as cursor:
+        cursor.execute(
+            "SELECT count(*) FROM question_rejections WHERE raw_response IS NULL"
+        )
+        assert cursor.fetchone() == (0,)
 
 
 def test_invalid_json_is_rejected_without_stopping_the_run(

@@ -129,10 +129,29 @@ def test_the_prompt_states_the_seed_the_type_and_the_difficulty() -> None:
     messages = build_messages(make_context(), "comparison", "hard")
     user = messages[1]["content"]
 
-    assert "[doc1:4]" in user
+    assert "chunk 4 (SEED)" in user
+    assert "The SEED chunk is chunk 4." in user
+    assert "cited_ordinals must contain 4" in user
     assert "question_type: comparison" in user
     assert "difficulty: hard" in user
-    assert "(SEED)" in user
+
+
+def test_the_prompt_never_fuses_the_document_id_into_a_chunk_label() -> None:
+    """Regression guard: p6-v1 fused them and every citation was rejected."""
+    user = build_messages(make_context(), "conceptual", "easy")[1]["content"]
+
+    assert "doc1:4" not in user
+    assert "DOCUMENT: doc1" in user
+
+
+def test_the_prompt_lists_the_chunk_numbers_that_may_be_cited() -> None:
+    user = build_messages(make_context(), "conceptual", "easy")[1]["content"]
+
+    assert "Chunk numbers available: 3, 4, 5" in user
+
+
+def test_the_prompt_version_records_the_contract_revision() -> None:
+    assert PROMPT_VERSION == "p6-v2"
 
 
 def test_the_prompt_carries_the_material_and_the_grounding_rules() -> None:
@@ -140,6 +159,7 @@ def test_the_prompt_carries_the_material_and_the_grounding_rules() -> None:
 
     assert messages[0]["role"] == "system"
     assert "grounding_quote must be copied word for word" in messages[0]["content"]
+    assert "cite N, not the document identifier" in messages[0]["content"]
     assert SEED_TEXT in messages[1]["content"]
 
 
@@ -164,6 +184,22 @@ def test_the_decoding_seed_is_derived_from_the_section_hash() -> None:
 def test_the_params_hash_is_stable() -> None:
     assert params_hash() == params_hash()
     assert len(params_hash()) == 32
+
+
+def test_a_rejection_carries_the_raw_response_that_produced_it() -> None:
+    body = response(question_type="comparison")
+
+    result = validate(body)
+
+    assert isinstance(result, Rejection)
+    assert result.raw == body
+
+
+def test_an_unparsable_rejection_still_carries_its_raw_body() -> None:
+    result = validate("definitely not json")
+
+    assert isinstance(result, Rejection)
+    assert result.raw == "definitely not json"
 
 
 def test_a_valid_response_becomes_a_storable_question() -> None:

@@ -162,8 +162,19 @@ def test_rendering_labels_every_chunk_and_marks_the_seed() -> None:
     rendered = render_context(context)
 
     assert "SECTION: S1 > S2" in rendered
-    assert "[doc9:0] prose" in rendered
-    assert "[doc9:1] prose (SEED)" in rendered
+    assert "DOCUMENT: doc9" in rendered
+    assert "--- chunk 0 [prose] ---" in rendered
+    assert "--- chunk 1 (SEED) [prose] ---" in rendered
+
+
+def test_rendering_never_fuses_the_document_id_into_the_chunk_label() -> None:
+    """The defect that rejected every p6-v1 citation: doc_id fused to ordinal."""
+    context = build_context("8665cdee5bd3aba6", ("S",), [prose(0, 10), prose(1, 40)])
+
+    rendered = render_context(context)
+
+    assert "8665cdee5bd3aba6:1" not in rendered
+    assert "--- chunk 1 (SEED) [prose] ---" in rendered
 
 
 def test_rendering_marks_a_truncated_chunk() -> None:
