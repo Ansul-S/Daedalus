@@ -4,7 +4,7 @@ Direction, not a work queue. **Do not implement phases automatically.** Each
 phase starts when I say it starts. This document is revised as the project
 develops; phases and their order are not fixed.
 
-**Current phase:** Phase 5 — Retrieval — complete. Phase 6 not started.
+**Current phase:** Phase 6 — Question generation
 
 Keep this line accurate. It's the fastest way for a new session to know where
 things stand.
