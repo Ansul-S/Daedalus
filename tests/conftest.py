@@ -63,8 +63,8 @@ def connection(
     """Yield a connection to an empty database, rolled back afterwards."""
     with psycopg.connect(database_url) as conn:
         conn.execute(
-            "TRUNCATE documents, chunks, embeddings, queries, judgements "
-            "RESTART IDENTITY CASCADE"
+            "TRUNCATE documents, chunks, embeddings, queries, judgements, "
+            "questions RESTART IDENTITY CASCADE"
         )
         conn.commit()
         yield conn
