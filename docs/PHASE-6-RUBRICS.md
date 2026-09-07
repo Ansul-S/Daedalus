@@ -41,10 +41,13 @@ whether those references suffice. A question that is answerable from its section
 but cites the wrong chunk scores low, and that is intended rather than a
 side effect.
 
-The grounding quote is withheld because it has already been verified verbatim by
-the deterministic check. It carries no information the cited chunk does not, and
-showing a sentence pre-selected as "the evidence" would anchor the groundedness
-judgement.
+**The grounding quote is never shown, in any pass, and most emphatically not
+during the groundedness pass.** It has already been verified verbatim by the
+deterministic check, so it carries no information the cited chunk does not. What
+it would carry is a sentence pre-selected by the generator as "the evidence",
+and reading that before judging groundedness would anchor the judgement on the
+model's own choice of support rather than on the material. A labelling tool that
+displays it is defective and must not be used.
 
 ### A blinding defect that must be fixed before labelling
 
@@ -57,15 +60,25 @@ Labelling in rank order, or showing the rank, would therefore leak the very
 value the difficulty rubric is supposed to assign independently, and the
 resulting agreement figure would be worthless.
 
-**Presentation order is shuffled**, by:
+**Presentation order is shuffled**, and each of the three passes in section 7
+uses a *different* shuffle:
 
 ```
 order_key = md5(doc_id || CHR(31) || array_to_string(heading_path, CHR(31))
-                || ':' || 'phase6-labelling-20260907')
+                || ':' || <seed>)
+
+pass 1, groundedness:  seed 'phase6-groundedness-20260907'
+pass 2, relevance:     seed 'phase6-relevance-20260907'
+pass 3, difficulty:    seed 'phase6-difficulty-20260907'
 ```
 
-ascending, tie-broken on `(doc_id, heading_path)`. The seed differs from the
-selection seed so the two orders are unrelated. The rank is not displayed.
+ascending, tie-broken on `(doc_id, heading_path)`. All three seeds differ from
+the selection seed, so no order is related to the draw or to any other pass. The
+rank is never displayed.
+
+Three different shuffles matter: reusing an order would let a later pass be
+anchored by the remembered sequence of an earlier one, which is part of what
+separating the passes exists to prevent.
 
 ---
 
@@ -89,6 +102,27 @@ look perfectly answerable because *you* can answer it.
 
 A question is still grade 2 if it is trivial. Triviality is a relevance
 judgement, not a groundedness one, and the two axes are kept apart deliberately.
+
+### Two distinct failure modes, both reducing the grade
+
+A question can fail groundedness in two different ways, and the grade alone does
+not say which. Both reduce the grade identically; the labeller records **which
+mode applies** alongside the grade, so the two are separable in the write-up.
+
+| mode | meaning |
+|---|---|
+| **support failure** | The material needed to answer does not exist in this section at all. The question reaches outside the corpus. |
+| **citation failure** | The material needed *is* in the section, but not in the chunks the question cited. The question is answerable; its references are wrong. |
+
+Both are real defects and neither is excused. A question whose citations do not
+support it has not delivered "references back to source chunks", which is the
+phase's stated deliverable — so a citation failure is not a lesser sin scored on
+a softer scale. It is recorded separately because the two imply different fixes:
+support failure points at the generator inventing material, citation failure at
+it mis-attributing material it did read.
+
+Recording the mode is only required where the grade is **0 or 1**. A grade 2
+question has neither failure.
 
 ### Edge cases
 
@@ -188,6 +222,12 @@ establishes difficulty validity, and nothing in the write-up will claim it.
 
 ### Edge cases
 
+- **`unusable` is excluded from the agreement denominator.** A question too
+  incoherent to carry a difficulty is not evidence for or against the
+  generator's difficulty control, and counting it as a mismatch would blame the
+  difficulty instruction for a defect in the question. The count of `unusable`
+  items is reported separately and always alongside the agreement figure, so the
+  denominator is never quietly reduced without the reader seeing by how much.
 - Judge difficulty **for the candidate**, not for you. You wrote the reference
   set and know this corpus better than any candidate will.
 - Do not let groundedness bleed in. A question resting on absent material is not
@@ -205,24 +245,52 @@ Stated in advance so the mapping is not chosen after seeing the labels.
 | grounded | share of labelled questions at groundedness **2** | >= 90% |
 | unsupported rate (failure condition) | share at groundedness **0** | > 10% fails |
 | interview-relevant | share at relevance **2** | >= 80% |
-| difficulty match | share where labelled difficulty equals requested | >= 80% |
+| difficulty match | share where labelled difficulty equals requested, **over items not labelled `unusable`** | >= 80% |
 
 Groundedness **2 + 1** is reported alongside the headline, never in place of it.
-Every rate is reported with a confidence interval and with its denominator
-stated.
+Grade 1 does not count toward the >= 90% criterion; only grade 2 does. Every
+rate is reported with a confidence interval and with its denominator stated.
 
-Note that these rates are over the **228 accepted questions**, not over 300. The
-72 rejected sections produced no question to label. Reporting a groundedness
+Groundedness failure modes — support failure against citation failure, from
+section 3 — are reported as a breakdown of the grade 0 and grade 1 items. They
+do not change any rate.
+
+The difficulty agreement denominator is `228 minus the unusable count`, and both
+numbers are printed together. No other rate excludes anything.
+
+### The thresholds do not move
+
+The >= 90% groundedness bar, the >= 80% relevance and difficulty bars, and the
+> 10% unsupported failure condition are fixed here and **do not change in
+response to the measured result**. If the generator comes in below a bar, that is
+reported as a failure against a pre-registered criterion. It is not answered by
+rereading the scale, by promoting grade 1 into the numerator, or by lowering the
+threshold to what was achieved.
+
+### Two denominators, kept apart
+
+**Generation is reported over 300 sections. Evaluation is reported over 228
+questions.** They are different measurements of different things and are never
+combined into one rate.
+
+- **300** — the selected sections. Generation outcomes live here: 228 accepted,
+  72 rejected. This is where structural coverage is reported.
+- **228** — the accepted questions, and the only items that carry a label. Every
+  groundedness, relevance and difficulty rate uses this denominator.
+
+The 72 rejected sections produced no question to label. Reporting a groundedness
 rate over 300 would silently treat a rejection as an ungrounded question, which
-it is not — it is an absent one. Both denominators appear in the write-up.
+it is not — it is an absent one. Any figure quoting one denominator states which
+it is using.
 
 ---
 
 ## 7. Procedure
 
 1. Rubrics committed. This document, before any label is recorded.
-2. Questions presented in the shuffled order of section 2, with the rank,
-   requested type, requested difficulty and grounding quote withheld.
+2. Questions presented in that pass's own shuffled order from section 2, with
+   the rank, requested type, requested difficulty, grounding quote and all
+   earlier passes' labels withheld.
 3. The user labels. `labelled_at` is recorded per item.
 4. Pace is audited afterwards as in Phase 4 — sub-2-second judgements are
    reported, not silently accepted.
@@ -231,26 +299,45 @@ it is not — it is an absent one. Both denominators appear in the write-up.
 6. Only once human labelling is complete does the LLM judge run, and judge
    agreement is measured against these labels before any automated score is
    quoted.
+7. Judge output is stored exactly as the model emitted it. The human scales
+   above are enforced by the database; the judge's are deliberately not. A judge
+   answer off its own scale is a finding about the judge — one of the things
+   this phase sets out to measure — and rejecting the write would discard the
+   evidence. Off-scale judge output is reported, never silently coerced onto the
+   scale or dropped.
 
-### One decision left open
+### Three independent passes, decided before labelling
 
-All three rubrics in a single pass per question, or difficulty in a separate
-pass with its own shuffle?
+Labelling runs as **three separate passes**, one rubric each, every pass in its
+own shuffled order:
 
-- **Single pass** is roughly ten hours and keeps the material fresh in mind, but
-  risks a halo effect: an item judged ungrounded is easily judged irrelevant and
-  easy too.
-- **Split pass** protects difficulty — the weakest of the three measurements —
-  at the cost of a second run through 228 items.
+| pass | rubric | shuffle seed |
+|---|---|---|
+| 1 | groundedness | `phase6-groundedness-20260907` |
+| 2 | interview relevance | `phase6-relevance-20260907` |
+| 3 | difficulty | `phase6-difficulty-20260907` |
 
-Whichever is chosen is recorded here before labelling starts.
+Judging several rubrics in one sitting invites a halo effect: an item judged
+ungrounded is easily judged irrelevant, and easy, on the strength of the first
+impression rather than the scale. Since the three axes are deliberately
+independent — a well-formed question resting on absent material is relevance 2
+and groundedness 0 — a halo would erase exactly the distinction the rubrics were
+built to record.
+
+The cost is three runs through 228 items rather than one. That is accepted.
+
+Each pass must be complete before the next begins, and **no pass displays the
+labels from any earlier pass.**
 
 ---
 
 ## 8. What is frozen
 
-The three scales, their criteria, their edge cases, the blinding rules, the
-shuffle seed `phase6-labelling-20260907`, and the mapping in section 6.
+The three scales, their criteria, their edge cases, the two groundedness failure
+modes, the blinding rules, the three shuffle seeds
+`phase6-groundedness-20260907`, `phase6-relevance-20260907` and
+`phase6-difficulty-20260907`, the three-pass structure, the thresholds, and the
+mapping and denominators in section 6.
 
 A rubric may not be revised after labelling begins. If labelling reveals that a
 scale is unworkable, the fix is to stop, amend this document with the reason,
