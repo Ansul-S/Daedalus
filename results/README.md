@@ -125,3 +125,135 @@ Reproduce with:
 ```bash
 uv run python scripts/evaluate_retrieval.py --unjudged zero
 ```
+
+---
+
+## `hybrid_20260907T071245Z.json`
+
+Reciprocal rank fusion of `bge-m3` production vector search and lexical search,
+scored against the same 1,422-judgement reference set as the four-way benchmark.
+
+### Pre-registered before the run
+
+The full method — fusion rule, constants, baseline, primary metric, and the
+decision rule for reading the interval — was fixed in `docs/HYBRID-PROTOCOL.md`
+and committed as `59e5918` on 2026-09-06T10:29Z. This run is stamped
+2026-09-07T07:12Z, so the pre-registration precedes the result in the history
+and can be checked rather than taken on trust.
+
+The constants are module-level in `scripts/evaluate_hybrid.py` with no
+command-line override, and
+`tests/test_hybrid_fusion.py::test_the_frozen_constants_are_what_the_protocol_declares`
+fails if any of them drifts from what the protocol declares.
+
+| parameter | value |
+|---|---|
+| fusion | reciprocal rank fusion, unweighted |
+| `k` | 60 |
+| input depth | 10 from each retriever |
+| output depth | 10 |
+| baseline | `bge-m3 (production)` |
+| primary outcome | NDCG@10, single metric |
+| interval | paired bootstrap, 10,000 resamples, seed 20260906 |
+
+### How unjudged candidates were treated
+
+**`zero` policy, declared in the protocol before the run. It made no
+difference:** all three variants returned 0.00 unjudged candidates per query in
+the top 10, across all 50 queries. `zero` and `skip` are provably identical
+here, so no number below depends on the choice.
+
+The fused ranking draws only from two retrievers whose top 10 was already fully
+judged, so fusion could not introduce an unjudged chunk at this depth.
+
+### Primary outcome
+
+**NDCG@10, hybrid minus `bge-m3` production: −0.0183, 95% CI
+[−0.0525, +0.0184], n = 50.**
+
+The interval includes zero. By the decision rule fixed in the protocol, this is
+a **null result**: hybrid retrieval is not shown to be better than production
+`bge-m3`, and is not shown to be worse.
+
+### Means, 95% bootstrap CI
+
+| metric | hybrid (RRF k=60) | bge-m3 (production) | lexical |
+|---|---|---|---|
+| NDCG@10 | 0.5944 | 0.6127 | 0.4893 |
+| NDCG@5 | 0.5402 | 0.5850 | 0.4473 |
+| NDCG@1 | 0.6000 | 0.6300 | 0.4700 |
+| MRR (>=1) | 0.7888 | 0.8118 | 0.7037 |
+| MRR (=2) | 0.6524 | 0.6393 | 0.5229 |
+| Recall@10 (>=1) | 0.5864 | 0.5832 | 0.4812 |
+| Recall@10 (=2) | 0.7164 | 0.7230 | 0.5588 |
+| P@5 (>=1) | 0.5520 | 0.5960 | 0.4640 |
+
+The `bge-m3` and `lexical` columns reproduce the four-way benchmark exactly —
+NDCG@10 of 0.6127 and 0.4893 — which is a consistency check on the harness
+across two independent runs, not a second measurement.
+
+`n = 50` throughout except recall at threshold 2, which is `n = 47`: q41, q45
+and q51 have no grade-2 chunk in their pool, so recall is undefined and they are
+excluded rather than counted as zero.
+
+### Secondary comparisons — descriptive only, no decision weight
+
+The protocol names one primary outcome. Everything below was computed and is
+recorded for completeness; none of it carries decision weight, and none of it
+may be substituted for the primary metric after the fact.
+
+Hybrid minus `bge-m3` production:
+
+| metric | difference | 95% CI | separable |
+|---|---|---|---|
+| NDCG@5 | −0.0449 | [−0.0942, +0.0047] | no |
+| NDCG@1 | −0.0300 | [−0.1500, +0.0900] | no |
+| MRR (>=1) | −0.0229 | [−0.0989, +0.0546] | no |
+| MRR (=2) | +0.0131 | [−0.0756, +0.1027] | no |
+| Recall@10 (>=1) | +0.0032 | [−0.0443, +0.0489] | no |
+| Recall@10 (=2) | −0.0066 | [−0.0681, +0.0567] | no |
+
+Not one of the six separates from zero. The primary outcome is not a lone null
+surrounded by signal.
+
+Hybrid minus `lexical` separates on five of six — NDCG@5 +0.0928
+[+0.0463, +0.1433], recall@10 at threshold 2 +0.1576 [+0.0691, +0.2534] — which
+says the fusion inherits the vector retriever's advantage over lexical search,
+not that the fusion adds anything to the vector retriever.
+
+Six pairs are compared per metric at 95% confidence each, so the family-wise
+error rate is well above 5%.
+
+### What was not done
+
+The protocol forbids changing anything in response to this result, and nothing
+was changed. `k` was not adjusted, weights were not introduced, depth was not
+altered, the primary metric was not switched, and no second fusion variant was
+run. The result is reported as it came out.
+
+Production retrieval stays `bge-m3` vector search. An inseparable difference is
+not a reason to add a second retriever, a fusion step, and a constant to the
+production path.
+
+This is a null result on this corpus at this sample size. It is not evidence
+that hybrid retrieval is useless in general, and the earlier complementarity
+diagnostic — an oracle union recall of 0.7958 against 0.5832 for vector alone —
+still stands as an upper bound that some other fusion might approach. That bound
+was never an expected gain, and RRF at these settings did not approach it.
+
+### Provenance
+
+- Reference set: 50 queries, 1,422 judgements, checksum
+  `4920b9e2b936d238ae61f4eb96b87ae1`, verified unchanged before the run.
+- Production `bge-m3` vectors unchanged, checksum
+  `809bdb448d6a187f7d0cd16cbe48db9a`.
+- 232 tests passing, `ruff check`, `ruff format --check` and `mypy src/` clean at
+  the time of the run.
+- Scored by the same `daedalus.evaluation.harness` and
+  `daedalus.evaluation.metrics` as the four-way benchmark, unmodified.
+
+Reproduce with:
+
+```bash
+uv run python scripts/evaluate_hybrid.py --unjudged zero
+```
