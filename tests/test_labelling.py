@@ -12,7 +12,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from daedalus import cli
+from daedalus import cli, labelling
 from daedalus.document import Document, Segment, SegmentKind
 from daedalus.storage.database import DATABASE_URL_ENV
 from daedalus.storage.documents import store_document
@@ -119,7 +119,7 @@ def prepare(
 ) -> None:
     monkeypatch.setenv(DATABASE_URL_ENV, database_url)
     monkeypatch.setattr(
-        cli, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
+        labelling, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
     )
     seed_corpus(connection)
     connection.commit()
@@ -357,9 +357,9 @@ def test_full_text_key_shows_untruncated_content(
 ) -> None:
     monkeypatch.setenv(DATABASE_URL_ENV, database_url)
     monkeypatch.setattr(
-        cli, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
+        labelling, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
     )
-    long_text = "reader " + ("x" * cli.PREVIEW_LIMIT) + " ENDMARKER"
+    long_text = "reader " + ("x" * labelling.PREVIEW_LIMIT) + " ENDMARKER"
     store_document(
         connection,
         Document(
@@ -438,7 +438,7 @@ def test_no_grade_is_recorded_without_a_keystroke(
 
 def test_preview_limit_is_two_thousand() -> None:
     """Chosen against the corpus so most chunks display whole."""
-    assert cli.PREVIEW_LIMIT == 2000
+    assert labelling.PREVIEW_LIMIT == 2000
 
 
 def test_truncation_is_marked_explicitly(
@@ -449,7 +449,7 @@ def test_truncation_is_marked_explicitly(
 ) -> None:
     monkeypatch.setenv(DATABASE_URL_ENV, database_url)
     monkeypatch.setattr(
-        cli, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
+        labelling, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
     )
     store_document(
         connection,
@@ -462,7 +462,7 @@ def test_truncation_is_marked_explicitly(
                 Segment(
                     0,
                     SegmentKind.PROSE,
-                    "reader " + ("x" * (cli.PREVIEW_LIMIT + 500)),
+                    "reader " + ("x" * (labelling.PREVIEW_LIMIT + 500)),
                     ("A",),
                     (),
                     "cell:0",
@@ -522,7 +522,7 @@ def test_output_chunk_shows_parent_as_context(
 ) -> None:
     monkeypatch.setenv(DATABASE_URL_ENV, database_url)
     monkeypatch.setattr(
-        cli, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
+        labelling, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
     )
     seed_with_output(connection)
     connection.commit()
@@ -565,7 +565,7 @@ def test_grade_is_recorded_against_the_output_not_the_parent(
     """Context must not shift the judgement onto the parent chunk."""
     monkeypatch.setenv(DATABASE_URL_ENV, database_url)
     monkeypatch.setattr(
-        cli, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
+        labelling, "embed_texts", lambda texts, model="m": [[1.0, 0.0] for _ in texts]
     )
     seed_with_output(connection)
     connection.commit()
@@ -592,7 +592,7 @@ def test_pooling_defaults_are_unchanged() -> None:
 
 
 def test_only_three_grades_are_accepted() -> None:
-    assert cli.GRADE_KEYS == {"0": 0, "1": 1, "2": 2}
+    assert labelling.GRADE_KEYS == {"0": 0, "1": 1, "2": 2}
 
 
 def test_per_query_cap_leaves_candidates_unjudged_not_zero(
@@ -888,7 +888,7 @@ def test_recorded_candidates_carry_no_provenance(
         ["label", "--vector-k", "0", "--lexical-k", "0", "--random-k", "0"]
     )
     query = next(q for q in list_queries(connection) if q.query_id == query_id)
-    pending = cli.pending_candidates(connection, query, args, set())
+    pending = labelling.pending_candidates(connection, query, args, set())
 
     assert [c.chunk.ordinal for c in pending] == [2]
     assert pending[0].sources == frozenset()

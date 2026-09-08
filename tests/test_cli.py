@@ -11,7 +11,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from daedalus import cli
+from daedalus import cli, labelling
 from daedalus.document import Document, Segment, SegmentKind
 from daedalus.storage.database import DATABASE_URL_ENV
 from daedalus.storage.documents import chunks_at, store_document
@@ -308,7 +308,7 @@ def run_labelling(
     """Run one labelling pass against a scripted sequence of keypresses."""
     monkeypatch.setenv(DATABASE_URL_ENV, database_url)
     pressed = iter(keys)
-    monkeypatch.setattr(cli, "read_key", lambda prompt: next(pressed, "q"))
+    monkeypatch.setattr(labelling, "read_key", lambda prompt: next(pressed, "q"))
     argv = ["label-questions", rubric]
     if limit is not None:
         argv += ["--limit", str(limit)]
@@ -323,7 +323,7 @@ def test_the_display_withholds_everything_the_rubrics_blind(
     question = next(q for q in list_questions(connection) if q.heading_path == ("S1",))
     cited = chunks_at(connection, [("d1", 0)])
 
-    cli.show_question(question, cited, 1, 2)
+    labelling.show_question(question, cited, 1, 2)
 
     out = capsys.readouterr().out
     assert "Why does bagging reduce variance?" in out
@@ -340,9 +340,10 @@ def test_each_pass_uses_a_different_order(connection: Connection) -> None:
 
     orders = {
         name: tuple(
-            q.question_id for q in cli.labelling_order(questions, str(spec["seed"]))
+            q.question_id
+            for q in labelling.labelling_order(questions, str(spec["seed"]))
         )
-        for name, spec in cli.LABEL_PASSES.items()
+        for name, spec in labelling.LABEL_PASSES.items()
     }
 
     assert len(set(orders.values())) > 1
@@ -353,20 +354,23 @@ def test_the_order_is_stable_and_independent_of_input_order(
 ) -> None:
     store_two_questions(connection)
     questions = list_questions(connection)
-    seed = str(cli.LABEL_PASSES["groundedness"]["seed"])
+    seed = str(labelling.LABEL_PASSES["groundedness"]["seed"])
 
-    forwards = [q.question_id for q in cli.labelling_order(questions, seed)]
+    forwards = [q.question_id for q in labelling.labelling_order(questions, seed)]
     backwards = [
-        q.question_id for q in cli.labelling_order(list(reversed(questions)), seed)
+        q.question_id
+        for q in labelling.labelling_order(list(reversed(questions)), seed)
     ]
 
     assert forwards == backwards
 
 
 def test_the_pass_seeds_are_what_the_rubrics_declare() -> None:
-    assert cli.LABEL_PASSES["groundedness"]["seed"] == "phase6-groundedness-20260907"
-    assert cli.LABEL_PASSES["relevance"]["seed"] == "phase6-relevance-20260907"
-    assert cli.LABEL_PASSES["difficulty"]["seed"] == "phase6-difficulty-20260907"
+    assert (
+        labelling.LABEL_PASSES["groundedness"]["seed"] == "phase6-groundedness-20260907"
+    )
+    assert labelling.LABEL_PASSES["relevance"]["seed"] == "phase6-relevance-20260907"
+    assert labelling.LABEL_PASSES["difficulty"]["seed"] == "phase6-difficulty-20260907"
 
 
 def test_a_relevance_pass_records_labels(
