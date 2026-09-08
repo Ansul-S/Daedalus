@@ -464,3 +464,83 @@ def test_re_judging_backs_out_of_the_failure_mode_prompt(
 
     assert label_totals(connection, "groundedness") == {"2": 1}
     assert failure_mode_counts(connection) == {}
+
+
+def test_the_full_text_key_is_offered_only_when_text_is_hidden() -> None:
+    short = [("d1", 0, "prose", "a" * 10, [])]
+    long = [("d1", 0, "prose", "a" * (labelling.PREVIEW_LIMIT + 1), [])]
+
+    assert labelling.has_truncation(short) is False
+    assert labelling.has_truncation(long) is True
+
+
+def test_a_short_chunk_does_not_advertise_the_full_text_key(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+    prompts: list[str] = []
+    monkeypatch.setenv(DATABASE_URL_ENV, database_url)
+    monkeypatch.setattr(
+        labelling, "read_key", lambda prompt: (prompts.append(prompt), "q")[1]
+    )
+
+    cli.main(["label-questions", "relevance"])
+
+    assert prompts
+    assert "f full text" not in prompts[0]
+    assert "? rubric" in prompts[0]
+
+
+def test_a_long_chunk_still_advertises_the_full_text_key(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_document(
+        connection,
+        Document(
+            doc_id="d2",
+            source_path=Path("/corpus/n.ipynb"),
+            source_format="notebook",
+            title="n",
+            segments=(
+                Segment(
+                    0,
+                    SegmentKind.PROSE,
+                    "x" * (labelling.PREVIEW_LIMIT + 50),
+                    ("S1",),
+                    (),
+                    "c:0",
+                ),
+            ),
+        ),
+    )
+    record_questions(
+        connection,
+        [
+            GeneratedQuestion(
+                doc_id="d2",
+                heading_path=("S1",),
+                seed_ordinal=0,
+                selection_rank=1,
+                requested_type="conceptual",
+                requested_difficulty="easy",
+                text="Why?",
+                grounding_quote="x",
+                context_ordinals=(0,),
+                cited_ordinals=(0,),
+                model="qwen3:8b",
+                prompt_version="p6-v2",
+                params_hash="abc",
+            )
+        ],
+    )
+    connection.commit()
+
+    prompts: list[str] = []
+    monkeypatch.setenv(DATABASE_URL_ENV, database_url)
+    monkeypatch.setattr(
+        labelling, "read_key", lambda prompt: (prompts.append(prompt), "q")[1]
+    )
+
+    cli.main(["label-questions", "relevance"])
+
+    assert "f full text" in prompts[0]
