@@ -323,6 +323,19 @@ def show_question(
     print("-" * 78)
 
 
+def has_truncation(
+    cited: Sequence[tuple[str, int, str, str, list[str]]],
+) -> bool:
+    """Whether any cited chunk is long enough that the display cuts it short.
+
+    The prompt offers "f full text" only when there is hidden text to reveal.
+    Offering it unconditionally advertises an action that does nothing on a
+    short chunk, which reads as a broken key rather than as an empty one, and
+    invites the labeller to wonder whether they are seeing the whole chunk.
+    """
+    return any(len(text.strip()) > PREVIEW_LIMIT for _d, _o, _k, text, _h in cited)
+
+
 def cmd_label_questions(args: argparse.Namespace) -> int:
     """Label generated questions for one rubric, one pass at a time.
 
@@ -366,7 +379,12 @@ def cmd_label_questions(args: argparse.Namespace) -> int:
             full = False
             while True:
                 show_question(question, cited, position, len(done) + len(pending), full)
-                prompt = "  ".join(legend) + "   f full text   ? rubric   q quit > "
+                truncated = has_truncation(cited)
+                prompt = (
+                    "  ".join(legend)
+                    + ("   f full text" if truncated and not full else "")
+                    + "   ? rubric   q quit > "
+                )
                 key = read_key(prompt)
 
                 if key == "q":
