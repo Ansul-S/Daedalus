@@ -8,13 +8,16 @@ seconds. Keeping them apart means re-ingesting never forces re-embedding.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 
 import psycopg
 
 from daedalus.embedding import DEFAULT_MODEL, EmbeddingError, embed_texts
+from daedalus.generation.selection import KEY_SEPARATOR
 from daedalus.ingestion.canonical import notebook_to_document
 from daedalus.ingestion.notebook import parse_notebook
 from daedalus.retrieval.search import Candidate, Chunk, pool_candidates
@@ -35,6 +38,13 @@ from daedalus.storage.queries import (
     judged_pairs,
     list_queries,
     record_judgement,
+)
+from daedalus.storage.questions import (
+    StoredQuestion,
+    label_totals,
+    labelled_question_ids,
+    list_questions,
+    record_label,
 )
 
 Connection = psycopg.Connection[tuple[object, ...]]
@@ -60,6 +70,31 @@ GRADE_MEANINGS = (
     "1 partially answers",
     "2 fully answers",
 )
+
+#: The three labelling passes of docs/PHASE-6-RUBRICS.md. Each has its own
+#: shuffle seed so no pass is presented in the order of any other, and none in
+#: the order of the draw -- requested difficulty is recoverable from selection
+#: rank with certainty, so rank order would leak it outright.
+LABEL_PASSES = {
+    "groundedness": {
+        "seed": "phase6-groundedness-20260907",
+        "keys": {"0": "0", "1": "1", "2": "2"},
+        "legend": ("0 unsupported", "1 partial", "2 supported"),
+    },
+    "relevance": {
+        "seed": "phase6-relevance-20260907",
+        "keys": {"0": "0", "1": "1", "2": "2"},
+        "legend": ("0 not usable", "1 weak", "2 interview-quality"),
+    },
+    "difficulty": {
+        "seed": "phase6-difficulty-20260907",
+        "keys": {"e": "easy", "m": "medium", "h": "hard", "u": "unusable"},
+        "legend": ("e easy", "m medium", "h hard", "u unusable"),
+    },
+}
+
+#: Groundedness grades that require a failure mode, and the keys that record it.
+FAILURE_MODE_KEYS = {"s": "support", "c": "citation"}
 
 #: Shown once at the start of a session and again on demand with "?".
 POLICY_REMINDER = """\
@@ -323,6 +358,186 @@ def pending_candidates(
     return pending
 
 
+RUBRIC_REMINDERS = {
+    "groundedness": """\
+Could someone holding ONLY the cited chunks answer this question correctly and
+completely?
+
+  0  unsupported  needs knowledge absent from the cited chunks, or misstates them
+  1  partial      the material contributes, but answering fully needs more
+  2  supported    everything needed is in the cited material
+
+Judge against the cited chunks only -- not the rest of the section, not the rest
+of the corpus, and not what you know about the topic. A trivial question is
+still 2; triviality is a relevance judgement.
+
+At 0 or 1, record which failure it is:
+  s  support   the material needed does not exist in this section at all
+  c  citation  the material exists in the section but was not cited
+""",
+    "relevance": """\
+Would a competent AI/ML interviewer ask this, and does it separate understanding
+from recall?
+
+  0  not usable          trivial, ambiguous, malformed, or notebook mechanics
+  1  weak but usable     answerable by restating a sentence
+  2  interview-quality   probes understanding, reasoning or application
+
+Judge the question, not whether the material supports it. A well-formed question
+resting on absent material is relevance 2 and groundedness 0.
+""",
+    "difficulty": """\
+For a candidate preparing for an AI/ML interview who has studied this material,
+how hard is this question?
+
+  e  easy      answerable by someone who has read the material once
+  m  medium    requires connecting two ideas, or explaining a mechanism
+  h  hard      requires reasoning about consequences, trade-offs or edge cases
+  u  unusable  too incoherent for difficulty to mean anything
+
+Judge for the candidate, not for you. Length is not difficulty.
+""",
+}
+
+
+def labelling_order(
+    questions: Sequence[StoredQuestion], seed: str
+) -> list[StoredQuestion]:
+    """Return questions in one pass's presentation order.
+
+    Ordered by a hash of the section key and the pass seed, tie-broken on the
+    section itself. Every pass uses a different seed so that no pass is
+    presented in the order of another, and none in the order of the draw.
+    """
+
+    def key(question: StoredQuestion) -> tuple[str, str, tuple[str, ...]]:
+        section = KEY_SEPARATOR.join((question.doc_id, *question.heading_path))
+        digest = hashlib.md5(f"{section}:{seed}".encode()).hexdigest()
+        return (digest, question.doc_id, question.heading_path)
+
+    return sorted(questions, key=key)
+
+
+def show_question(
+    question: StoredQuestion,
+    cited: Sequence[tuple[str, int, str, str, list[str]]],
+    position: int,
+    total: int,
+    full: bool = False,
+) -> None:
+    """Print one question and the chunks it cites, and nothing else.
+
+    What is withheld is the point of this function. The requested type, the
+    requested difficulty, the selection rank, the grounding quote and any label
+    from an earlier pass are all deliberately absent: each would anchor the
+    judgement on something other than the question and its material.
+    """
+    print("\n" + "=" * 78)
+    print(f"[{position}/{total}]")
+    print("-" * 78)
+    print("QUESTION")
+    print("-" * 78)
+    print(question.text.strip())
+    print("-" * 78)
+    print("CITED MATERIAL — judge against this only")
+    print("-" * 78)
+    for _doc_id, ordinal, kind, text, _heading in cited:
+        print(f"\n[chunk {ordinal}] {kind}")
+        print(_body(text, full))
+    print("-" * 78)
+
+
+def cmd_label_questions(args: argparse.Namespace) -> int:
+    """Label generated questions for one rubric, one pass at a time.
+
+    One rubric per run, in that pass's own shuffled order, skipping questions
+    already labelled for it so a session can be stopped and resumed. Each label
+    is committed as it is made.
+
+    The passes are deliberately separate. Judging several rubrics in one sitting
+    invites a halo in which an item judged ungrounded is then judged irrelevant
+    and easy on the strength of the first impression rather than the scale.
+    """
+    rubric = args.rubric
+    pass_spec = LABEL_PASSES[rubric]
+    keys = cast("dict[str, str]", pass_spec["keys"])
+    legend = cast("tuple[str, ...]", pass_spec["legend"])
+    seed = cast("str", pass_spec["seed"])
+
+    with connect() as connection:
+        done = labelled_question_ids(connection, rubric)
+        pending = [
+            question
+            for question in labelling_order(list_questions(connection), seed)
+            if question.question_id not in done
+        ]
+
+        if not pending:
+            print(f"nothing left to label for {rubric}")
+            return 0
+
+        print(RUBRIC_REMINDERS[rubric])
+        print(f"{len(done)} already labelled, {len(pending)} remaining\n")
+
+        recorded = 0
+        for position, question in enumerate(pending, start=len(done) + 1):
+            if recorded >= args.limit:
+                break
+            cited = chunks_at(
+                connection,
+                [(question.doc_id, ordinal) for ordinal in question.cited_ordinals],
+            )
+            full = False
+            while True:
+                show_question(question, cited, position, len(done) + len(pending), full)
+                prompt = "  ".join(legend) + "   f full text   ? rubric   q quit > "
+                key = read_key(prompt)
+
+                if key == "q":
+                    print("\nstopped")
+                    return 0
+                if key == "f":
+                    full = True
+                    continue
+                if key == "?":
+                    print(RUBRIC_REMINDERS[rubric])
+                    continue
+                if key not in keys:
+                    print(f"  unrecognised key {key!r}")
+                    continue
+
+                value = keys[key]
+                mode = None
+                if rubric == "groundedness" and value in ("0", "1"):
+                    mode = _read_failure_mode()
+                    if mode is None:
+                        continue
+
+                record_label(connection, question.question_id, rubric, value, mode)
+                connection.commit()
+                recorded += 1
+                break
+
+        totals = label_totals(connection, rubric)
+        print(f"\nrecorded {recorded} this session")
+        print(f"{rubric} totals: {dict(sorted(totals.items()))}")
+    return 0
+
+
+def _read_failure_mode() -> str | None:
+    """Read which kind of groundedness failure applies, or None to re-judge."""
+    while True:
+        key = read_key(
+            "    which failure?  s support (not in this section)   "
+            "c citation (in section, not cited)   r re-judge > "
+        )
+        if key == "r":
+            return None
+        if key in FAILURE_MODE_KEYS:
+            return FAILURE_MODE_KEYS[key]
+        print(f"    unrecognised key {key!r}")
+
+
 def cmd_label(args: argparse.Namespace) -> int:
     """Judge pooled candidates for each query, one at a time.
 
@@ -489,6 +704,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="offer one query's whole pool again, replacing its grades",
     )
     label.set_defaults(handler=cmd_label)
+
+    questions = subcommands.add_parser(
+        "label-questions", help="label generated questions for one rubric"
+    )
+    questions.add_argument("rubric", choices=tuple(LABEL_PASSES))
+    questions.add_argument(
+        "--limit",
+        type=int,
+        default=10**9,
+        help="stop after this many labels in one session",
+    )
+    questions.set_defaults(handler=cmd_label_questions)
 
     return parser
 

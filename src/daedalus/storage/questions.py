@@ -463,3 +463,29 @@ def list_rejections(connection: Connection) -> list[RecordedRejection]:
             )
             for row in cursor.fetchall()
         ]
+
+
+def labelled_question_ids(connection: Connection, rubric: str) -> set[int]:
+    """Return the questions already labelled for one rubric.
+
+    A labelling pass skips these, so a session can be stopped and resumed
+    without re-offering work already done.
+    """
+    if rubric not in RUBRICS:
+        raise ValueError(f"rubric must be one of {RUBRICS}, got {rubric!r}")
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT question_id FROM question_labels WHERE rubric = %s", (rubric,)
+        )
+        return {cast("int", row[0]) for row in cursor.fetchall()}
+
+
+def label_totals(connection: Connection, rubric: str) -> dict[str, int]:
+    """Return how many labels have been recorded at each value for one rubric."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT value, count(*) FROM question_labels WHERE rubric = %s "
+            "GROUP BY value",
+            (rubric,),
+        )
+        return {cast("str", row[0]): cast("int", row[1]) for row in cursor.fetchall()}
