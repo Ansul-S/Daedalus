@@ -12,7 +12,16 @@ import psycopg
 import pytest
 
 from daedalus import cli
+from daedalus.document import Document, Segment, SegmentKind
 from daedalus.storage.database import DATABASE_URL_ENV
+from daedalus.storage.documents import chunks_at, store_document
+from daedalus.storage.questions import (
+    GeneratedQuestion,
+    failure_mode_counts,
+    label_totals,
+    list_questions,
+    record_questions,
+)
 from tests.test_notebook import code, md, write_notebook
 
 Connection = psycopg.Connection[tuple[object, ...]]
@@ -231,3 +240,223 @@ def test_changed_material_is_not_skipped(
     make_notebook(path, title="Second")
     assert cli.main(["ingest", str(path)]) == 0
     assert "stored 1, skipped 0" in capsys.readouterr().out
+
+
+# --- question labelling -------------------------------------------------
+
+
+def store_two_questions(connection: Connection) -> None:
+    """Two accepted questions in one document, each citing its own seed."""
+    store_document(
+        connection,
+        Document(
+            doc_id="d1",
+            source_path=Path("/corpus/n.ipynb"),
+            source_format="notebook",
+            title="n",
+            segments=(
+                Segment(0, SegmentKind.PROSE, "Bagging averages.", ("S1",), (), "c:0"),
+                Segment(1, SegmentKind.PROSE, "Trees overfit.", ("S2",), (), "c:1"),
+            ),
+        ),
+    )
+    record_questions(
+        connection,
+        [
+            GeneratedQuestion(
+                doc_id="d1",
+                heading_path=("S1",),
+                seed_ordinal=0,
+                selection_rank=1,
+                requested_type="conceptual",
+                requested_difficulty="hard",
+                text="Why does bagging reduce variance?",
+                grounding_quote="Bagging averages.",
+                context_ordinals=(0,),
+                cited_ordinals=(0,),
+                model="qwen3:8b",
+                prompt_version="p6-v2",
+                params_hash="abc",
+            ),
+            GeneratedQuestion(
+                doc_id="d1",
+                heading_path=("S2",),
+                seed_ordinal=1,
+                selection_rank=2,
+                requested_type="explanation",
+                requested_difficulty="easy",
+                text="Why do deep trees overfit?",
+                grounding_quote="Trees overfit.",
+                context_ordinals=(1,),
+                cited_ordinals=(1,),
+                model="qwen3:8b",
+                prompt_version="p6-v2",
+                params_hash="abc",
+            ),
+        ],
+    )
+    connection.commit()
+
+
+def run_labelling(
+    monkeypatch: pytest.MonkeyPatch,
+    database_url: str,
+    rubric: str,
+    keys: list[str],
+    limit: int | None = None,
+) -> int:
+    """Run one labelling pass against a scripted sequence of keypresses."""
+    monkeypatch.setenv(DATABASE_URL_ENV, database_url)
+    pressed = iter(keys)
+    monkeypatch.setattr(cli, "read_key", lambda prompt: next(pressed, "q"))
+    argv = ["label-questions", rubric]
+    if limit is not None:
+        argv += ["--limit", str(limit)]
+    return cli.main(argv)
+
+
+def test_the_display_withholds_everything_the_rubrics_blind(
+    connection: Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The blinding is the tool's job, not the labeller's discipline."""
+    store_two_questions(connection)
+    question = next(q for q in list_questions(connection) if q.heading_path == ("S1",))
+    cited = chunks_at(connection, [("d1", 0)])
+
+    cli.show_question(question, cited, 1, 2)
+
+    out = capsys.readouterr().out
+    assert "Why does bagging reduce variance?" in out
+    assert "chunk 0" in out
+    assert "Bagging averages." in out
+    assert "conceptual" not in out
+    assert "hard" not in out
+    assert "Bagging averages." not in out.split("CITED MATERIAL")[0]
+
+
+def test_each_pass_uses_a_different_order(connection: Connection) -> None:
+    store_two_questions(connection)
+    questions = list_questions(connection)
+
+    orders = {
+        name: tuple(
+            q.question_id for q in cli.labelling_order(questions, str(spec["seed"]))
+        )
+        for name, spec in cli.LABEL_PASSES.items()
+    }
+
+    assert len(set(orders.values())) > 1
+
+
+def test_the_order_is_stable_and_independent_of_input_order(
+    connection: Connection,
+) -> None:
+    store_two_questions(connection)
+    questions = list_questions(connection)
+    seed = str(cli.LABEL_PASSES["groundedness"]["seed"])
+
+    forwards = [q.question_id for q in cli.labelling_order(questions, seed)]
+    backwards = [
+        q.question_id for q in cli.labelling_order(list(reversed(questions)), seed)
+    ]
+
+    assert forwards == backwards
+
+
+def test_the_pass_seeds_are_what_the_rubrics_declare() -> None:
+    assert cli.LABEL_PASSES["groundedness"]["seed"] == "phase6-groundedness-20260907"
+    assert cli.LABEL_PASSES["relevance"]["seed"] == "phase6-relevance-20260907"
+    assert cli.LABEL_PASSES["difficulty"]["seed"] == "phase6-difficulty-20260907"
+
+
+def test_a_relevance_pass_records_labels(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+
+    assert run_labelling(monkeypatch, database_url, "relevance", ["2", "0"]) == 0
+
+    assert label_totals(connection, "relevance") == {"2": 1, "0": 1}
+
+
+def test_a_groundedness_failure_prompts_for_its_mode(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "groundedness", ["0", "s", "2"])
+
+    assert label_totals(connection, "groundedness") == {"0": 1, "2": 1}
+    assert failure_mode_counts(connection) == {"support": 1}
+
+
+def test_a_supported_grade_is_never_asked_for_a_mode(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "groundedness", ["2", "2"])
+
+    assert failure_mode_counts(connection) == {}
+
+
+def test_a_difficulty_pass_uses_letter_keys(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "difficulty", ["e", "u"])
+
+    assert label_totals(connection, "difficulty") == {"easy": 1, "unusable": 1}
+
+
+def test_quitting_keeps_what_was_already_recorded(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "relevance", ["1", "q"])
+
+    assert label_totals(connection, "relevance") == {"1": 1}
+
+
+def test_a_resumed_pass_offers_only_what_is_left(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+    run_labelling(monkeypatch, database_url, "relevance", ["1", "q"])
+
+    run_labelling(monkeypatch, database_url, "relevance", ["2"])
+
+    assert label_totals(connection, "relevance") == {"1": 1, "2": 1}
+
+
+def test_the_session_limit_stops_early(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "relevance", ["2", "2"], limit=1)
+
+    assert sum(label_totals(connection, "relevance").values()) == 1
+
+
+def test_an_unrecognised_key_re_offers_the_same_question(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "relevance", ["x", "2", "q"])
+
+    assert label_totals(connection, "relevance") == {"2": 1}
+
+
+def test_re_judging_backs_out_of_the_failure_mode_prompt(
+    connection: Connection, database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "groundedness", ["1", "r", "2", "q"])
+
+    assert label_totals(connection, "groundedness") == {"2": 1}
+    assert failure_mode_counts(connection) == {}
