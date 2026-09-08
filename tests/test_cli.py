@@ -544,3 +544,40 @@ def test_a_long_chunk_still_advertises_the_full_text_key(
     cli.main(["label-questions", "relevance"])
 
     assert "f full text" in prompts[0]
+
+
+def test_the_rubric_key_leaves_the_question_on_screen(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """ "?" must print the rubric under the question, not behind a repaint.
+
+    Repainting the question after the reminder scrolls the reminder away on any
+    real terminal, which is indistinguishable from a key that does nothing.
+    """
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "relevance", ["?", "2", "q"])
+
+    out = capsys.readouterr().out
+    assert out.count("[1/2]") == 1
+    # Once at the start of the session, once because "?" asked for it.
+    assert out.count("interview-quality") == 2
+    assert "[1/2]" not in out.split("interview-quality")[-1]
+
+
+def test_the_full_text_key_repaints_the_question(
+    connection: Connection,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Revealing hidden text is a display change, so it must redraw."""
+    store_two_questions(connection)
+
+    run_labelling(monkeypatch, database_url, "relevance", ["f", "2", "q"])
+
+    out = capsys.readouterr().out
+    assert out.count("[1/2]") == 2

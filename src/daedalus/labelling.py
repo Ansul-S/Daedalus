@@ -377,8 +377,17 @@ def cmd_label_questions(args: argparse.Namespace) -> int:
                 [(question.doc_id, ordinal) for ordinal in question.cited_ordinals],
             )
             full = False
+            redraw = True
             while True:
-                show_question(question, cited, position, len(done) + len(pending), full)
+                # Only repaint when the display itself has changed. Repainting
+                # after every key pushed the rubric off the screen the moment
+                # "?" printed it, which reads as a dead key rather than as one
+                # whose output was overwritten.
+                if redraw:
+                    show_question(
+                        question, cited, position, len(done) + len(pending), full
+                    )
+                    redraw = False
                 truncated = has_truncation(cited)
                 prompt = (
                     "  ".join(legend)
@@ -392,6 +401,7 @@ def cmd_label_questions(args: argparse.Namespace) -> int:
                     return 0
                 if key == "f":
                     full = True
+                    redraw = True
                     continue
                 if key == "?":
                     print(RUBRIC_REMINDERS[rubric])
