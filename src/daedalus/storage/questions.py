@@ -489,3 +489,56 @@ def label_totals(connection: Connection, rubric: str) -> dict[str, int]:
             (rubric,),
         )
         return {cast("str", row[0]): cast("int", row[1]) for row in cursor.fetchall()}
+
+
+def judged_question_ids(
+    connection: Connection,
+    rubric: str,
+    judge_model: str,
+    judge_version: str,
+    run: int = 1,
+) -> set[int]:
+    """Return the questions already scored by one judge for one rubric and run."""
+    if rubric not in RUBRICS:
+        raise ValueError(f"rubric must be one of {RUBRICS}, got {rubric!r}")
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT question_id FROM judge_scores
+            WHERE rubric = %s AND judge_model = %s AND judge_version = %s
+              AND run = %s
+            """,
+            (rubric, judge_model, judge_version, run),
+        )
+        return {cast("int", row[0]) for row in cursor.fetchall()}
+
+
+def judge_pairs(
+    connection: Connection,
+    rubric: str,
+    judge_model: str,
+    judge_version: str,
+    run: int = 1,
+) -> list[tuple[str, str]]:
+    """Return (human, judge) label pairs for one rubric, for agreement.
+
+    Only questions carrying both a human label and a judge score appear. The
+    caller is told nothing about how many were dropped for want of one or the
+    other, so the count is checked separately rather than inferred from this.
+    """
+    if rubric not in RUBRICS:
+        raise ValueError(f"rubric must be one of {RUBRICS}, got {rubric!r}")
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT l.value, j.value
+            FROM question_labels l
+            JOIN judge_scores j
+              ON j.question_id = l.question_id AND j.rubric = l.rubric
+            WHERE l.rubric = %s AND j.judge_model = %s
+              AND j.judge_version = %s AND j.run = %s
+            ORDER BY l.question_id
+            """,
+            (rubric, judge_model, judge_version, run),
+        )
+        return [(cast("str", row[0]), cast("str", row[1])) for row in cursor.fetchall()]
