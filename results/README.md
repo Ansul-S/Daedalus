@@ -396,3 +396,69 @@ uv run python scripts/generate_questions.py
 ```
 
 Completed sections are skipped, so on the current store this is a no-op.
+
+---
+
+## Phase 6 human labelling — three passes
+
+Labelled in the database rather than to a file: 684 rows in `question_labels`,
+228 per rubric, one per accepted question, no item unlabelled on any rubric.
+
+| pass | rubric | when | span |
+|---|---|---|---|
+| 1 | groundedness | 2026-09-08 | 15:34:57 – 16:27:50 |
+| 2 | interview relevance | 2026-09-09 | 10:02:19 – 11:04:48 |
+| 3 | difficulty | 2026-09-09 | 12:30:48 – 14:10:15 |
+
+Each pass ran in its own shuffled order under the seeds fixed in
+`docs/PHASE-6-RUBRICS.md` section 7. The order actually labelled, reconstructed
+from `labelled_at`, matches the order the seed produces for all three passes.
+
+### Corrections, recorded as section 7 step 5 requires
+
+**Two tooling defects, both found by the labeller, both fixed before the labels
+they affected were recorded.**
+
+1. `f full text` was offered on chunks with nothing hidden, so it read as a
+   broken key rather than an empty one. Four groundedness labels had already
+   been recorded and were deleted at the labeller's instruction; the pass
+   restarted from zero. The discarded grades were selection rank 233 grade 2,
+   rank 147 grade 2, rank 9 grade 0 support, rank 67 grade 0 support. This was a
+   tooling defect, not a change of judgement.
+
+2. Pressing `?` for the rubric reminder printed it and then immediately
+   repainted the question over it, so the reminder was never readable. Found at
+   the start of the relevance pass, with no relevance label yet recorded, and
+   fixed before that pass began. No label was affected.
+
+**Two mis-key corrections during the difficulty pass**, both on the labeller's
+explicit instruction, both relabelled from the same position in the same order:
+
+| positions | rows deleted | 
+|---|---|
+| 44–48 | 5 |
+| 144–161 | 18 |
+
+The discarded grades were preserved before deletion and were not displayed back
+to the labeller, so the relabelling was not anchored on them.
+
+### The `unusable` coincidence expectation does not fully hold
+
+Rubric 3 states that `unusable` should coincide with relevance 0. Measured
+across the completed passes, 8 of the 11 `unusable` items are also relevance 0.
+Three are not: one at relevance 2 and two at relevance 1.
+
+The 57 items that are relevance 0 without being `unusable` are not exceptions.
+Relevance 0 also covers trivial questions and notebook mechanics, which are
+coherent enough to carry a difficulty; the expectation runs in one direction
+only.
+
+The three exceptions were audited after the pass. None was a fast decision —
+10.65 s, 7.56 s and 8.39 s against a pass median of 8.83 s — and none fell in
+either range that was relabelled for mis-keys. The labeller reviewed all three
+and confirmed they are considered judgements, not slips.
+
+So the expectation is an approximation rather than an invariant: a question can
+be answerable in principle and still not sit anywhere meaningful on a difficulty
+scale. This is recorded as a limitation of the rubric as written. The rubric was
+not changed, and the three labels stand.
