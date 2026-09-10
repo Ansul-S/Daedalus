@@ -52,12 +52,59 @@ def test_the_prompt_withholds_everything_the_rubrics_blind() -> None:
     assert "grounding_quote" not in body
 
 
-def test_the_rubric_text_is_the_one_the_labeller_read() -> None:
-    """Restating it here would let two copies of a frozen document drift."""
-    messages = prompt.build_messages("groundedness", "Why?", CITED)
-    body = messages[1]["content"]
+def test_the_rubric_criteria_are_the_ones_the_labeller_read() -> None:
+    """Restating them here would let two copies of a frozen document drift."""
+    body = prompt.build_messages("relevance", "Why?", CITED)[1]["content"]
 
-    assert RUBRIC_REMINDERS["groundedness"].strip() in body
+    assert RUBRIC_REMINDERS["relevance"].strip() in body
+
+
+def test_the_judge_reads_the_same_groundedness_criteria() -> None:
+    body = prompt.build_messages("groundedness", "Why?", CITED)[1]["content"]
+    shared = (
+        RUBRIC_REMINDERS["groundedness"]
+        .partition(prompt.FAILURE_MODE_MARKER)[0]
+        .strip()
+    )
+
+    assert shared in body
+    assert "0  unsupported" in body
+    assert "2  supported" in body
+
+
+def test_the_failure_mode_block_is_not_shown_to_the_judge() -> None:
+    """The judge has no key to press and no field to record a mode in."""
+    body = prompt.build_messages("groundedness", "Why?", CITED)[1]["content"]
+
+    assert prompt.FAILURE_MODE_MARKER not in body
+    assert "s  support" not in body
+    assert "c  citation" not in body
+
+
+def test_only_groundedness_differs_from_what_the_labeller_read() -> None:
+    for rubric in ("relevance", "difficulty"):
+        assert prompt.judge_rubric_text(rubric) == RUBRIC_REMINDERS[rubric].strip()
+    assert (
+        prompt.judge_rubric_text("groundedness")
+        != RUBRIC_REMINDERS["groundedness"].strip()
+    )
+
+
+def test_a_missing_marker_raises_rather_than_passing_the_block_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A silent no-op would put an unfollowable instruction back in the prompt."""
+    monkeypatch.setitem(
+        prompt.RUBRIC_REMINDERS, "groundedness", "criteria with no marker"
+    )
+
+    with pytest.raises(ValueError, match="can no longer strip"):
+        prompt.judge_rubric_text("groundedness")
+
+
+def test_judge_rubric_text_rejects_an_unknown_rubric() -> None:
+    with pytest.raises(ValueError, match="unknown rubric"):
+        prompt.judge_rubric_text("clarity")
 
 
 def test_each_rubric_asks_for_its_own_scale() -> None:

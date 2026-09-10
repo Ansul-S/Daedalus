@@ -17,6 +17,15 @@ thing.
 create two versions of a frozen document that could drift apart silently, and a
 drift would invalidate the comparison without failing a test.
 
+One block is removed on the way through. The groundedness reminder ends by
+telling the labeller to record a support or citation failure at grade 0 or 1,
+naming the keys `s` and `c`. The judge has no key to press and no field to put a
+failure mode in, so that block is an instruction it cannot follow. It is stripped
+rather than left dangling, and the strip is loud: if the marker it keys on ever
+disappears from the rubric, this raises instead of silently passing the block
+through. The two raters therefore read identical criteria and differ only in an
+instruction about recording.
+
 **One rubric per call.** The labeller made three separate passes so that a
 judgement on one rubric could not anchor a judgement on another. Asking for all
 three in one response would put a halo on one side of a comparison that exists to
@@ -40,7 +49,7 @@ from daedalus.labelling import RUBRIC_REMINDERS
 #: Identifies the judging contract a score was produced under. Every setting
 #: below is part of it: change any of them and this must change too, or scores
 #: produced under different conditions will pool silently.
-JUDGE_VERSION = "j6-v1"
+JUDGE_VERSION = "j6-v2"
 
 #: The judge model, and the decoding settings that make a run reproducible.
 #: Temperature 0 because reproducibility is worth more here than a sample of the
@@ -72,6 +81,10 @@ RESPONSE_SCHEMA: dict[str, Any] = {
     "required": ["grade"],
 }
 
+#: Where the groundedness reminder stops being criteria and starts being an
+#: instruction about which key to press.
+FAILURE_MODE_MARKER = "At 0 or 1, record which failure it is:"
+
 SYSTEM_PROMPT = """\
 You are grading interview questions against a fixed rubric. You are not \
 answering the questions, improving them, or explaining them.
@@ -83,6 +96,28 @@ Rules you must follow:
 other part of the source, and you must not use knowledge from outside it.
 3. Return one grade and nothing else.
 """
+
+
+def judge_rubric_text(rubric: str) -> str:
+    """Return the rubric as the judge is shown it: criteria, without keystrokes.
+
+    Only groundedness differs from what the labeller read, and only by the
+    failure-mode block. A missing marker raises rather than returning the text
+    unchanged, because a silent no-op here would put an unfollowable instruction
+    back in the prompt without failing anything.
+    """
+    if rubric not in RUBRICS:
+        raise ValueError(f"unknown rubric {rubric!r}")
+    text = RUBRIC_REMINDERS[rubric]
+    if rubric != "groundedness":
+        return text.strip()
+    head, marker, _ = text.partition(FAILURE_MODE_MARKER)
+    if not marker:
+        raise ValueError(
+            f"{FAILURE_MODE_MARKER!r} is absent from the groundedness rubric; "
+            "the judge prompt can no longer strip what it was written to strip"
+        )
+    return head.strip()
 
 
 def render_question(text: str, cited: list[tuple[int, str, str]]) -> str:
@@ -116,7 +151,7 @@ def build_messages(
     user = f"""\
 RUBRIC
 
-{RUBRIC_REMINDERS[rubric].strip()}
+{judge_rubric_text(rubric)}
 
 {render_question(text, cited)}
 Return JSON: {{"grade": <{ANSWER_FORMATS[rubric]}>}}
@@ -158,7 +193,7 @@ def params_hash() -> str:
             "num_predict": NUM_PREDICT,
             "think": THINK,
             "system": SYSTEM_PROMPT,
-            "rubrics": {rubric: RUBRIC_REMINDERS[rubric] for rubric in RUBRICS},
+            "rubrics": {rubric: judge_rubric_text(rubric) for rubric in RUBRICS},
             "answer_formats": ANSWER_FORMATS,
             "schema": RESPONSE_SCHEMA,
         },
