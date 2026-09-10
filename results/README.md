@@ -795,3 +795,57 @@ consumer hardware, one run each at temperature 0, one prompt, one corpus of thre
 documents. Nothing here measures whether a larger judge would do better, and
 nothing here establishes difficulty validity — `docs/PHASE-0.md` already records
 that validity requires learner performance data, which this project does not have.
+
+---
+
+## Phase 6 — structural coverage
+
+Protocol section 14 defines structural coverage as selected sections producing at
+least one question that passes the deterministic checks, over the **300 selected
+sections**, and requires three further figures beside it so the denominator is
+never mistaken for the corpus. Duplicate detection is excluded from the
+definition.
+
+| figure | value | |
+|---|---|---|
+| **structural coverage** | **228/300** | **76.0%** |
+| selected of eligible | 300/337 | 89.0% |
+| eligible of all sections | 337/408 | 82.6% |
+| selected of all sections | 300/408 | 73.5% |
+
+Derived from the same counts, and the most conservative statement of how much of
+the corpus carries a question: **228 of 408 sections, 55.9%.** The 180 sections
+without one are 71 never eligible (56 thin, 15 prose-free), 37 eligible but not
+drawn, and 72 drawn but rejected.
+
+Section 18 item 5 records why the denominator is 300 rather than 337: the
+approved decision defined coverage over eligible sections, but the benchmark
+generates from 300 of them, and a denominator of 337 would cap coverage at 88.7%
+for a reason unrelated to generator quality. The narrowing was approved on
+2026-09-07 before generation.
+
+### The selection reproduces exactly
+
+The 300 selected sections were recomputed from `daedalus.generation.selection`
+against the current store and compared with what the run actually attempted:
+
+- 228 selected sections hold a question, 72 hold a rejection, and the two sets
+  are disjoint and sum to 300.
+- **No question comes from a section outside the selection**, and no selected
+  section is unaccounted for.
+- Section counts recompute unchanged: 408 total, 337 eligible, 56 thin, 15
+  prose-free.
+
+So the frozen sample is reproducible from committed code and the current
+database, not merely recorded.
+
+### The 72 uncovered sections
+
+All 72 were rejected for the same reason, `quote_not_found` — the diagnostic is
+in the generation section above. Coverage is therefore limited by the verbatim
+quote check rather than by schema failures, type or difficulty mismatches, or
+transport errors, of which there were none.
+
+A rejected section is an **absent** question, not an ungrounded one. The 72 are
+part of the 300-section coverage denominator and take no part in any rate
+computed over the 228 accepted questions.
