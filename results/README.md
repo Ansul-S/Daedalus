@@ -399,6 +399,33 @@ Completed sections are skipped, so on the current store this is a no-op.
 
 ---
 
+## `labels_20260910T120516Z.json`
+
+Every Phase 6 judgement, frozen. The database remains the working copy; this
+file is the record, so a result can be rechecked without a PostgreSQL instance.
+
+Contents:
+
+- **684 human labels** — 228 questions on each of three rubrics, with the
+  failure mode where groundedness defines one, and each label's timestamp.
+- **1,368 judge scores** — three rubrics by two judges, values stored exactly as
+  emitted, off-scale answers included.
+- **76 duplicate pair judgements** with the similarity and band each was
+  presented under, alongside the band counts over all 25,878 pairs.
+- **Agreement for all six rubric-by-judge combinations**, under every policy
+  pair: `unusable` excluded and included, off-scale excluded and counted as
+  disagreement, each with raw agreement, weighted kappa, marginals, the full
+  confusion counts, and bootstrap intervals.
+- **The contracts that produced it** — generation `p6-v2` with its params hash,
+  judging `j6-v2` with its params hash, the selection seed and size, the three
+  labelling shuffle seeds, and the duplicate sampling seed and bands.
+- **The denominators**, so no rate in the file can be read against the wrong one.
+
+`duplicates.threshold` is `null` deliberately. No threshold separates the
+labelled pairs, and recording one would misstate the result.
+
+---
+
 ## Phase 6 human labelling — three passes
 
 Labelled in the database rather than to a file: 684 rows in `question_labels`,

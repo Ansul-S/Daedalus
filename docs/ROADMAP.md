@@ -4,7 +4,7 @@ Direction, not a work queue. **Do not implement phases automatically.** Each
 phase starts when I say it starts. This document is revised as the project
 develops; phases and their order are not fixed.
 
-**Current phase:** Phase 6 — Question generation
+**Current phase:** Phase 6 complete. Milestone 1 delivered.
 
 Keep this line accurate. It's the fastest way for a new session to know where
 things stand.
@@ -83,9 +83,27 @@ met: reciprocal rank fusion against production `bge-m3` came out at −0.0183
 NDCG@10 [−0.0525, +0.0184], a null result. It is not in the production path.
 Three of the phase's comparisons are nulls and are recorded as nulls.
 
-## Phase 6 — Question generation
+## Phase 6 — Question generation — complete
 
 Grounded interview questions with references back to source chunks.
+
+**Delivered:** a generator working from a frozen 300-section sample, a
+deterministic validity check that rejects rather than repairs, 684 human rubric
+labels, an LLM judge measured against them, and a duplicate safety net. Protocol
+and rubrics were committed before the work they govern.
+
+**All four pre-registered criteria were missed**, and are reported as missed:
+groundedness 57.5% against a 90% bar, unsupported 25.9% against a 10% ceiling,
+interview relevance 11.8% against 80%, difficulty match 46.1% against 80%.
+Structural coverage is 228 of 300 selected sections, 76.0%.
+
+**No automated score is quoted**, because judge agreement was measured first and
+does not support one. The best agreement anywhere in the grid is weighted kappa
+0.319; relevance judging by `qwen3:8b` is worse than chance. The duplicate
+threshold is reported as unvalidatable.
+
+Full numbers, provenance and limitations in `results/README.md` and
+`results/labels_20260910T120516Z.json`.
 
 ---
 
@@ -308,3 +326,100 @@ score-based rather than rank-based combination might behave differently, and
 none of them was tried — deliberately, because trying them after seeing this
 result and reporting the best one would destroy the pre-registration. Any future
 attempt needs its own protocol committed in advance.
+
+### 2026-09-10 — Phase 6 reported as four missed criteria, not repaired
+
+The generator, the three rubrics and the thresholds were fixed in
+`docs/PHASE-6-PROTOCOL.md` and `docs/PHASE-6-RUBRICS.md`, both committed before
+the work they govern. All four pre-registered criteria came out below their bars:
+groundedness grade 2 at 57.5% against 90%, unsupported grade 0 at 25.9% against a
+10% ceiling, interview relevance grade 2 at 11.8% against 80%, and difficulty
+match at 46.1% against 80%.
+
+Nothing was changed in response. No threshold moved, no prompt was revised, no
+question was regenerated, and no rubric was rewritten after a number was seen.
+Protocol section 15 states that a null or a failure is a completed outcome, and
+this is that outcome.
+
+The relevance result is the substantive one. The failure is not scattered bad
+questions: 136 of 228 sit at grade 1, which the scale defines as on topic and
+sensible but answerable by restating a sentence. The generator produces questions
+about the right subject that test recall rather than understanding.
+
+A separate structural defect was found by inspection during labelling and
+measured afterwards: 57 of 228 questions (25.0%) refer to prompt scaffolding the
+candidate cannot see — `chunk 170`, "the SEED chunk". The class is strongly
+associated with relevance 0 (71.9% against 14.0%, chi-square 70.30 on 1 df).
+It does **not** explain the relevance failure: had those 57 behaved like the
+other 171, grade 2 would land near 12.9% rather than 11.8%.
+
+Alternatives considered: regenerating under a prompt that does not label chunks
+`--- chunk N ---`. Rejected for this phase — a revision after seeing the result
+is exactly what section 16 forbids. Any such attempt needs a new contract
+committed in advance and reported beside `p6-v2`, not instead of it.
+
+Limitation: the labels are one annotator's, made once, and the labeller was aware
+of the chunk-pointer class before the relevance pass finished, so that
+association is not independently confirmed. Two tooling defects were found during
+labelling and are recorded with the labels they cost.
+
+### 2026-09-10 — No automated score is quoted; the judge does not work here
+
+Protocol section 15 item 5 required judge agreement to be measured before any
+automated score was quoted. It was measured, and the answer is that none should
+be. Two judges scored all 228 questions on all three rubrics under contract
+`j6-v2` at temperature 0: `qwen3:8b`, which is also the generator, and
+`llama3.2`, which is not.
+
+The strongest agreement anywhere in the six-way grid is weighted kappa 0.319
+(difficulty, `qwen3:8b`). Relevance judging by `qwen3:8b` is **−0.0013** — worse
+than chance, with a bootstrap interval whose upper bound is 0.0000.
+
+The clearest evidence is a comparison against a constant. `qwen3:8b` answered "2"
+on 219 of 228 groundedness questions and 227 of 228 relevance questions —
+near-identical behaviour — yet scored 60.1% raw agreement on one and 11.8% on the
+other. The difference is entirely the human's marginal. A rater that ignored the
+input and always answered "2" scores 57.5% on groundedness; the judge beat that
+by six questions.
+
+**Self-preference was tested and is not supported.** `llama3.2` shares no lineage
+with the generator and is *more* generous, not less — 41.7% of its judgements sit
+above the diagonal against `qwen3:8b`'s 39.9%. The leniency is a property of both
+local judges on this task, not a model favouring its own output. Of the 59
+questions labelled unsupported, `qwen3:8b` found 6 and `llama3.2` found none.
+
+Alternatives considered: a frontier judge through a paid API, which the zero
+budget rules out and which the 2026-08-29 decision already anticipated would be
+materially more reliable. Also considered and deferred: repeat runs at a nonzero
+temperature for a self-consistency estimate — the `run` column exists for it, and
+adding runs later requires no rework.
+
+Limitation: two models at 8B and 3B, one run each, one prompt, one corpus of
+three documents. Nothing here measures a larger judge, and nothing establishes
+difficulty validity, which `docs/PHASE-0.md` already records as needing learner
+performance data.
+
+### 2026-09-10 — The duplicate threshold is unvalidatable
+
+Section 11 required a threshold be validated or reported as unvalidatable. It is
+unvalidatable. All 25,878 question pairs were scored by cosine similarity over
+`bge-m3` question embeddings stored under a distinct identity; 76 pairs were
+labelled across bands fixed on the cosine range before any vector was computed.
+
+The classes do not separate. Duplicates span 0.7232–0.9322 and non-duplicates
+0.3091–0.8951, so every duplicate lies inside the overlap, and sorted by
+similarity the two interleave almost pair for pair. The best threshold classifies
+85.5% correctly, against 84.2% for calling every pair not a duplicate — one pair
+better — and catches 1 of 12 duplicates. Full recall costs precision 0.387.
+
+**No threshold is proposed.** The structural claim does hold where it can be
+checked: no pair reaches 0.95 similarity and exactly one reaches 0.90, so one
+question per section with no section generated twice did avoid a dense
+near-duplicate tail.
+
+Limitation: the three bands below 0.70 hold 25,636 of the 25,878 pairs on 15
+samples each, so they are unmeasured rather than shown clean — the weighted point
+estimate of 71 duplicate pairs carries an upper bound of 18.42%. And unlike the
+three rubrics, the duplicate criterion was written during Phase 6 rather than
+committed before it; section 11 places this check outside validity, but the
+freeze claim for it is weaker and is recorded as such in `results/README.md`.
