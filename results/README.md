@@ -849,3 +849,124 @@ transport errors, of which there were none.
 A rejected section is an **absent** question, not an ungrounded one. The 72 are
 part of the 300-section coverage denominator and take no part in any rate
 computed over the 228 accepted questions.
+
+---
+
+## Phase 6 — duplicate detection
+
+The safety net from protocol section 11, measured after the fact. Diversity here
+is structural first — one question per section, no section generated from twice —
+so similarity is a check on that claim rather than a filter the design relies on.
+It takes no part in structural coverage.
+
+### Procedure as run
+
+228 accepted questions embedded with `bge-m3` under the distinct identity
+`bge-m3-questions`, stored in `question_embeddings` by migration 008. The
+production chunk embeddings were not touched. All 25,878 unordered pairs scored
+by cosine similarity in pgvector.
+
+**Band cuts were fixed in code on the cosine range before any vector was
+computed**, and the sample drawn by seeded hash within each band. Quantile bands
+would have manufactured a populated tail whether or not one existed; these cuts
+are the same whatever the data turned out to hold.
+
+| band | pairs in corpus | sampled | labelled duplicate |
+|---|---|---|---|
+| [0.95, 1.0] | 0 | 0 | — |
+| [0.90, 0.95) | 1 | 1 | 1 |
+| [0.80, 0.90) | 30 | 15 | 7 |
+| [0.70, 0.80) | 211 | 15 | 4 |
+| [0.60, 0.70) | 1,654 | 15 | 0 |
+| [0.50, 0.60) | 7,688 | 15 | 0 |
+| < 0.50 | 16,294 | 15 | 0 |
+| **total** | **25,878** | **76** | **12** |
+
+Similarity across all pairs runs 0.2154 to 0.9322, mean 0.4813. The two highest
+bands hold 0 and 1 pairs, so the sample is 76 rather than the 105 that 15 per
+band would give. **Short bands are reported short, never padded from a
+neighbour**; the alternative would misdescribe the one thing this check exists to
+find out.
+
+### No threshold separates the labelled pairs
+
+| | range |
+|---|---|
+| pairs labelled duplicate (12) | 0.7232 – 0.9322 |
+| pairs labelled not duplicate (64) | 0.3091 – 0.8951 |
+| overlap | 0.7232 – 0.8951 |
+
+Every duplicate falls inside the overlap. Sorted by similarity, the two classes
+interleave almost pair for pair through it:
+
+```
+0.9322 duplicate      0.8193 duplicate      0.8066 not duplicate
+0.8951 not duplicate  0.8156 not duplicate  0.8040 duplicate
+0.8621 duplicate      0.8126 duplicate      0.8039 not duplicate
+0.8465 not duplicate  0.8098 not duplicate  0.7932 not duplicate
+0.8398 duplicate      0.8070 duplicate      0.7869 duplicate
+0.8375 not duplicate
+```
+
+The best-separating threshold, searched over midpoints between adjacent observed
+similarities, is **0.9137**, classifying 65 of 76 correctly (85.5%). That figure
+is degenerate: it reaches 85.5% by calling almost everything not a duplicate, and
+**a rater that called every pair not-duplicate scores 64 of 76, 84.2%.** The best
+threshold beats a constant answer by one pair, and catches 1 of the 12 duplicates
+— recall 0.083 at precision 1.000.
+
+Lowering it does not help:
+
+| threshold | true pos | false pos | false neg | precision | corpus pairs at or above |
+|---|---|---|---|---|---|
+| 0.95 | 0 | 0 | 12 | — | 0 |
+| 0.90 | 1 | 0 | 11 | 1.000 | 1 |
+| 0.85 | 2 | 1 | 10 | 0.667 | 6 |
+| 0.80 | 8 | 8 | 4 | 0.500 | 31 |
+| 0.75 | 9 | 9 | 3 | 0.400 | 78 |
+| 0.70 | 12 | 19 | 0 | 0.387 | 242 |
+
+Full recall costs a precision of 0.387 — nearly two false positives for every
+true one. **No threshold is proposed, because the labels do not support one.**
+Cosine similarity over `bge-m3` question embeddings does not distinguish a
+duplicate question from a merely related one on this corpus.
+
+### How many duplicate pairs the corpus holds is not well estimated
+
+Weighting each band's observed duplicate rate by its size gives a point estimate
+of **71 duplicate pairs of 25,878, 0.275%**. That number should not be quoted on
+its own. The three bands below 0.70 hold 25,636 of the 25,878 pairs and
+contributed 15 samples each; observing no duplicate in 15 draws puts the 95%
+upper bound on a band's rate at 18.1%, which carries the upper bound on the whole
+estimate to 18.42%.
+
+The honest statement is therefore bounded on one side only: **near-duplicates are
+rare in the high-similarity region, where they can be found at all, and the low
+bands are unmeasured rather than shown to be clean.** A sample of 15 per band
+cannot distinguish a rate of zero from a rate of a few percent across 25,636
+pairs.
+
+### What this supports
+
+The structural claim holds where it can be checked: **no pair of the 228
+questions reaches 0.95 similarity, and exactly one reaches 0.90.** One question
+per section, with no section generated from twice, did produce a corpus without a
+dense near-duplicate tail.
+
+The detection claim does not hold: **the duplicate threshold is reported as
+unvalidatable**, which is the outcome section 11 step 5 names explicitly. No
+value separates the labelled pairs, and none is chosen.
+
+### A limitation of this check, recorded rather than smoothed over
+
+The three rubrics were committed before any label was recorded. **The duplicate
+criterion was not.** Section 11 specifies the procedure and says the user labels
+each pair duplicate or not duplicate, but never defines what makes a pair a
+duplicate, and `docs/PHASE-6-RUBRICS.md` covers only groundedness, relevance and
+difficulty. The operational test used — *a candidate answering one has answered
+the other; asking both adds nothing* — was written during Phase 6, not before it.
+
+The freeze claim for this one check is therefore weaker than for the other three.
+It is confined to a check section 11 already places outside validity, and it does
+not affect any rubric rate. An earlier run of 50 pairs was discarded before this
+one; those labels are not included and were not consulted while relabelling.
