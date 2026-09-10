@@ -14,10 +14,16 @@ from pathlib import Path
 
 import psycopg
 
+from daedalus.duplicates import PER_BAND
 from daedalus.embedding import DEFAULT_MODEL, EmbeddingError, embed_texts
 from daedalus.ingestion.canonical import notebook_to_document
 from daedalus.ingestion.notebook import parse_notebook
-from daedalus.labelling import LABEL_PASSES, cmd_label, cmd_label_questions
+from daedalus.labelling import (
+    LABEL_PASSES,
+    cmd_label,
+    cmd_label_pairs,
+    cmd_label_questions,
+)
 from daedalus.storage.database import DatabaseNotConfiguredError, connect
 from daedalus.storage.documents import (
     document_exists,
@@ -216,6 +222,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="stop after this many labels in one session",
     )
     questions.set_defaults(handler=cmd_label_questions)
+
+    pairs = subcommands.add_parser(
+        "label-pairs", help="judge sampled question pairs as duplicates"
+    )
+    pairs.add_argument(
+        "--per-band",
+        type=int,
+        default=PER_BAND,
+        help="pairs drawn from each similarity band",
+    )
+    pairs.add_argument(
+        "--limit",
+        type=int,
+        default=10**9,
+        help="stop after this many labels in one session",
+    )
+    pairs.set_defaults(handler=cmd_label_pairs)
 
     return parser
 

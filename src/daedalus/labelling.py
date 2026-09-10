@@ -21,6 +21,7 @@ from typing import cast
 
 import psycopg
 
+from daedalus.duplicates import QUESTION_EMBEDDING_MODEL, sample_pairs
 from daedalus.embedding import embed_texts
 from daedalus.generation.selection import KEY_SEPARATOR
 from daedalus.retrieval.search import Candidate, Chunk, pool_candidates
@@ -37,8 +38,11 @@ from daedalus.storage.queries import (
 from daedalus.storage.questions import (
     StoredQuestion,
     label_totals,
+    labelled_pairs,
     labelled_question_ids,
     list_questions,
+    pairwise_similarities,
+    record_duplicate_label,
     record_label,
 )
 
@@ -554,4 +558,107 @@ def cmd_label(args: argparse.Namespace) -> int:
             f"{grade}={totals.get(grade, 0)}" for grade in sorted(GRADE_KEYS.values())
         )
     )
+    return 0
+
+
+#: Shown once at the start of a pair session and again on demand with "?".
+DUPLICATE_REMINDER = """\
+Are these two questions duplicates of each other?
+
+  d  duplicate      a candidate answering one has answered the other; asking
+                    both adds nothing
+  n  not duplicate  they differ in what they ask, what they test, or what a
+                    good answer would contain
+
+Judge the questions, not their topics. Two questions about the same concept are
+not duplicates if a candidate could answer one well and the other badly.
+Similarity is not shown, because a number would anchor the judgement it is
+supposed to be checked against.
+"""
+
+
+def show_pair(first: str, second: str, position: int, total: int, band: str) -> None:
+    """Print one candidate pair, with the similarity and band withheld.
+
+    The band a pair was drawn from is the stratum, not evidence: showing it
+    would tell the labeller how similar the vectors thought the pair was, which
+    is the very thing the labels exist to check independently.
+    """
+    print("\n" + "=" * 78)
+    print(f"[{position}/{total}]")
+    print("-" * 78)
+    print("QUESTION A")
+    print("-" * 78)
+    print(first.strip())
+    print("-" * 78)
+    print("QUESTION B")
+    print("-" * 78)
+    print(second.strip())
+    print("-" * 78)
+
+
+def cmd_label_pairs(args: argparse.Namespace) -> int:
+    """Judge sampled question pairs as duplicates, one pair at a time.
+
+    The sample is drawn deterministically from the stored similarities, so a
+    stopped session resumes on exactly the pairs it had not reached.
+    """
+    keys = {"d": "duplicate", "n": "not_duplicate"}
+
+    with connect() as connection:
+        pairs = pairwise_similarities(connection, QUESTION_EMBEDDING_MODEL)
+        if not pairs:
+            print("no question embeddings stored; nothing to sample")
+            return 1
+
+        drawn = sample_pairs(pairs, args.per_band)
+        done = labelled_pairs(connection, QUESTION_EMBEDDING_MODEL)
+        pending = [p for p in drawn if (p[0], p[1]) not in done]
+
+        if not pending:
+            print("nothing left to label")
+            return 0
+
+        texts = {
+            question.question_id: question.text
+            for question in list_questions(connection)
+        }
+
+        print(DUPLICATE_REMINDER)
+        print(f"{len(done)} already labelled, {len(pending)} remaining\n")
+
+        recorded = 0
+        for position, (lower, higher, similarity, band) in enumerate(
+            pending, start=len(done) + 1
+        ):
+            if recorded >= args.limit:
+                break
+            while True:
+                show_pair(texts[lower], texts[higher], position, len(drawn), band)
+                key = read_key("  d duplicate   n not duplicate   ? rubric   q quit > ")
+
+                if key == "q":
+                    print("\nstopped")
+                    return 0
+                if key == "?":
+                    print(DUPLICATE_REMINDER)
+                    continue
+                if key not in keys:
+                    print(f"  unrecognised key {key!r}")
+                    continue
+
+                record_duplicate_label(
+                    connection,
+                    lower,
+                    higher,
+                    QUESTION_EMBEDDING_MODEL,
+                    similarity,
+                    band,
+                    keys[key],
+                )
+                connection.commit()
+                recorded += 1
+                break
+
+        print(f"\nrecorded {recorded} this session")
     return 0

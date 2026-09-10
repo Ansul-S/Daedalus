@@ -542,3 +542,129 @@ def judge_pairs(
             (rubric, judge_model, judge_version, run),
         )
         return [(cast("str", row[0]), cast("str", row[1])) for row in cursor.fetchall()]
+
+
+def record_question_embedding(
+    connection: Connection, question_id: int, model: str, vector: Sequence[float]
+) -> None:
+    """Store one question's vector, replacing any earlier one for that model."""
+    if not vector:
+        raise ValueError("refusing to store an empty vector")
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO question_embeddings (question_id, model, dim, embedding)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (question_id, model)
+            DO UPDATE SET embedding = EXCLUDED.embedding,
+                          dim = EXCLUDED.dim,
+                          created_at = now()
+            """,
+            (question_id, model, len(vector), str(list(vector))),
+        )
+
+
+def questions_without_embeddings(connection: Connection, model: str) -> list[int]:
+    """Return the questions not yet embedded under one model identity."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT q.id FROM questions q
+            WHERE NOT EXISTS (
+                SELECT 1 FROM question_embeddings e
+                WHERE e.question_id = q.id AND e.model = %s)
+            ORDER BY q.id
+            """,
+            (model,),
+        )
+        return [cast("int", row[0]) for row in cursor.fetchall()]
+
+
+def pairwise_similarities(
+    connection: Connection, model: str
+) -> list[tuple[int, int, float]]:
+    """Return cosine similarity for every unordered pair, low id first.
+
+    Computed by pgvector rather than in Python: the vectors are already in the
+    database, and 228 questions make 25,878 pairs, which is a join rather than a
+    loop. `<=>` is cosine distance, so similarity is one minus it.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT a.question_id, b.question_id,
+                   1 - (a.embedding <=> b.embedding)
+            FROM question_embeddings a
+            JOIN question_embeddings b
+              ON b.model = a.model AND b.question_id > a.question_id
+            WHERE a.model = %s
+            ORDER BY a.question_id, b.question_id
+            """,
+            (model,),
+        )
+        return [
+            (cast("int", row[0]), cast("int", row[1]), float(cast("float", row[2])))
+            for row in cursor.fetchall()
+        ]
+
+
+def record_duplicate_label(
+    connection: Connection,
+    lower_id: int,
+    higher_id: int,
+    model: str,
+    similarity: float,
+    band: str,
+    value: str,
+) -> None:
+    """Record one pair judgement, replacing any earlier one for that pair."""
+    if lower_id >= higher_id:
+        raise ValueError(f"pair must be ordered, got ({lower_id}, {higher_id})")
+    if value not in ("duplicate", "not_duplicate"):
+        raise ValueError(f"value must be duplicate or not_duplicate, got {value!r}")
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO duplicate_labels
+                (lower_id, higher_id, model, similarity, band, value)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (lower_id, higher_id, model)
+            DO UPDATE SET value = EXCLUDED.value, labelled_at = now()
+            """,
+            (lower_id, higher_id, model, similarity, band, value),
+        )
+
+
+def labelled_pairs(connection: Connection, model: str) -> set[tuple[int, int]]:
+    """Return the pairs already judged under one model identity."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT lower_id, higher_id FROM duplicate_labels WHERE model = %s",
+            (model,),
+        )
+        return {(cast("int", row[0]), cast("int", row[1])) for row in cursor.fetchall()}
+
+
+def duplicate_labels(
+    connection: Connection, model: str
+) -> list[tuple[int, int, float, str, str]]:
+    """Return every pair judgement as (lower, higher, similarity, band, value)."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT lower_id, higher_id, similarity, band, value
+            FROM duplicate_labels WHERE model = %s
+            ORDER BY similarity DESC
+            """,
+            (model,),
+        )
+        return [
+            (
+                cast("int", row[0]),
+                cast("int", row[1]),
+                float(cast("float", row[2])),
+                cast("str", row[3]),
+                cast("str", row[4]),
+            )
+            for row in cursor.fetchall()
+        ]
