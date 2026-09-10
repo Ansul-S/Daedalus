@@ -24,8 +24,10 @@ knowledge as though it came from your material.
 
 ## Status
 
-**Under construction.** The ingestion, storage, and retrieval spine works and is
-tested end to end. Question generation and answer evaluation are not built yet.
+**Milestone 1 complete.** One measured path runs end to end: a Jupyter notebook
+goes in, and grounded interview questions come out, with retrieval quality,
+question quality, and the reliability of the automated judge all measured rather
+than asserted.
 
 | Area | State |
 |---|---|
@@ -34,17 +36,61 @@ tested end to end. Question generation and answer evaluation are not built yet.
 | PostgreSQL storage with pgvector | working, tested |
 | Local embedding via Ollama | working, tested |
 | Vector, lexical, and pooled retrieval | working, tested |
-| Command line interface | working, tested |
-| Reference set and labelling tool | working, tested |
-| Hand-labelled reference set | complete — 50 queries, 1,064 judgements |
-| Retrieval quality | **not yet measured** |
-| Question generation | not started |
-| Answer evaluation | not started |
+| Hand-labelled reference set | complete — 50 queries, 1,422 judgements |
+| Retrieval quality | **measured** — `bge-m3` NDCG@10 0.6127 |
+| Question generation | working — 228 questions from 300 sections |
+| Question quality | **measured** — 684 hand labels, four bars missed |
+| LLM judge | built and **measured against the human labels** |
+| Interview session, answer evaluation | not built — deferred, see below |
 
-**No retrieval quality figure has been measured yet.** Search returns plausible
-results, but "plausible" is not a number. The labelled reference set that makes
-an honest Recall@K possible is now complete — 50 queries and 1,064 human
-judgements — and computing the metrics from it is the current phase.
+### The headline result is a negative one
+
+Four quality thresholds were fixed in a protocol committed **before** any
+question was generated. All four were missed:
+
+| criterion | threshold | measured |
+|---|---|---|
+| grounded in the cited material | >= 90% | **57.5%** |
+| unsupported questions | > 10% fails | **25.9%** |
+| interview-relevant | >= 80% | **11.8%** |
+| matches its assigned difficulty | >= 80% | **46.1%** |
+
+Nothing was tuned in response. No threshold moved, no prompt was revised, no
+question was regenerated. The protocol says a failure is a completed outcome,
+and this is that outcome.
+
+The relevance number is the substantive one, and it is not a scatter of bad
+questions: **136 of 228 sit at grade 1** — on topic and sensible, but answerable
+by restating a sentence. The generator asks about the right subject and tests
+recall rather than understanding.
+
+### The judge does not work here either, and that was measured before it was used
+
+Two local models scored all 228 questions on all three rubrics. Neither can
+substitute for the human labels:
+
+| rubric | judge | raw agreement | weighted kappa |
+|---|---|---|---|
+| groundedness | `qwen3:8b` | 0.6009 | 0.1201 |
+| groundedness | `llama3.2` | 0.5381 | 0.0559 |
+| relevance | `qwen3:8b` | 0.1184 | **−0.0013** |
+| relevance | `llama3.2` | 0.5825 | 0.1069 |
+| difficulty | `qwen3:8b` | 0.6129 | **0.3190** |
+| difficulty | `llama3.2` | 0.5741 | 0.2809 |
+
+`qwen3:8b` answered "2" on 219 of 228 groundedness questions and 227 of 228
+relevance questions — near-identical behaviour — and scored 60.1% raw agreement
+on one and 11.8% on the other. The difference is entirely the human's label
+distribution, not the judge. A rater that ignored the input and always answered
+"2" would score 57.5% on groundedness; the judge beat that by six questions.
+
+That is why no automated quality score appears anywhere in this project.
+
+Full numbers, confidence intervals, confusion matrices and limitations are in
+[`results/README.md`](results/README.md), and every judgement is frozen in
+`results/labels_20260910T120516Z.json`.
+
+---
 
 ---
 
@@ -68,7 +114,17 @@ vector search    lexical search    random sample
 candidates
       ↓  human judgement — 0 / 1 / 2
 reference set
-      ↓  (next) measure Recall@K, then generate questions
+      ↓  measure — NDCG, recall, precision, reciprocal rank, bootstrap intervals
+retrieval quality
+      ↓
+300 sections drawn by hash from a frozen selection
+      ↓  generate — qwen3:8b, one question per section, no retries
+      ↓  validate — seven deterministic checks; failures rejected, not repaired
+228 questions + 72 recorded rejections
+      ↓  label — three blinded human passes, one rubric each
+684 human labels
+      ↓  judge — two local models, then measure agreement against the human
+judge agreement, and the decision not to trust it
 ```
 
 ### Parsing keeps the structure
@@ -114,6 +170,10 @@ heuristic. Pools hold 16 to 25 candidates per query.
 | Written independently | 25 | 531 | 69.1% | 21.7% | 9.2% |
 | **Total** | **50** | **1,064** | 66.2% | 19.5% | 14.3% |
 
+The pool was later expanded to **1,422 judgements** so that all four retrieval
+variants compared have 100% top-10 coverage and no reported number depends on
+how unjudged candidates are treated.
+
 The two halves exist to be compared. Harvested queries are taken verbatim from
 the material's own concept-check cells, so they share its vocabulary. Authored
 queries were written separately, asking the same material about itself in
@@ -144,6 +204,8 @@ fully answer is real information about the corpus.
 | pgvector | 0.8.6 |
 | Ollama | 0.33.2 |
 | bge-m3 | 1024 dimensions |
+| qwen3:8b | generation and judging |
+| llama3.2 | second judge |
 
 Everything runs locally. There are no paid services and no API keys.
 
@@ -160,12 +222,15 @@ brew services start postgresql@18
 createdb -p 5434 daedalus
 psql -p 5434 -d daedalus -c "CREATE EXTENSION vector;"
 
-# 3. Schema
-psql -p 5434 -d daedalus --single-transaction -v ON_ERROR_STOP=1 -f migrations/001_initial.sql
-psql -p 5434 -d daedalus --single-transaction -v ON_ERROR_STOP=1 -f migrations/002_reference_set.sql
+# 3. Schema — every migration, in order
+for m in migrations/*.sql; do
+  psql -p 5434 -d daedalus --single-transaction -v ON_ERROR_STOP=1 -f "$m"
+done
 
-# 4. The embedding model
+# 4. Models — embedding, generation, and the second judge
 ollama pull bge-m3
+ollama pull qwen3:8b
+ollama pull llama3.2
 
 # 5. Python dependencies
 uv sync
@@ -202,7 +267,25 @@ uv run daedalus status
 uv run daedalus query add "How does the retriever narrow candidates?" --source authored
 uv run daedalus query list
 uv run daedalus label
+
+# Generate the benchmark questions from the frozen selection
+uv run python scripts/generate_questions.py
+
+# Label generated questions — one rubric per pass, each in its own shuffled order
+uv run daedalus label-questions groundedness
+uv run daedalus label-questions relevance
+uv run daedalus label-questions difficulty
+
+# Judge sampled question pairs as duplicates
+uv run daedalus label-pairs
 ```
+
+The three rubric passes are deliberately separate runs in different orders.
+Judging several rubrics in one sitting invites a halo, where a question judged
+ungrounded is then judged irrelevant on the strength of that first impression
+rather than on the scale. Requested difficulty is also recoverable from selection
+rank with 100% accuracy, so presenting questions in rank order would hand the
+labeller the answer the difficulty rubric exists to assign independently.
 
 Ingestion skips documents whose content is unchanged, because document
 identity is a hash of content — so re-running it does not discard embeddings
@@ -233,6 +316,22 @@ precisions. The `vector` column is deliberately dimensionless for the same
 reason, with a `CHECK (vector_dims(embedding) = dim)` supplying the integrity a
 typed column would.
 
+**`questions`**, **`question_sources`**, **`question_rejections`** — generated
+questions, the chunks each cites, and the responses that failed validation. A
+rejection stores its raw body, so a failure can be diagnosed later without asking
+the model again.
+
+**`question_labels`**, **`judge_scores`** — human labels and automated ones, kept
+in separate tables on purpose. The human scales are enforced by database CHECK
+constraints; the judge's deliberately are not, because an answer off its own
+scale is a finding about the judge and rejecting the write would discard the
+evidence.
+
+**`question_embeddings`**, **`duplicate_labels`** — question vectors under a
+distinct model identity, and the hand-judged pairs behind the duplicate check.
+The vectors are kept out of `embeddings` so the production chunk embeddings that
+every retrieval measurement reads are never touched.
+
 **`queries`** and **`judgements`** — the reference set. Judgements carry no
 foreign key into documents or chunks, deliberately: storing a document deletes
 and reinserts its rows, so a cascade would destroy hours of human labelling to
@@ -244,7 +343,7 @@ whose chunk no longer exists.
 ## Development
 
 ```bash
-uv run pytest -q          # 140 tests
+uv run pytest -q          # 485 tests
 uv run ruff check .
 uv run ruff format .
 uv run mypy src/
@@ -279,6 +378,20 @@ src/daedalus/
     queries.py           reference set
   retrieval/
     search.py            vector, lexical, random, and pooling
+  evaluation/
+    metrics.py           NDCG, recall, precision, RR — validated against trec_eval
+    harness.py           scoring and bootstrap intervals
+    agreement.py         judge-versus-human agreement, weighted kappa
+  generation/
+    selection.py         the frozen 300-section sample
+    prompt.py            the generation contract, versioned
+    validation.py        seven deterministic checks
+    runner.py            one attempt per section, no retries
+  judging/
+    prompt.py            the judging contract, versioned
+    runner.py            one rubric per call
+  labelling.py           the human labelling loops
+  duplicates.py          similarity bands and the duplicate safety net
 migrations/              numbered SQL, applied in order
 tests/
 docs/
@@ -295,7 +408,55 @@ corpus/                  study material (not tracked)
 - **`docs/FEATURES.md`** — the intended end-state product, most of it deferred
 - **`docs/PGVECTOR.md`** — a complete pgvector methodology, reproducible from scratch
 - **`docs/LABELLING.md`** — the fixed relevance grading policy
+- **`docs/HYBRID-PROTOCOL.md`** — the pre-registered hybrid retrieval experiment
+- **`docs/PHASE-6-PROTOCOL.md`** — the generation protocol, committed before generating
+- **`docs/PHASE-6-RUBRICS.md`** — the three labelling rubrics, committed before labelling
+- **`results/README.md`** — every measured result, with its limitations
 - **`Instructions.md`** — step-by-step procedure for building the reference set
+
+---
+
+## What was not built, and why
+
+Milestone 1 was cut to a measured retrieval-and-generation spine under a
+two-week constraint. The cuts were made at the start and recorded in
+`docs/FEATURES.md`, not discovered at the end:
+
+- the interview session — topic selection, answering, feedback, follow-ups
+- answer evaluation against the source material
+- adaptive difficulty and scoring
+- MCQ, MSQ and numeric answer modes
+- parsers for PDF, Markdown, `.py` and images
+- page-image retrieval for figures and diagrams
+- any API, UI or deployment
+
+The choice was a complete measured path over a broader unmeasured system. What
+exists is small, and every claim about it has a number behind it.
+
+### What the results actually license
+
+The generator does not meet the bar in `docs/PHASE-0.md`, and this system is not
+currently trustworthy for interview preparation — the failure condition in that
+document, an unsupported-question rate above 10%, is met at 25.9%.
+
+Three defects are identified and measured rather than merely suspected:
+
+- **25.0% of questions leak prompt scaffolding.** 57 of 228 refer to `chunk 170`
+  or "the SEED chunk" — things a candidate cannot see. The class is strongly
+  associated with unusable relevance, and it does *not* explain the relevance
+  failure: had those 57 behaved like the rest, grade 2 would land near 12.9%
+  rather than 11.8%.
+- **Half of the groundedness failures are citation failures, not missing
+  material** — 49 of 97, where the supporting text exists in the section but was
+  not cited. That is a retrieval-and-citation problem with a different fix from a
+  generation problem.
+- **15.0% of attempted sections produced a quotation that appears nowhere in the
+  corpus.** This is the rate at which one field of one contract was fabricated,
+  on one corpus, at one model size. It is not a general hallucination rate.
+
+Fixing any of these means a new contract committed in advance and a fresh run
+reported beside the current one — not a revision of `p6-v2` after seeing its
+numbers.
 
 ---
 
