@@ -10,6 +10,7 @@ import time
 
 import httpx
 from pydantic_ai import Agent
+from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.models import Model
 
 from app.core.checks import Check, run_checks
@@ -18,6 +19,9 @@ from app.db.session import engine
 from app.llm import models
 
 ICONS = {"ok": "✓", "warn": "!", "fail": "✗"}
+
+# The provider accepted the key but is rate-limiting or overloaded; free tiers do this often.
+BUSY_STATUS_CODES = {429, 503}
 
 
 def show(checks: list[Check]) -> None:
@@ -30,6 +34,11 @@ async def ping_chat_model(model: Model) -> Check:
     start = time.perf_counter()
     try:
         result = await Agent(model).run("Reply with exactly one word: ok")
+    except ModelHTTPError as exc:
+        if exc.status_code in BUSY_STATUS_CODES:
+            detail = f"HTTP {exc.status_code}: provider busy or rate-limited, try again later"
+            return Check(name=name, status="warn", detail=detail)
+        return Check(name=name, status="fail", detail=f"HTTP {exc.status_code}: {exc}"[:200])
     except Exception as exc:  # report the failure and keep checking the other models
         return Check(name=name, status="fail", detail=f"{type(exc).__name__}: {exc}"[:200])
     elapsed = time.perf_counter() - start
