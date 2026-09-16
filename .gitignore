@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+
+# Your study material and generated files stay on your machine
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js (frontend/.gitignore covers the rest)
+node_modules/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
