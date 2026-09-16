@@ -96,7 +96,7 @@ Each task has its own fallback chain (Pydantic AI `FallbackModel`): generation u
 | LLM regression tests | **DeepEval** (Apache-2.0) + pytest |
 | Grader calibration against hand grades | **scikit-learn** `cohen_kappa_score`, **scipy** `spearmanr` |
 | Tracing | **Langfuse Cloud Hobby** (50K units/month, 30-day retention, no card) or **Arize Phoenix** for fully local tracing |
-| Tooling | **uv** (lockfile committed), **ruff**, **pytest**, **npm**, **Playwright** (end-to-end tests), **GitHub Actions** + **Dependabot** |
+| Tooling | **uv** (lockfile committed), **ruff**, **pytest**, **pnpm**, **Playwright** (end-to-end tests), **GitHub Actions** + **Dependabot** |
 
 ### Free hosting
 | Piece | Free option | Limits |
@@ -111,15 +111,28 @@ Each task has its own fallback chain (Pydantic AI `FallbackModel`): generation u
 - **Hugging Face Spaces**: new Gradio and Docker Spaces require a paid plan; free accounts can host at most 2 Gradio Spaces on ZeroGPU.
 - **Render free Postgres** (deleted after 30 days) and **Supabase Free** (pauses after 7 idle days) are risky for a rarely opened demo. Render's free web service is a workable backup host (sleeps after 15 idle minutes).
 - **Cerebras free tier**: terms changed during 2026; verify before relying on it.
-- **Unpinned dependencies**: malicious LiteLLM releases (1.82.7, 1.82.8) reached PyPI on March 24, 2026. Lockfiles are committed, upgrades are deliberate, and uv ignores packages uploaded in the last 7 days.
+- **Unpinned dependencies**: malicious LiteLLM releases (1.82.7, 1.82.8) reached PyPI on March 24, 2026. Lockfiles are committed and upgrades are deliberate. uv and pnpm both skip versions published in the last 7 days, and pnpm blocks dependency install scripts unless they're explicitly allowed.
 - **Serving arXiv papers publicly**: fetching papers for personal study is allowed, but a public app shouldn't serve full papers unless their license permits it. Each paper's license is stored, and links point to arxiv.org.
 
 ## Running on 16 GB
 `make ollama` starts the server with these settings.
 - One chat model loaded at a time (`OLLAMA_MAX_LOADED_MODELS=1`), short `keep_alive`.
 - **Context length set explicitly** to 16K (`OLLAMA_CONTEXT_LENGTH`). Ollama's default is 4K, and prompts longer than the limit are silently truncated. Much larger limits cost memory.
+- Flash attention plus an 8-bit KV cache (`OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`). The 8-bit cache needs half the memory of the default 16-bit one.
 - Docling ingestion doesn't run during practice sessions.
-- Rough memory use: macOS + browser + IDE ≈ 6 GB · `qwen3.5:9b` ≈ 7–8 GB with cache · embeddings <1 GB · Postgres ≈ 0.2 GB. Under memory pressure, `qwen3.5:4b` replaces the 9B grader.
+- Under memory pressure, `qwen3.5:4b` replaces the 9B grader.
+
+Measured on an Apple M4 with 16 GB (Ollama 0.34, 16K context, all layers on the GPU, other apps using most of the memory and swap in use):
+
+| Model | Memory when loaded | Load time | Generation speed |
+|---|---|---|---|
+| `qwen3.5:9b` | 5.7 GB | ~6 s | 6.5 tokens/s |
+| `gemma4:12b` | 7.8 GB | ~7 s | 4.9 tokens/s |
+| `qwen3-embedding:0.6b` | 2.9 GB | — | — |
+
+- The embedding model's footprint is mostly its 16K context cache. Embedding requests should pass a smaller `num_ctx`, since chunks are under 1K tokens.
+- Postgres itself uses about 30 MB, but Docker Desktop's VM holds about 2 GB.
+- At ~6.5 tokens/s, a local grade (150–300 tokens) takes 25–50 s. Groq answers the same prompt in about 1 s.
 
 ## Roadmap
 **Phase 0: Setup**
