@@ -1,0 +1,51 @@
+[project]
+name = "daedalus-backend"
+version = "0.1.0"
+description = "Daedalus API: interview questions generated from your study material, graded against the same sources"
+requires-python = ">=3.13"
+# Main dependencies = what the deployed API needs. Keep heavy ML libraries in the `ingest` group.
+dependencies = [
+    "alembic>=1.19.2",
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "pgvector>=0.5.0",
+    "psycopg[binary]>=3.3.5",
+    "pydantic-ai-slim[google,groq,openai]>=2.42.0",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "sqlalchemy[asyncio]>=2.0.52",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[tool.uv]
+# Supply-chain guard: ignore anything uploaded to PyPI in the last week.
+exclude-newer = "7 days"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.6",
+]
+eval = [
+    "scikit-learn>=1.9.0",
+    "scipy>=1.18.1",
+]
+ingest = [
+    "arxiv>=4.0.1",
+    "docling>=2.126.0",
+    "nbformat>=5.11.1",
+    "rapidfuzz>=3.14.6",
+    "scikit-learn>=1.9.0",
+    "sentence-transformers>=6.0.1",
+]
