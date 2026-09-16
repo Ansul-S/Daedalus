@@ -1,0 +1,10 @@
+# pnpm settings for this single-package project.
+
+# Supply-chain guard: only install package versions published at least 7 days ago.
+minimumReleaseAge: 10080
+
+# Dependency install scripts are blocked unless allowed here.
+allowBuilds:
+  # Its postinstall only downloads the native binary when the platform package
+  # (@unrs/resolver-binding-*) is missing; pnpm installs that package directly.
+  unrs-resolver: false
