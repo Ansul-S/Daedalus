@@ -4,7 +4,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.pipeline_options import CodeFormulaVlmOptions, PdfPipelineOptions
+from docling.datamodel.vlm_engine_options import TransformersVlmEngineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from app.ingest.chunking import ParsedDocument
@@ -14,7 +15,15 @@ from app.ingest.docling_blocks import document_blocks, document_title
 @lru_cache(maxsize=2)
 def _converter(ocr: bool, formulas: bool) -> DocumentConverter:
     # Building a converter loads the layout and table models, so converters are reused.
-    options = PdfPipelineOptions(do_ocr=ocr, do_formula_enrichment=formulas)
+    # On a Mac the formula model runs on the CPU (Docling's Transformers engine has no Apple
+    # GPU support), where float32 generates about 11 times faster than the model's default
+    # bfloat16, with the same output.
+    formula_options = CodeFormulaVlmOptions.from_preset(
+        "codeformulav2", engine_options=TransformersVlmEngineOptions(torch_dtype="float32")
+    )
+    options = PdfPipelineOptions(
+        do_ocr=ocr, do_formula_enrichment=formulas, code_formula_options=formula_options
+    )
     return DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
     )
