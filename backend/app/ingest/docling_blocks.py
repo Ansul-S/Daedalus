@@ -27,9 +27,10 @@ _ROMAN_NUMBER = re.compile(r"([IVXLC]+)\.\s+(\S.*)")
 _LETTER = re.compile(r"[A-Z]\.\s+\S")
 _PARENTHESIZED_NUMBER = re.compile(r"\d+\)\s+\S")
 _ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
-_NUMBER_PREFIX = re.compile(r"\A(?:\d+(?:\.\d+)*|[IVXLC]+)\.?\s+")
+_NUMBER_PREFIX = re.compile(r"\A(?:\d+(?:\.\d+)*\.?|[A-Z]+\.)\s+")
 # Small capitals can come out of a PDF as "I NTRODUCTION": the large first letter is its own run.
 _SMALL_CAPS_SPLIT = re.compile(r"\b([A-Z]) (?=[A-Z]{2,}\b)")
+_CAPITALS_WORD = re.compile(r"\b[A-Z]{2,}\b")
 _REFERENCE_TITLES = {"references", "bibliography", "referencesandnotes"}
 _INLINE_MATH = re.compile(r"\$\$.+?\$\$|\$[^$\n]+\$", re.DOTALL)
 # PDF text extraction sometimes splits a word after its opening ligature: "fi xed", "fi nal".
@@ -122,6 +123,7 @@ def _prepare(doc: DoclingDocument) -> None:
         elif isinstance(item, FormulaItem) and item.text:
             item.text = compact_latex(item.text)
         elif isinstance(item, SectionHeaderItem):
+            item.text = normalize_heading(item.text)
             headers.append(item)
     if len({header.level for header in headers}) == 1:
         _infer_heading_levels(headers)
@@ -134,17 +136,15 @@ def _infer_heading_levels(headers: Iterable[SectionHeaderItem]) -> None:
     numbered_level = 0
     last_roman = 0
     for header in headers:
+        header.text = join_small_caps(header.text)
         level = None
         if match := _ARABIC_NUMBER.match(header.text):
             level = match.group(1).count(".") + 1
-        elif (match := _ROMAN_NUMBER.fullmatch(header.text)) and _roman_value(
-            match.group(1)
-        ) == last_roman + 1:
-            # Only the next numeral counts, so a subsection "C." is not read as 100.
-            last_roman += 1
+        elif (match := _ROMAN_NUMBER.fullmatch(header.text)) and _is_section_numeral(
+            match, last_roman
+        ):
+            last_roman = max(last_roman, _roman_value(match.group(1)))
             level = 1
-            title = _SMALL_CAPS_SPLIT.sub(r"\1", match.group(2))
-            header.text = f"{match.group(1)}. {title}"
         elif _LETTER.match(header.text):
             level = 2 if last_roman else 1
         elif _PARENTHESIZED_NUMBER.match(header.text) and last_roman:
@@ -154,6 +154,23 @@ def _infer_heading_levels(headers: Iterable[SectionHeaderItem]) -> None:
             header.level = numbered_level + 1
         else:
             numbered_level = header.level = level
+
+
+def _is_section_numeral(match: re.Match[str], last_roman: int) -> bool:
+    """Only the next numeral starts a section, so a subsection "C." is not read as 100. A title
+    in capitals, as IEEE section titles are, may also repeat an earlier number: some papers
+    have two sections "I."."""
+    value = _roman_value(match.group(1))
+    return value == last_roman + 1 or (value <= last_roman and match.group(2).isupper())
+
+
+def join_small_caps(text: str) -> str:
+    """Rejoin words split by small capitals ("R ELATED W ORK"). Only done when most words in
+    capitals are split, so a heading in plain capitals such as "APPENDIX A PROOFS" is kept."""
+    title = _NUMBER_PREFIX.sub("", text, count=1)
+    splits = len(_SMALL_CAPS_SPLIT.findall(title))
+    unsplit = len(_CAPITALS_WORD.findall(title)) - splits
+    return _SMALL_CAPS_SPLIT.sub(r"\1", text) if splits > unsplit else text
 
 
 def _roman_value(numeral: str) -> int:
