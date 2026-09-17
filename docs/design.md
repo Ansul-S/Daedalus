@@ -45,6 +45,125 @@ Retrieval and grading are implemented directly rather than through a RAG framewo
 6. **Documents and answers are untrusted input.** Prompts wrap them in clear delimiters, and the grader ignores any instructions inside them.
 7. **Heavy work stays local.** Heavy ML libraries (Docling, PyTorch) live in a local-only dependency group. The deployed API needs only FastAPI, the database driver and LLM clients.
 
+## Ingestion and retrieval (Phase 1)
+
+```
+ upload (.pdf, .ipynb) · arXiv ID · make ingest SRC=…
+   ─► store the file once per content hash, queue a job in Postgres
+   ─► a worker claims the job (one ingesting process at a time)
+   ─► parse   PDF       Docling: layout, reading order, tables, formulas → LaTeX
+              arXiv     OAI-PMH metadata + license; LaTeXML HTML via Docling, else the PDF
+              notebook  nbformat: Markdown, code, short text outputs
+   ─► blocks  text · heading path · page or cell · content types
+   ─► chunks  300–800 tokens; each section or subsection starts a new one; labeled with
+              every section they cover
+   ─► embed   "title > label" + text, with qwen3-embedding
+   ─► store   replace the document's chunks in one transaction
+
+ query ─┬─► embed (with instruction) ─► HNSW cosine ──► top 50 ─┐
+        └─► words ORed ─► ts_rank_cd ÷ length ────────► top 50 ─┴─► RRF ─► top N with citations
+```
+
+**Tables** (Alembic migration `0001`):
+- **`documents`:**
+  - source type and title;
+  - authors, arXiv ID and version, license and source URL (arXiv papers);
+  - the stored file's path and SHA-256 (uploads);
+  - status: `pending`, `ready` or `failed`;
+  - `details` (JSON): pages or cells, abstract, categories, timings, and chunk and token counts.
+- **`chunks`:**
+  - position, section label and `content_types` (text, code, formula, table);
+  - Markdown text: code fenced, math as `$…$`;
+  - token count, and the first and last page or cell;
+  - the section's HTML anchor (arXiv papers);
+  - `embedding halfvec(1024)`, with an HNSW cosine index;
+  - a generated `search_vector`, with a GIN index. The section label has weight A and the text weight B.
+- **`jobs`:**
+  - status: `queued`, `running`, `done` or `failed`;
+  - options: OCR, formulas and arXiv version;
+  - progress message, error, attempts and timestamps.
+
+### Ingestion and retrieval decisions
+- **A worker and a Postgres job queue.**
+  - Parsing a PDF needs up to 3.2 GB of memory and can take minutes, so the API only stores the file and queues a job.
+  - A worker claims jobs with `FOR UPDATE SKIP LOCKED`.
+  - An advisory lock allows only one ingesting process, because two Docling instances next to the local models don't fit in 16 GB.
+  - Jobs that a stopped process left `running` are queued again at the next start.
+  - `make ingest` runs the same pipeline in its own process when no worker is running. No extra service, such as Redis or Celery, is needed.
+- **Uploads are stored once per content.** Files are saved as `data/uploads/<sha256>`. A document is found again by that hash, or by its arXiv ID, so adding the same material twice doesn't duplicate it.
+- **A document's chunks are replaced in one transaction.** Search never sees a half-ingested document, and a failed re-ingestion keeps the previous chunks and status.
+- **`halfvec(1024)` with an HNSW index.**
+  - Half precision halves the storage and index memory, and float16 is precise enough for cosine ranking.
+  - HNSW returns at most `hnsw.ef_search` rows (40 by default), so each query raises that limit to at least the number of candidates.
+- **arXiv metadata comes from OAI-PMH, not the `arxiv` package.**
+  - The package wraps arXiv's search API, whose Atom entries carry no license.
+  - The OAI-PMH `arXivRaw` record lists every version and the license, which decides whether a paper may be shown publicly.
+  - A single client waits 3 s between requests and caches downloads under `data/arxiv/`.
+- **arXiv HTML is preferred to the PDF.**
+  - The LaTeXML page gives exact LaTeX for every formula (from the MathML `alttext`) and section ids for links.
+  - The page is cleaned first: the title block and the references are removed, figures are reduced to their captions, footnotes move after their paragraph, and citations become plain text.
+  - Docling's HTML backend then parses it, so papers and PDFs produce the same structure.
+  - ar5iv is the fallback source. It answers unknown papers by redirecting to the abstract page with status 200, so a page counts only if it contains LaTeXML paragraphs.
+  - Without HTML, the PDF goes through Docling.
+- **Docling's `HierarchicalChunker` provides the structure; a shared packer sets the chunk size.**
+  - The hierarchical chunker yields one block per paragraph, list, table or formula, with its heading path and pages.
+  - `chunking.py` packs the blocks from all three parsers into chunks.
+  - Docling's `HybridChunker` is not used: it merges neighbors only when their heading paths are identical, and it has no minimum size.
+  - On 1706.03762, `HybridChunker` produced 31 chunks of 13–794 tokens, 7 of them under 100. The packer, under the section rule of the time, produced 14 chunks of 298–798 tokens.
+- **Chunks break at sections and subsections.**
+  - A change in the first two heading levels starts a new chunk once the current one has 300 tokens. Chunks stay within 300–800 tokens.
+  - With breaks at top-level sections only, one chunk could hold a whole run of subsections (II.A–D of 2510.10824), which blurred its embedding.
+  - Several rules were compared offline: top level or two levels, a minimum of 200–300 tokens, a maximum of 600–800, and merging a section's small tail backwards.
+    - Every two-level variant retrieved better than the top-level ones, and about as well as the others.
+    - 300–800 was kept because it gives the fewest chunks.
+    - Merging tails backwards made retrieval worse.
+  - Re-chunking gives chunks new IDs, so the rule was settled before Phase 2 starts storing chunk IDs with questions.
+- **Section labels name every section a chunk covers,** below their common parent.
+  - Example: `3 Model Architecture > 3.3 Position-wise Feed-Forward Networks · 3.4 Embeddings and Softmax · 3.5 Positional Encoding`.
+  - A chunk that crosses top-level sections lists those sections instead: `II. METHODOLOGY · III. IMPLEMENTATION`.
+  - Labels used to name only the first block's section, so a chunk mostly about 3.3–3.5 was labeled "3.2.3 Applications of Attention".
+  - Chunks are embedded as "title > label", a blank line and the text, so a chunk that never names its topic can still be found by it.
+  - Full-text search indexes the label with a higher weight than the text.
+  - Papers read from HTML have no pages, so their citations show the label's last part.
+- **Heading levels are inferred from the numbering.** PDF layout analysis gives every heading the same level.
+  - The numbering restores the outline:
+    - "3.1" is level 2;
+    - in IEEE style, "IV." is level 1, "B." level 2 and "2)" level 3;
+    - an unnumbered heading sits one level below the last numbered one.
+  - Docling's `HeadingHierarchyOptions` did worse on both sample PDFs, neither of which has bookmarks:
+    - with numbering alone, unnumbered headings stayed at level 1, and "V. CONCLUSION" was read as a letter;
+    - adding font styles put "7.1 Why Use tanh" at level 1.
+  - The same step rejoins headings split by small capitals ("I NTRODUCTION") and accepts a section numeral that a paper repeats.
+- **Lettered headings read as list items are restored.**
+  - In 2510.10824, layout analysis read "G. Real-World Deployment: SAP S/4HANA Migration" as the last item of the list above it, so section G's text was filed under F.
+  - Such an item becomes a heading again only when all of these hold:
+    - its letter follows the current subsection's letter;
+    - it ends its list;
+    - no other item in that list is lettered;
+    - it reads as a short title: at most 10 words, capitalized, no final period.
+  - These conditions keep real lettered lists intact.
+- **Formula recognition runs in float32.**
+  - On a Mac, Docling runs its formula model, CodeFormulaV2, on the CPU, because its Transformers engine has no Apple GPU support.
+  - On the CPU, the preset's bfloat16 generated 2.9 tokens/s and float32 33 tokens/s, with identical output.
+  - Parsing the 11-page notes went from 150–164 s to about 10 s, at the cost of 1 GB more peak memory (3.2 GB).
+  - Formulas stay on by default; `--no-formulas` skips them.
+- **Full-text search ORs the question's words.** Questions are long, and requiring every word returned nothing for 18 of the 20 milestone questions.
+- **Full-text ranks are divided by chunk length** (`ts_rank_cd(…, 2)`).
+  - With ORed words, `ts_rank_cd` adds up the weighted matches. A long code chunk that repeats a few of the question's words therefore outranked a short passage that answers it.
+  - Normalization 2 raised full-text-only search from 12/16/0.69 to 18/19/0.91 (hit@1 / hit@5 / MRR@5), and hybrid MRR@5 from 0.96 to 0.97.
+  - Normalizations 1, 8, 16 and 32 didn't help.
+  - The setting is validated on only 20 questions and should be rechecked when the evaluation set grows (Phase 5).
+- **Results are fused by rank.**
+  - Reciprocal Rank Fusion (k = 60) over 50 candidates per retriever needs no calibration between cosine distances and `ts_rank_cd` scores.
+  - A chunk that only one retriever finds scores at most 1/61, less than a chunk that both rank 10th (2/70).
+- **Chunks list all their content types.**
+  - `content_types` is an array (text, code, formula, table), since a chunk usually mixes them.
+  - Notebooks keep short text outputs, up to 1,000 characters, because printed results often hold the numbers a question asks about, such as benchmark timings.
+  - Images, HTML, widgets, errors and long output tails are dropped.
+- **The embedding instruction goes on queries only,** as Qwen3-Embedding expects (`Instruct: … Query:…`). Documents are embedded as they are.
+  - Requests use a fixed `num_ctx` of 2048, since a different value makes Ollama reload the model.
+  - Requests set `truncate: false`, so an over-long input fails instead of being cut silently.
+
 ## Tech stack (free tiers as of September 2026)
 
 ### Models
@@ -72,11 +191,12 @@ Each task has its own fallback chain (Pydantic AI `FallbackModel`): generation u
 ### Data & retrieval
 | Need | Choice | Why |
 |---|---|---|
-| PDF parsing | **Docling** (MIT) | Layout, reading order, tables, OCR, formula → LaTeX enrichment. `HybridChunker` splits by structure and token count. Keeps page and section info for citations. |
-| arXiv | **`arxiv`** package (MIT); arXiv HTML (`arxiv.org/html/<id>`) when available, otherwise the PDF through Docling | HTML and LaTeX give cleaner text and math than PDF. arXiv allows **1 request every 3 seconds**. |
-| Notebooks | **nbformat** (BSD) | Markdown cells → text, code cells → code blocks, outputs and images dropped. Cell boundaries become chunk boundaries. |
-| Database | **PostgreSQL 17 + pgvector**: `pgvector/pgvector` Docker image locally, **Neon Free** in the cloud | One database for documents, chunks, vectors, questions, attempts and review schedules. HNSW vector index plus built-in full-text search. |
-| Hybrid search | pgvector similarity + Postgres full-text search, merged with **Reciprocal Rank Fusion** | Exact terms ("AdamW", "KL divergence") need keyword matching; paraphrases need vectors. |
+| PDF parsing | **Docling** (MIT) | Layout, reading order, tables, OCR, and formula → LaTeX enrichment (CodeFormulaV2, run in float32). Its `HierarchicalChunker` yields paragraphs, lists, tables and formulas with their heading paths and pages; the project's own packer turns them into chunks. |
+| arXiv | **OAI-PMH** `arXivRaw` records (metadata, versions, license) and arXiv's LaTeXML HTML (`arxiv.org/html/<id>`, ar5iv as fallback), fetched with **httpx**. The HTML is cleaned with **BeautifulSoup** + **lxml** (MIT, BSD) and parsed by Docling; without HTML, Docling parses the PDF. | HTML gives cleaner text and exact LaTeX. arXiv allows **1 request every 3 seconds**, and one client spaces all requests. |
+| Notebooks | **nbformat** (BSD) | Markdown cells → text, code cells → fenced code blocks. Short text outputs (up to 1,000 characters) are kept; images, HTML, widgets and errors are dropped. Chunks record their first and last cell. |
+| Token counting | **tokenizers** (Apache-2.0) with the embedding model's tokenizer | Chunk sizes are measured in the tokens the embedding model sees. |
+| Database | **PostgreSQL 17 + pgvector**: `pgvector/pgvector` Docker image locally, **Neon Free** in the cloud | One database for documents, chunks, vectors, questions, attempts and review schedules. `halfvec(1024)` embeddings with an HNSW index, plus built-in full-text search with a GIN index. |
+| Hybrid search | pgvector cosine similarity + Postgres full-text search (words ORed, `ts_rank_cd` divided by chunk length), 50 candidates each, merged with **Reciprocal Rank Fusion** (k = 60) | Exact terms ("AdamW", "KL divergence") need keyword matching; paraphrases need vectors. |
 | Quote checking | **rapidfuzz** (MIT) | Fuzzy-matches evidence quotes against chunk text. |
 | Topic map | LLM concept tags + **scikit-learn** clustering | Spreads questions across topics and tracks weak ones. |
 
@@ -119,7 +239,7 @@ Each task has its own fallback chain (Pydantic AI `FallbackModel`): generation u
 - One chat model loaded at a time (`OLLAMA_MAX_LOADED_MODELS=1`), short `keep_alive`.
 - **Context length set explicitly** to 16K (`OLLAMA_CONTEXT_LENGTH`). Ollama's default is 4K, and prompts longer than the limit are silently truncated. Much larger limits cost memory.
 - Flash attention plus an 8-bit KV cache (`OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`). The 8-bit cache needs half the memory of the default 16-bit one.
-- Docling ingestion doesn't run during practice sessions.
+- Docling ingestion doesn't run during practice sessions, and only one process ingests at a time.
 - Under memory pressure, `qwen3.5:4b` replaces the 9B grader.
 
 Measured on an Apple M4 with 16 GB (Ollama 0.34, 16K context, all layers on the GPU, other apps using most of the memory and swap in use):
@@ -128,11 +248,41 @@ Measured on an Apple M4 with 16 GB (Ollama 0.34, 16K context, all layers on the 
 |---|---|---|---|
 | `qwen3.5:9b` | 5.7 GB | ~6 s | 6.5 tokens/s |
 | `gemma4:12b` | 7.8 GB | ~7 s | 4.9 tokens/s |
-| `qwen3-embedding:0.6b` | 2.9 GB | — | — |
+| `qwen3-embedding:0.6b` | 2.9 GB at 16K context; 2.0 GB at 2,048 | ~1.5 s | 780–930 tokens/s embedded |
 
-- The embedding model's footprint is mostly its 16K context cache. Embedding requests should pass a smaller `num_ctx`, since chunks are under 1K tokens.
-- Postgres itself uses about 30 MB, but Docker Desktop's VM holds about 2 GB.
-- At ~6.5 tokens/s, a local grade (150–300 tokens) takes 25–50 s. Groq answers the same prompt in about 1 s.
+- **Embedding model:** most of its footprint is the context cache. Chunks stay under 1K tokens, so embedding requests pass `num_ctx` 2048 (`EMBEDDING_NUM_CTX`).
+- **PDF parsing:** memory peaks at 3.2 GB while the formula model is loaded.
+- **Postgres:** the server itself uses about 30 MB, but Docker Desktop's VM holds about 2 GB.
+- **Grading speed:** at ~6.5 tokens/s, a local grade (150–300 tokens) takes 25–50 s. Groq answers the same prompt in about 1 s.
+
+## Phase 1 measurements
+Measured on the same Mac with the sample material: lecture notes (PDF), a notebook and two arXiv papers. Each ingestion ran in its own process unless noted.
+
+| Source | Chunks | Tokens (median per chunk) | Parse | Embed |
+|---|---|---|---|---|
+| Notebook, 223 cells | 84 | 42,597 (462) | 0.1 s | 54.6 s |
+| Lecture notes PDF, 11 pages, 3 formulas | 9 | 3,669 (414) | 28–32 s including model loading; about 10 s with the models loaded | 4.7–6.5 s |
+| arXiv 1706.03762, from HTML | 15 | 8,448 (591) | 0.5 s | 9.1 s |
+| arXiv 2510.10824, from the PDF (7 pages, no HTML) | 16 | 6,170 (375) | 4.3 s, with the models already loaded | 6.7 s |
+
+- **Ingestion runs:**
+  - The four sources took 1 min 53 s in one run.
+  - The first PDF on a new machine also downloads about 1.1 GB of Docling models.
+  - arXiv parse times include the metadata request; the paper itself was already cached.
+- **Formula recognition:**
+  - CodeFormulaV2 on the CPU generated 2.9 tokens/s in bfloat16 and 33 tokens/s in float32.
+  - Parse time for the notes: 150–164 s in bfloat16, about 10 s in float32.
+- **Token counting:** the tokenizer loads in about 1 s, and counting an 800-token chunk takes about 1 ms.
+- **Storage:**
+  - The 124 chunks take 2.5 MB including indexes: 0.6 MB HNSW and 0.5 MB GIN.
+  - An embedding takes about 2 KB, half the size of a `vector(1024)`.
+- **Search latency** (124 chunks, the 20 milestone questions):
+  - Hybrid search takes 73 ms at the median and about 100 ms at most.
+  - Embedding the question accounts for 66 ms of that; the vector query and the full-text query take 2–4 ms each.
+  - Full-text-only search takes 8 ms.
+- **Tests:**
+  - The 149 fast tests take 10–13 s, including creating the test database.
+  - The slow PDF test takes about 15 s.
 
 ## Roadmap
 **Phase 0: Setup**
@@ -140,14 +290,17 @@ Measured on an Apple M4 with 16 GB (Ollama 0.34, 16K context, all layers on the 
 - Free API keys: Groq and Google AI Studio (Langfuse, Neon and Vercel come later).
 - Ollama with `qwen3.5:9b`, `qwen3.5:4b`, `gemma4:12b` and `qwen3-embedding:0.6b` (about 18 GB).
 
-**Phase 1: Ingestion & retrieval**
+**Phase 1: Ingestion & retrieval** (done; see [Ingestion and retrieval](#ingestion-and-retrieval-phase-1) and the [milestone result](#phase-1-milestone-result))
 - Parsers:
-  - Docling for PDFs, with formula enrichment for papers.
-  - arXiv fetcher: metadata and license; HTML when available, PDF otherwise; 3 s between requests.
-  - Notebook parser.
-- Chunks of about 300–800 tokens, each with section path, page and type (text / code / formula).
-- Embeddings stored in Postgres with an HNSW index and a full-text (GIN) index; hybrid search with Reciprocal Rank Fusion.
-- API endpoints: upload a file or add an arXiv ID, ingestion job status, search.
+  - Docling for PDFs, with formula enrichment (in float32) and heading levels inferred from the numbering.
+  - arXiv fetcher: OAI-PMH metadata and license; LaTeXML HTML when available, PDF otherwise; 3 s between requests.
+  - Notebook parser: Markdown, code and short text outputs.
+- Chunks of 300–800 tokens:
+  - each section or subsection starts a new chunk;
+  - each chunk records the sections it covers, its page or cell range, its HTML anchor and its content types (text / code / formula / table).
+- `halfvec(1024)` embeddings with an HNSW index, a full-text (GIN) index, and hybrid search with Reciprocal Rank Fusion.
+- A Postgres job queue with a worker (`make worker`) and a command-line ingester (`make ingest`).
+- API endpoints: upload a file or add an arXiv ID, list documents, ingestion job status, and search with citations and source links.
 
 **Phase 2: Question generation**
 - Topic map: concept tags per chunk, then clustering.
@@ -209,40 +362,94 @@ Measured on an Apple M4 with 16 GB (Ollama 0.34, 16K context, all layers on the 
 - LangGraph interviewer with follow-up questions and a mock-interview report.
 - Spoken answers, transcribed with Groq `whisper-large-v3-turbo` (free: 2,000 requests/day) or locally with mlx-whisper.
 
-## Project layout (target)
+## Project layout
+Parts marked *(planned)* don't exist yet.
 ```
 Daedalus/
 ├── docker-compose.yml        # postgres + pgvector
-├── env.example               # DATABASE_URL, OLLAMA_BASE_URL, model names, API keys
+├── env.example               # settings and their defaults
+├── Makefile                  # setup, run, ingest, test and lint commands
+├── db/init/                  # enables pgvector when the database is created
+├── data/                     # uploads and arXiv downloads (not committed)
 ├── backend/
 │   ├── pyproject.toml        # uv; main deps = API; groups: ingest | eval | dev
 │   ├── app/
 │   │   ├── main.py           # FastAPI app + routers
-│   │   ├── api/              # documents, questions, sessions, stats
+│   │   ├── api/              # health, documents + jobs, search (citations, source links);
+│   │   │                     #   questions, sessions, stats (planned)
 │   │   ├── core/             # settings, dependency checks
-│   │   ├── db/               # SQLAlchemy models, Alembic migrations
-│   │   ├── llm/              # model routing (fallback chains), prompts
-│   │   ├── ingest/           # docling_parser, arxiv_fetcher, notebook_parser, chunker, embedder
-│   │   ├── retrieval/        # hybrid search (pgvector + FTS + RRF), reranker
-│   │   ├── generation/       # topic map, generator, validators
-│   │   ├── grading/          # grader pipeline, scoring
-│   │   └── scheduling/       # FSRS + topic mastery
-│   ├── scripts/              # setup check, ingest / generate / calibrate CLIs
-│   └── tests/                # unit, DeepEval regression, calibration fixtures
-└── frontend/                 # Next.js + Tailwind + shadcn/ui
-    └── src/app/              # library, questions, practice, dashboard
+│   │   ├── db/               # SQLAlchemy models, sessions, Alembic migrations
+│   │   ├── llm/              # model routing (fallback chains), embeddings; prompts (planned)
+│   │   ├── ingest/
+│   │   │   ├── storage.py        # uploads stored once per content hash
+│   │   │   ├── queue.py          # Postgres job queue and ingest lock
+│   │   │   ├── pipeline.py       # parse → chunk → embed → store
+│   │   │   ├── pdf.py            # Docling PDF conversion
+│   │   │   ├── arxiv.py          # IDs, OAI-PMH metadata, rate-limited downloads
+│   │   │   ├── arxiv_html.py     # LaTeXML HTML cleanup, then Docling's HTML parser
+│   │   │   ├── docling_blocks.py # Docling document → blocks, heading levels
+│   │   │   ├── notebook.py       # notebook cells → blocks
+│   │   │   ├── chunking.py       # shared chunk packer and section labels
+│   │   │   └── tokens.py         # token counts with the embedding model's tokenizer
+│   │   ├── retrieval/        # search (vector, full-text, hybrid), fusion (RRF); reranker (planned)
+│   │   ├── generation/       # topic map, generator, validators (planned)
+│   │   ├── grading/          # grader pipeline, scoring (planned)
+│   │   └── scheduling/       # FSRS + topic mastery (planned)
+│   ├── scripts/              # check_setup, ingest, worker; generate / calibrate CLIs (planned)
+│   └── tests/                # unit and database tests, slow PDF test;
+│                             #   DeepEval regression, calibration fixtures (planned)
+└── frontend/                 # Next.js + Tailwind; shadcn/ui (planned)
+    └── src/app/              # setup status page; library, questions, practice, dashboard (planned)
 ```
 
 ## Milestone checks
 | Phase | Check |
 |---|---|
 | 0 | `make check LIVE=1` passes: database, Ollama and all four models, Groq and Gemini each answer a test prompt. The home page lists every check as ok. |
-| 1 | One PDF, one arXiv paper and one notebook ingested; chunk counts look right and math and code survive; `/search` returns relevant chunks with page or cell citations. |
+| 1 | One PDF, one arXiv paper and one notebook ingested; chunk counts look right and math and code survive; `/search` returns relevant chunks with page or cell citations. **Passed**; see below. |
 | 2 | 20 generated questions; at least 90% pass validation; 10 reviewed by hand. |
 | 3 | Grader agreement with hand grades reaches Spearman ρ ≥ 0.7 before scores are trusted. |
 | 4 | A Playwright test covers upload → generate → practice → cited feedback → dashboard update. |
 | 5 | Retrieval report produced; DeepEval suite runs in CI (LLM-dependent tests on demand, to save free quota). |
 | 6 | The deployed app works after waking from sleep, and daily limits are enforced. |
+
+## Phase 1 milestone result
+Four sources were ingested: lecture notes (PDF), a notebook, and two arXiv papers (1706.03762 from HTML, 2510.10824 from its PDF). Math and code survive, and search returns relevant chunks with page, cell or section citations.
+
+**Evaluation method.**
+- **Questions:** 20, five per source, each with hand-labeled relevant ("gold") chunks.
+- **Labels:** defined by heading paths plus a text snippet, or by notebook cell ranges, so they carry over when the chunking changes.
+- **Runs:** every question goes through the production `search()` with `limit=5`.
+- **Metrics:**
+  - hit@1 and hit@5 count the questions (out of 20) with a gold chunk at rank 1 or in the top 5;
+  - MRR@5 is the mean reciprocal rank of the first gold chunk, counting 0 when none is in the top 5.
+
+Results, as hit@1 / hit@5 / MRR@5:
+
+| Mode | Top-level chunks | + two-level chunks and full labels | + full-text length normalization (current) |
+|---|---|---|---|
+| Hybrid | 14 / 18 / 0.79 | 19 / 20 / 0.96 | **19 / 20 / 0.97** |
+| Vector only | 15 / 18 / 0.80 | 20 / 20 / 1.00 | **20 / 20 / 1.00** |
+| Full-text only | 14 / 18 / 0.78 | 12 / 16 / 0.69 | **18 / 19 / 0.91** |
+
+- **Top-level chunks.** Both hybrid misses were questions about 2510.10824.
+  - Their answers sat in long chunks covering several subsections (II.A–D and III.A–F), and those chunks' vectors ranked 34th and 51st of 99.
+  - Notebook chunks about FAISS and Transformer chunks about "five layers" ranked above them.
+  - Several section labels named only a chunk's first section.
+- **Two-level chunks and full labels.** Both misses were fixed, and vector search put a gold chunk first for every question.
+  - Full-text search got worse. Once prose sections became short chunks of their own, longer chunks that repeat a question's words (mostly notebook code) outranked them, because `ts_rank_cd` adds up matches regardless of length.
+- **Length normalization** fixed that.
+  - Seven full-text ranks improved and none got worse.
+  - In hybrid search, one notebook question moved from rank 4 to rank 1. Another moved from rank 1 to rank 2, behind a chunk about the same point.
+- **Per source,** hybrid hit@1 went from 5 / 3 / 4 / 2 to 5 / 4 / 5 / 5 (notes / notebook / 1706.03762 / 2510.10824).
+- **Full-text AND:** a query that requires every word returned nothing for 18 of the 20 questions.
+- **Citations:** all 124 chunks were checked against their sources:
+  - page ranges against the PDF page text;
+  - cell ranges against the notebook cells;
+  - section anchors against the HTML element ids.
+
+  The arXiv links resolve.
+- **Caveat:** 20 questions is a small set, and the same set guided the chunking and ranking choices, so these scores are optimistic. The Phase 5 evaluation, built from the generated questions, is the check that counts.
 
 ## References
 - Groq limits: https://console.groq.com/docs/rate-limits · models: https://console.groq.com/docs/models
@@ -252,7 +459,12 @@ Daedalus/
 - Ollama Cloud free tier: https://dev.to/amareswer/ollama-cloud-free-vs-pro-usage-limits-pricing-what-you-actually-get-2026-3ieo
 - Gemma 4 Apache-2.0: https://venturebeat.com/technology/google-releases-gemma-4-under-apache-2-0-and-that-license-change-may-matter
 - GitHub Models retired: https://github.blog/changelog/2026-07-30-github-models-is-now-retired/
-- Docling: https://github.com/docling-project/docling
+- Docling: https://github.com/docling-project/docling · documentation: https://docling-project.github.io/docling/
+- arXiv OAI-PMH interface: https://info.arxiv.org/help/oa/index.html
+- pgvector (`halfvec`, HNSW): https://github.com/pgvector/pgvector
+- PostgreSQL full-text ranking (`ts_rank_cd` normalization): https://www.postgresql.org/docs/current/textsearch-controls.html
+- Reciprocal Rank Fusion (Cormack, Clarke and Büttcher, 2009): https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf
+- Qwen3-Embedding (query instruction format): https://huggingface.co/Qwen/Qwen3-Embedding-0.6B
 - Pydantic AI models / FallbackModel: https://pydantic.dev/docs/ai/models/overview/
 - py-fsrs: https://github.com/open-spaced-repetition/py-fsrs
 - arXiv API terms: https://info.arxiv.org/help/api/tou.html
