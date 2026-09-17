@@ -28,9 +28,10 @@ Reporter = Callable[[Document, str], None]
 
 
 def embedding_input(title: str, chunk: ChunkDraft) -> str:
-    """Documents are embedded with their title and heading path, so a chunk that never names
-    its topic can still be found by it."""
-    return f"{SECTION_SEPARATOR.join([title, *chunk.headings])}\n\n{chunk.text}"
+    """Documents are embedded with their title and the sections they cover, so a chunk that
+    never names its topic can still be found by it."""
+    heading = SECTION_SEPARATOR.join([title, chunk.section]) if chunk.section else title
+    return f"{heading}\n\n{chunk.text}"
 
 
 class Ingestor:

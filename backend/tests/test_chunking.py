@@ -1,3 +1,5 @@
+import pytest
+
 from app.ingest.chunking import Block, pack_blocks, render, split_block, split_text
 
 
@@ -19,9 +21,49 @@ def test_a_new_section_starts_a_chunk_only_after_the_minimum() -> None:
     chunks = pack_blocks(blocks, words, max_tokens=100, min_tokens=20)
 
     # "1 Intro" alone is below the minimum, so "2 Method" joins it; "3 Results" does not.
-    assert [chunk.section for chunk in chunks] == ["1 Intro", "3 Results"]
+    assert [chunk.section for chunk in chunks] == ["1 Intro · 2 Method", "3 Results"]
     assert "# 2 Method" in chunks[0].text
     assert chunks[0].token_count == words(chunks[0].text)
+
+
+def test_a_new_subsection_starts_a_chunk_but_deeper_headings_do_not() -> None:
+    blocks = [
+        block("a " * 10, "1 Model"),
+        block("b " * 10, "1 Model", "1.1 Encoder"),
+        block("c " * 10, "1 Model", "1.1 Encoder", "Details"),
+        block("d " * 10, "1 Model", "1.2 Decoder"),
+    ]
+
+    chunks = pack_blocks(blocks, words, max_tokens=100, min_tokens=15)
+
+    # The introduction is below the minimum, so "1.1 Encoder" joins it.
+    assert [chunk.section for chunk in chunks] == ["1 Model > 1.1 Encoder", "1 Model > 1.2 Decoder"]
+    assert "### Details" in chunks[0].text
+
+
+@pytest.mark.parametrize(
+    ("paths", "label"),
+    [
+        ([("3 Model",), ("3 Model",)], "3 Model"),
+        (
+            [
+                ("3 Model", "3.3 Layers"),
+                ("3 Model", "3.4 Embeddings"),
+                ("3 Model", "3.4 Embeddings", "Tying"),
+            ],
+            "3 Model > 3.3 Layers · 3.4 Embeddings",
+        ),
+        # Text before the first heading has no section.
+        ([(), ("3 Model", "3.5 Positions"), ("4 Why Attention",)], "3 Model · 4 Why Attention"),
+        ([()], None),
+    ],
+)
+def test_the_label_names_every_section_the_chunk_covers(paths, label) -> None:
+    blocks = [block("text", *path) for path in paths]
+
+    [chunk] = pack_blocks(blocks, words, max_tokens=100, min_tokens=100)
+
+    assert chunk.section == label
 
 
 def test_chunks_never_exceed_the_maximum() -> None:

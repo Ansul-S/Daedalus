@@ -101,6 +101,10 @@ def test_vector_mode_reports_a_missing_embedding_model(sessions, corpus) -> None
         ({"cell_start": 12, "cell_end": 14}, "RNN Intuition, cells 12–14"),
         ({"cell_start": 3}, "RNN Intuition, cell 3"),
         ({"section": "3 Model Architecture > 3.2 Attention"}, "RNN Intuition, § 3.2 Attention"),
+        (
+            {"section": "3 Model Architecture > 3.3 Layers · 3.4 Embeddings"},
+            "RNN Intuition, § 3.3 Layers · 3.4 Embeddings",
+        ),
         ({}, "RNN Intuition"),
     ],
 )

@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # Ingestion (local only). Uploads and downloaded papers are stored under data_dir.
     data_dir: Path = REPO_ROOT / "data"
     max_upload_mb: int = 50
-    # Chunks grow until the next block would pass the maximum; a new top-level section
+    # Chunks grow until the next block would pass the maximum; a new section or subsection
     # starts a new chunk once the current one has the minimum.
     chunk_min_tokens: int = 300
     chunk_max_tokens: int = 800

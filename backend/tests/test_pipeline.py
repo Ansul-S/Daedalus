@@ -197,8 +197,10 @@ def test_an_arxiv_paper_is_read_from_its_html_page(settings, sessions, embedder)
     assert [(c.section, c.anchor, c.content_types) for c in chunks] == [
         ("Abstract", "abstract1", ["text"]),
         ("1 Introduction", "S1", ["text", "formula"]),
-        ("3 Model Architecture", "S3", ["text", "formula", "table"]),
+        ("3 Model Architecture", "S3", ["text"]),
+        # A subsection starts a new chunk once the current one has the minimum size.
+        ("3 Model Architecture > 3.2 Attention", "S3.SS2", ["text", "formula", "table"]),
     ]
-    assert "## 3.2 Attention" in chunks[2].text
+    assert chunks[3].text.startswith("Scaled dot-product attention is computed as")
     assert all(chunk.page_start is None and chunk.cell_start is None for chunk in chunks)
     assert (settings.data_dir / "arxiv" / "1706.03762" / "v7.html").exists()

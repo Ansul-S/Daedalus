@@ -5,10 +5,12 @@ table, formula or code cell, together with the heading path it sits under and wh
 from (page or cell). Packing then works the same way for every source:
 
 - blocks are added to the current chunk until the next one would push it past `max_tokens`;
-- a new top-level section starts a new chunk once the current one has `min_tokens`, so small
-  sections are merged instead of becoming fragments;
+- a new section or subsection (a change in the first two heading levels) starts a new chunk
+  once the current one has `min_tokens`, so small sections are merged instead of becoming
+  fragments, and a chunk rarely mixes more than a few subsections;
 - when the heading path changes inside a chunk, the new headings are written into the text as
   Markdown headings, so a chunk that spans sections keeps its structure;
+- a chunk's section label names every section it covers, not just the one it starts in;
 - a block longer than `max_tokens` is split on paragraph, line and word boundaries; code
   blocks keep their fences and tables repeat their header row.
 """
@@ -22,6 +24,10 @@ TokenCounter = Callable[[str], int]
 
 CONTENT_TYPE_ORDER = ("text", "code", "formula", "table")
 SECTION_SEPARATOR = " > "
+# Between the sections a chunk covers: "3 Model > 3.3 Feed-Forward Networks · 3.4 Embeddings"
+SECTION_LIST_SEPARATOR = " · "
+# Heading levels whose change starts a new chunk: sections and subsections
+SECTION_DEPTH = 2
 
 _FENCED = re.compile(r"((`{3,}|~{3,})[^\n]*\n)(.*)(\n\2)", re.DOTALL)
 
@@ -52,7 +58,8 @@ class ParsedDocument:
 @dataclass(frozen=True)
 class ChunkDraft:
     text: str
-    headings: tuple[str, ...]
+    # Heading paths of the chunk's blocks, in order, without repeats
+    sections: tuple[tuple[str, ...], ...]
     content_types: list[str]
     token_count: int
     start: int | None
@@ -61,7 +68,18 @@ class ChunkDraft:
 
     @property
     def section(self) -> str | None:
-        return SECTION_SEPARATOR.join(self.headings) or None
+        """The sections the chunk covers, named below their common parent:
+        "3 Model Architecture > 3.3 Feed-Forward Networks · 3.4 Embeddings"."""
+        paths = [path for path in self.sections if path]
+        if not paths:
+            return None
+        parent = paths[0]
+        for path in paths[1:]:
+            parent = parent[: _common_length(parent, path)]
+        children = dict.fromkeys(path[len(parent)] for path in paths if len(path) > len(parent))
+        if children:
+            return SECTION_SEPARATOR.join([*parent, SECTION_LIST_SEPARATOR.join(children)])
+        return SECTION_SEPARATOR.join(parent)
 
 
 def pack_blocks(
@@ -75,7 +93,7 @@ def pack_blocks(
         for piece in split_block(block, count_tokens, max_tokens):
             if current:
                 candidate_tokens = count_tokens(render([*current, piece]))
-                new_section = piece.headings[:1] != current[-1].headings[:1]
+                new_section = piece.headings[:SECTION_DEPTH] != current[-1].headings[:SECTION_DEPTH]
                 if candidate_tokens > max_tokens or (new_section and current_tokens >= min_tokens):
                     chunks.append(_merge(current, current_tokens))
                     current = []
@@ -100,12 +118,18 @@ def render(blocks: Sequence[Block]) -> str:
 
 
 def _heading_lines(previous: tuple[str, ...], new: tuple[str, ...]) -> list[str]:
-    common = 0
-    while common < min(len(previous), len(new)) and previous[common] == new[common]:
-        common += 1
+    common = _common_length(previous, new)
     # Moving back up to a parent section: repeat the parent's heading so the text says so.
     first = min(common, len(new) - 1) if new else 0
     return [f"{'#' * min(depth + 1, 6)} {new[depth]}" for depth in range(first, len(new))]
+
+
+def _common_length(a: tuple[str, ...], b: tuple[str, ...]) -> int:
+    """How many leading headings two heading paths share."""
+    length = 0
+    while length < min(len(a), len(b)) and a[length] == b[length]:
+        length += 1
+    return length
 
 
 def _merge(blocks: list[Block], token_count: int) -> ChunkDraft:
@@ -114,7 +138,7 @@ def _merge(blocks: list[Block], token_count: int) -> ChunkDraft:
     content_types = set().union(*(block.content_types for block in blocks))
     return ChunkDraft(
         text=render(blocks),
-        headings=blocks[0].headings,
+        sections=tuple(dict.fromkeys(block.headings for block in blocks)),
         content_types=[kind for kind in CONTENT_TYPE_ORDER if kind in content_types],
         token_count=token_count,
         start=min(starts, default=None),
