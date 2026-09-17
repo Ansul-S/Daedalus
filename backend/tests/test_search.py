@@ -37,6 +37,39 @@ def test_keyword_matches_in_a_section_title_rank_higher(sessions, corpus) -> Non
     assert ranking == [corpus.softmax, corpus.scaling]
 
 
+def test_keyword_ranking_is_divided_by_chunk_length(sessions, embedder) -> None:
+    # Twenty matches among much other text rank below two matches in one sentence.
+    training_log = " ".join(
+        f"Step {step} logs the loss, the learning rate and the gradient norm." for step in range(20)
+    )
+    rows = [
+        ("Training Loop", training_log),
+        ("Backpropagation", "Gradients vanish when many small factors are multiplied."),
+    ]
+
+    async def query(session):
+        notes = Document(source_type="pdf", title="Training Notes")
+        notes.chunks = [
+            Chunk(
+                position=position,
+                section=section,
+                content_types=["text"],
+                text=body,
+                token_count=len(body.split()),
+                embedding=embedder.vector(body),
+            )
+            for position, (section, body) in enumerate(rows)
+        ]
+        session.add(notes)
+        await session.commit()
+        ranking = await keyword_ranking(session, "why do gradients vanish", 10)
+        return ranking, [chunk.id for chunk in notes.chunks]
+
+    ranking, (long_chunk, short_chunk) = in_session(sessions, query)
+
+    assert ranking == [short_chunk, long_chunk]
+
+
 def test_vector_search_ranks_every_chunk_by_similarity(sessions, embedder, corpus) -> None:
     async def query(session):
         vector = await embedder.embed_query("square root of the key dimension")

@@ -20,7 +20,9 @@ SearchMode = Literal["hybrid", "vector", "keyword"]
 CANDIDATES = 50
 
 # Questions are long, and requiring every word (AND) would match almost nothing, so the
-# stemmed words are ORed and ranked by how densely a chunk matches them.
+# stemmed words are ORed. ts_rank_cd adds up the matches, with section words weighing more
+# than body text, and normalization 2 divides the sum by the chunk's length: otherwise a
+# long code chunk that repeats a few of the words outranks a short passage about them.
 _KEYWORD_QUERY = text(
     """
     WITH query AS (
@@ -29,7 +31,7 @@ _KEYWORD_QUERY = text(
     SELECT chunks.id
     FROM chunks, query
     WHERE chunks.search_vector @@ query.terms
-    ORDER BY ts_rank_cd(chunks.search_vector, query.terms) DESC, chunks.id
+    ORDER BY ts_rank_cd(chunks.search_vector, query.terms, 2) DESC, chunks.id
     LIMIT :limit
     """
 )
