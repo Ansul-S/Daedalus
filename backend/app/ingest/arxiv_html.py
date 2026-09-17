@@ -18,8 +18,11 @@ from app.ingest.docling_blocks import document_blocks, normalize_heading
 
 _DISPLAYSTYLE = re.compile(r"\\displaystyle\b\s*")
 _HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
-# Page furniture and LaTeXML error markers inside the article
-_REMOVED = ".ltx_note, .ltx_pagination, .ltx_ERROR, img, svg, button, script, style"
+# Page furniture, LaTeXML error markers and bullet characters (list items get their own marker)
+_REMOVED = (
+    ".ltx_note, .ltx_pagination, .ltx_ERROR, ul.ltx_itemize > li > .ltx_tag_item, "
+    "img, svg, button, script, style"
+)
 
 
 @lru_cache(maxsize=1)
@@ -60,12 +63,13 @@ def clean_latexml(html: str) -> tuple[str, dict[str, str]]:
     _replace_listings(soup, article)
     for tag in article.select(_REMOVED):
         tag.decompose()
-    # Citations and cross-references become plain text ("[13]", "section 3.2"); their
-    # links point into the removed bibliography or elsewhere on the page.
+    # Citations and cross-references become plain text ("[13]", "Figure 2"); their links
+    # point into the removed bibliography or elsewhere on the page. Each becomes a single
+    # string, since the HTML parser puts spaces around inline tags: "(Figure 2 )".
     for cite in article.find_all("cite"):
         cite.replace_with(NavigableString(cite.get_text()))
     for link in article.find_all("a"):
-        link.unwrap()
+        link.replace_with(NavigableString(link.get_text()))
 
     anchors: dict[str, str] = {}
     for heading in article.find_all(_HEADINGS):
