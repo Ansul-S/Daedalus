@@ -10,6 +10,7 @@ takes them and this command waits for the results.
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -34,6 +35,10 @@ def configure_logging(verbose: bool) -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     if not verbose:
+        # Hide the progress bars and config warnings printed while the PDF models load. Both
+        # settings are read when the libraries are first imported, which happens later.
+        os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+        os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
         for name in _NOISY_LOGGERS:
             # A filter, because these loggers reset their own level when created.
             logging.getLogger(name).addFilter(lambda record: record.levelno >= logging.ERROR)
@@ -191,7 +196,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--force", action="store_true", help="ingest again even if a document is already ready"
     )
-    parser.add_argument("--verbose", action="store_true", help="show library log messages")
+    parser.add_argument(
+        "--verbose", action="store_true", help="show library log messages and progress bars"
+    )
     return parser.parse_args()
 
 

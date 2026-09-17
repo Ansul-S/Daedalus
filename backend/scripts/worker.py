@@ -46,7 +46,9 @@ async def main() -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--verbose", action="store_true", help="show library log messages")
+    parser.add_argument(
+        "--verbose", action="store_true", help="show library log messages and progress bars"
+    )
     configure_logging(parser.parse_args().verbose)
     try:
         sys.exit(asyncio.run(main()))

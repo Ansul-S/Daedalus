@@ -1,5 +1,6 @@
 """PDF parsing with Docling: layout, reading order, tables, and LaTeX for formulas."""
 
+import atexit
 from functools import lru_cache
 from pathlib import Path
 
@@ -27,6 +28,12 @@ def _converter(ocr: bool, formulas: bool) -> DocumentConverter:
     return DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
     )
+
+
+# The formula model frees itself when it is garbage-collected, and during interpreter shutdown
+# that fails with "Error cleaning up engine". Exit handlers run before the shutdown, so
+# dropping the cached converters there frees the models cleanly.
+atexit.register(_converter.cache_clear)
 
 
 def parse_pdf(
