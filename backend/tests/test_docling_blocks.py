@@ -91,6 +91,65 @@ def test_ieee_headings_are_nested() -> None:
     ]
 
 
+def blocks_after_a_list(
+    items: list[tuple[str, str]], levels: bool = False, heading: str | None = None
+) -> list[tuple]:
+    """Subsection F of an IEEE-style paper: a list of (marker, text) items, then a paragraph.
+    `levels` takes the heading levels from the source, as an HTML page does; `heading` is
+    added between the subsection heading and the list."""
+    doc = new_document()
+    doc.add_heading("I. M ETHOD", level=1, prov=page(1))
+    doc.add_heading("F. Prompts", level=2 if levels else 1, prov=page(1))
+    if heading:
+        doc.add_heading(heading, prov=page(1))
+    steps = doc.add_list_group()
+    for marker, text in items:
+        doc.add_list_item(text, enumerated=True, marker=marker, parent=steps, prov=page(1))
+    doc.add_text(TEXT, "A case study.", prov=page(2))
+    return [(block.headings, block.text) for block in document_blocks(doc, "Paper")]
+
+
+def test_a_subsection_heading_read_as_the_last_list_item_is_restored() -> None:
+    items = [("1)", "Context Layer: the domain"), ("G.", "Real-World  Deployment: SAP Migration")]
+
+    assert blocks_after_a_list(items) == [
+        (("I. METHOD", "F. Prompts"), "- 1) Context Layer: the domain"),
+        (("I. METHOD", "G. Real-World Deployment: SAP Migration"), "A case study."),
+    ]
+
+
+@pytest.mark.parametrize(
+    "items",
+    [
+        # Not the next subsection letter
+        [("1)", "Context Layer"), ("H.", "Real-World Deployment")],
+        # Not the end of the list
+        [("G.", "Real-World Deployment"), ("1)", "Context Layer")],
+        # A lettered list
+        [("F.", "Prompt Layers"), ("G.", "Real-World Deployment")],
+        # A sentence, not a title
+        [("1)", "Context Layer"), ("G.", "Deployment is described below.")],
+    ],
+)
+def test_other_lettered_list_items_stay_in_their_list(items: list[tuple[str, str]]) -> None:
+    blocks = blocks_after_a_list(items)
+    assert [headings for headings, _ in blocks] == [("I. METHOD", "F. Prompts")] * 2
+
+
+@pytest.mark.parametrize(
+    ("heading", "path"),
+    [("II. R ESULTS", ("II. RESULTS",)), ("1.1 Setup", ("I. METHOD", "1.1 Setup"))],
+)
+def test_a_heading_without_a_letter_ends_the_subsection_letters(heading: str, path) -> None:
+    blocks = blocks_after_a_list([("1)", "Context Layer"), ("G.", "Deployment")], heading=heading)
+    assert [headings for headings, _ in blocks] == [path] * 2
+
+
+def test_list_items_stay_when_the_source_has_heading_levels() -> None:
+    blocks = blocks_after_a_list([("1)", "Context Layer"), ("G.", "Deployment")], levels=True)
+    assert [headings for headings, _ in blocks] == [("I. M ETHOD", "F. Prompts")] * 2
+
+
 @pytest.mark.parametrize(
     "heading", ["References", "7 References", "VII. REFERENCES", "R EFERENCES", "Bibliography"]
 )

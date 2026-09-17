@@ -15,6 +15,8 @@ from docling_core.types.doc import (
     DocItemLabel,
     DoclingDocument,
     FormulaItem,
+    ListItem,
+    NodeItem,
     SectionHeaderItem,
     TitleItem,
 )
@@ -24,8 +26,11 @@ from app.ingest.chunking import Block
 # Heading numbering: "3.1 Title", IEEE-style "IV. TITLE", "B. Title" and "2) Title"
 _ARABIC_NUMBER = re.compile(r"(\d+(?:\.\d+)*)\.?\s+\S")
 _ROMAN_NUMBER = re.compile(r"([IVXLC]+)\.\s+(\S.*)")
-_LETTER = re.compile(r"[A-Z]\.\s+\S")
+_LETTER = re.compile(r"([A-Z])\.\s+\S")
 _PARENTHESIZED_NUMBER = re.compile(r"\d+\)\s+\S")
+# A list marker such as "G.", and the longest list item still read as a heading title
+_LETTER_MARKER = re.compile(r"[A-Z]\.")
+_MAX_TITLE_WORDS = 10
 _ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
 _NUMBER_PREFIX = re.compile(r"\A(?:\d+(?:\.\d+)*\.?|[A-Z]+\.)\s+")
 # Small capitals can come out of a PDF as "I NTRODUCTION": the large first letter is its own run.
@@ -127,6 +132,7 @@ def _prepare(doc: DoclingDocument) -> None:
             headers.append(item)
     if len({header.level for header in headers}) == 1:
         _infer_heading_levels(headers)
+        _restore_list_headings(doc)
 
 
 def _infer_heading_levels(headers: Iterable[SectionHeaderItem]) -> None:
@@ -154,6 +160,60 @@ def _infer_heading_levels(headers: Iterable[SectionHeaderItem]) -> None:
             header.level = numbered_level + 1
         else:
             numbered_level = header.level = level
+
+
+def _restore_list_headings(doc: DoclingDocument) -> None:
+    """Layout analysis sometimes reads a lettered subsection heading as the last item of the
+    list above it: "G. Real-World Deployment" after a numbered list in subsection F. Such an
+    item is moved out of the list and becomes a heading again, only when its letter is the
+    next subsection letter, it ends its list, no other item of that list is lettered and its
+    text is a short title."""
+    found: list[tuple[ListItem, NodeItem, int]] = []
+    letter, level = "", 0
+    for item, _ in doc.iterate_items():
+        if isinstance(item, SectionHeaderItem):
+            if match := _LETTER.match(item.text):
+                letter, level = match.group(1), item.level
+            elif item.level <= level:
+                letter, level = "", 0
+        elif (
+            isinstance(item, ListItem)
+            and letter
+            and (list_group := _list_ended_by_heading(doc, item, letter))
+        ):
+            found.append((item, list_group, level))
+            letter = item.marker.strip()[0]
+
+    # Last one first: removing an item renumbers the items after it.
+    for item, list_group, heading_level in reversed(found):
+        title = join_small_caps(normalize_heading(f"{item.marker} {item.text}"))
+        heading = doc.insert_heading(sibling=list_group, text=title, level=heading_level)
+        heading.prov.extend(item.prov)
+        doc.delete_items(node_items=[item])
+
+
+def _list_ended_by_heading(doc: DoclingDocument, item: ListItem, letter: str) -> NodeItem | None:
+    """The list holding `item` when the item is really the heading of the subsection after
+    `letter`; otherwise None."""
+    marker = item.marker.strip()
+    words = item.text.split()
+    if (
+        item.parent is None
+        or not _LETTER_MARKER.fullmatch(marker)
+        or ord(marker[0]) != ord(letter) + 1
+        or not 0 < len(words) <= _MAX_TITLE_WORDS
+        or not words[0][:1].isupper()
+        or words[-1].endswith(".")
+    ):
+        return None
+    list_group = item.parent.resolve(doc)
+    siblings = [child.resolve(doc) for child in list_group.children]
+    lettered = [
+        other
+        for other in siblings
+        if isinstance(other, ListItem) and _LETTER_MARKER.fullmatch(other.marker.strip())
+    ]
+    return list_group if siblings[-1] is item and lettered == [item] else None
 
 
 def _is_section_numeral(match: re.Match[str], last_roman: int) -> bool:
