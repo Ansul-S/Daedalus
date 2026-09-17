@@ -1,10 +1,28 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health
+from app.api import documents, health, search
 from app.core.config import get_settings
+from app.llm.embeddings import Embedder
 
-app = FastAPI(title="Daedalus API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+    # Query embeddings need Ollama, which only runs locally; production search is keyword-only.
+    if settings.environment == "local":
+        async with Embedder(settings) as embedder:
+            app.state.embedder = embedder
+            yield
+    else:
+        app.state.embedder = None
+        yield
+
+
+app = FastAPI(title="Daedalus API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
@@ -12,3 +30,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(health.router)
+app.include_router(documents.router)
+app.include_router(search.router)

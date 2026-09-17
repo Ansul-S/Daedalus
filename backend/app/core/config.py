@@ -30,11 +30,24 @@ class Settings(BaseSettings):
     second_opinion_model: str = "gemma4:12b"
     embedding_model: str = "qwen3-embedding:0.6b"
 
+    # Kept small and constant: a different value on each call makes Ollama reload the model.
+    embedding_num_ctx: int = 2048
+
     # Free cloud models (optional locally)
     groq_api_key: SecretStr | None = None
     groq_model: str = "openai/gpt-oss-120b"
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-flash-latest"
+
+    # Ingestion (local only). Uploads and downloaded papers are stored under data_dir.
+    data_dir: Path = REPO_ROOT / "data"
+    max_upload_mb: int = 50
+    # Chunks grow until the next block would pass the maximum; a new top-level section
+    # starts a new chunk once the current one has the minimum.
+    chunk_min_tokens: int = 300
+    chunk_max_tokens: int = 800
+    # Hugging Face tokenizer of the embedding model, used to measure chunk sizes.
+    tokenizer_model: str = "Qwen/Qwen3-Embedding-0.6B"
 
     @property
     def local_chat_models(self) -> list[str]:

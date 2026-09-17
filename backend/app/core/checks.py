@@ -1,15 +1,19 @@
 """Dependency checks shared by `GET /health/deps` and `scripts/check_setup.py`."""
 
+from pathlib import Path
 from typing import Literal
 
 import httpx
+from alembic.script import ScriptDirectory
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import Settings
 
 Status = Literal["ok", "warn", "fail"]
+MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "db" / "migrations"
 
 
 class Check(BaseModel):
@@ -33,6 +37,23 @@ async def check_database(engine: AsyncEngine) -> Check:
     if version is None:
         return Check(name="postgres", status="fail", detail="connected, but pgvector is missing")
     return Check(name="postgres", status="ok", detail=f"connected, pgvector {version}")
+
+
+async def check_schema(engine: AsyncEngine) -> Check:
+    latest = ScriptDirectory(str(MIGRATIONS_DIR)).get_current_head()
+    try:
+        async with engine.connect() as conn:
+            current = await conn.scalar(text("SELECT version_num FROM alembic_version"))
+    except DBAPIError:  # the version table does not exist yet
+        current = None
+    if current == latest:
+        return Check(name="database schema", status="ok", detail=f"up to date ({latest})")
+    found = f"at {current}" if current else "not created"
+    return Check(
+        name="database schema",
+        status="fail",
+        detail=f"{found}, latest is {latest}; run `make migrate`",
+    )
 
 
 def is_installed(model: str, installed: set[str]) -> bool:
@@ -90,7 +111,10 @@ def check_cloud_keys(settings: Settings) -> list[Check]:
 
 
 async def run_checks(settings: Settings, engine: AsyncEngine) -> list[Check]:
-    checks = [await check_database(engine)]
+    database = await check_database(engine)
+    checks = [database]
+    if database.status == "ok":
+        checks.append(await check_schema(engine))
     if settings.environment == "local":
         checks += await check_ollama(settings)
     checks += check_cloud_keys(settings)

@@ -8,7 +8,6 @@ import asyncio
 import sys
 import time
 
-import httpx
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.models import Model
@@ -17,6 +16,7 @@ from app.core.checks import Check, run_checks
 from app.core.config import Settings, get_settings
 from app.db.session import engine
 from app.llm import models
+from app.llm.embeddings import Embedder, EmbeddingError
 
 ICONS = {"ok": "✓", "warn": "!", "fail": "✗"}
 
@@ -48,15 +48,12 @@ async def ping_chat_model(model: Model) -> Check:
 async def ping_embedding_model(settings: Settings) -> Check:
     name = f"vector from ollama:{settings.embedding_model}"
     try:
-        async with httpx.AsyncClient(base_url=settings.ollama_base_url, timeout=120) as client:
-            response = await client.post(
-                "/api/embed", json={"model": settings.embedding_model, "input": "ok"}
-            )
-            response.raise_for_status()
-    except httpx.HTTPError as exc:
-        return Check(name=name, status="fail", detail=f"{type(exc).__name__}: {exc}"[:200])
-    dimensions = len(response.json()["embeddings"][0])
-    return Check(name=name, status="ok", detail=f"{dimensions} dimensions")
+        # Same client and context size as ingestion, so the model is not loaded twice.
+        async with Embedder(settings) as embedder:
+            vector = await embedder.embed_query("ok")
+    except EmbeddingError as exc:
+        return Check(name=name, status="fail", detail=str(exc)[:200])
+    return Check(name=name, status="ok", detail=f"{len(vector)} dimensions")
 
 
 async def main(live: bool) -> int:
