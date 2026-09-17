@@ -119,7 +119,8 @@ async def _ingest_out(
     await session.refresh(enqueued.document)
     if enqueued.job is not None:
         await session.refresh(enqueued.job)
-    if enqueued.job is None or enqueued.job.status != "queued":
+    # 202 while a job for the document is still pending, 200 when there is nothing to wait for
+    if enqueued.job is None or enqueued.job.status not in queue.ACTIVE_STATUSES:
         response.status_code = status.HTTP_200_OK
     [document] = await _documents_out(session, [enqueued.document])
     return IngestOut(
@@ -141,7 +142,7 @@ async def upload_document(
     settings: SettingsDep,
     response: Response,
 ) -> IngestOut:
-    """Upload a PDF or a Jupyter notebook. Returns 202 when a job was queued."""
+    """Upload a PDF or a Jupyter notebook. Returns 202 while its ingestion job is pending."""
     max_bytes = settings.max_upload_mb * 1024 * 1024
     if file.size is not None and file.size > max_bytes:
         raise HTTPException(
@@ -167,7 +168,7 @@ async def upload_document(
     dependencies=[Depends(local_only)],
 )
 async def add_arxiv_paper(body: ArxivIn, session: SessionDep, response: Response) -> IngestOut:
-    """Add an arXiv paper by ID or URL. Returns 202 when a job was queued."""
+    """Add an arXiv paper by ID or URL. Returns 202 while its ingestion job is pending."""
     try:
         arxiv_id, version = parse_arxiv_id(body.arxiv_id)
     except ValueError as exc:
