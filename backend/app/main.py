@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import documents, health, search
+from app.api import documents, health, questions, search
 from app.core.config import get_settings
 from app.llm.embeddings import Embedder
 
@@ -32,3 +32,4 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(documents.router)
 app.include_router(search.router)
+app.include_router(questions.router)

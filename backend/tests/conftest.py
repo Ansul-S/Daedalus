@@ -16,6 +16,7 @@ import psycopg
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
@@ -26,9 +27,12 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-from app.core.config import get_settings
+from app.api.search import get_embedder
+from app.core.config import Settings, get_settings
 from app.db.models import EMBEDDING_DIMENSIONS, Base, Chunk, Document
+from app.db.session import get_session
 from app.llm.embeddings import EmbeddingError, Progress
+from app.main import app
 
 BACKEND = Path(__file__).resolve().parents[1]
 TEST_DATABASE = "daedalus_test"
@@ -71,6 +75,28 @@ class FakeEmbedder:
 @pytest.fixture
 def embedder() -> FakeEmbedder:
     return FakeEmbedder()
+
+
+@pytest.fixture
+def settings(tmp_path: Path) -> Settings:
+    return Settings(_env_file=None, data_dir=tmp_path, max_upload_mb=1)
+
+
+@pytest.fixture
+def client(sessions, embedder: FakeEmbedder, settings: Settings) -> Iterator[TestClient]:
+    """The API on the test database, with the fake embedder standing in for Ollama."""
+
+    async def test_session():
+        async with sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = test_session
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_embedder] = lambda: embedder
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="session")

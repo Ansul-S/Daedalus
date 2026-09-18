@@ -37,7 +37,9 @@ class JobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    document_id: int
+    kind: str
+    # None for a job that writes questions: it belongs to the library, not to one document
+    document_id: int | None
     status: str
     progress: str | None
     error: str | None

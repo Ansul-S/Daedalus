@@ -1,39 +1,16 @@
 import asyncio
 import json
-from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select, update
 
 from app.api.search import get_embedder
-from app.core.config import Settings, get_settings
 from app.db.models import Chunk, Document, Job
-from app.db.session import get_session
 from app.main import app
 
 NOTEBOOK = json.dumps({"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}).encode()
 PDF = b"%PDF-1.4\n% test file\n"
-
-
-@pytest.fixture
-def settings(tmp_path) -> Settings:
-    return Settings(_env_file=None, data_dir=tmp_path, max_upload_mb=1)
-
-
-@pytest.fixture
-def client(sessions, embedder, settings) -> Iterator[TestClient]:
-    async def test_session():
-        async with sessions() as session:
-            yield session
-
-    app.dependency_overrides[get_session] = test_session
-    app.dependency_overrides[get_settings] = lambda: settings
-    app.dependency_overrides[get_embedder] = lambda: embedder
-    try:
-        yield TestClient(app)
-    finally:
-        app.dependency_overrides.clear()
 
 
 def upload(client: TestClient, filename: str, content: bytes, **options: str):
@@ -161,6 +138,21 @@ def test_documents_show_their_chunk_count_and_latest_job(client, sessions, corpu
     assert client.get(f"/jobs/{finished_id}").json()["progress"] == "3 chunks"
     assert client.get("/documents/999").status_code == 404
     assert client.get("/jobs/999").status_code == 404
+
+
+def test_a_job_that_writes_questions_belongs_to_no_document(client, sessions) -> None:
+    async def add() -> int:
+        async with sessions() as session, session.begin():
+            job = Job(kind="generate", options={"count": 5, "planned": 5})
+            session.add(job)
+            await session.flush()
+            return job.id
+
+    job_id = asyncio.run(add())
+
+    body = client.get(f"/jobs/{job_id}").json()
+    assert (body["kind"], body["document_id"]) == ("generate", None)
+    assert body["options"]["planned"] == 5
 
 
 def test_superseded_chunks_are_left_out_of_the_chunk_count(client, sessions, corpus) -> None:
