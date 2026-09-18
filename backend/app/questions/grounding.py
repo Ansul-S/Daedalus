@@ -50,13 +50,16 @@ def check_quote(quote: str, chunk_id: int, chunk_text: str | None) -> QuoteCheck
 
     if chunk_text is None:
         return failed(f"chunk {chunk_id} is not one of the sources")
-    if ELLIPSIS.search(quote):
-        return failed("the quote leaves words out instead of running on")
     if len(normalize(quote).split()) < MIN_WORDS:
         return failed(f"the quote is shorter than {MIN_WORDS} words")
     if quote.rstrip().endswith(":"):
         return failed("the quote stops at a colon, so it states nothing on its own")
+    # The score decides whether an ellipsis is the model eliding a span or the source's own
+    # notation: a paper that writes a sequence as (x_1, ..., x_n) is quoted faithfully with
+    # the dots in it, while a quote that really leaves words out stops matching the chunk.
     score = float(fuzz.partial_ratio(normalize(quote), normalize(chunk_text)))
     if score < THRESHOLD:
+        if ELLIPSIS.search(quote):
+            return failed("the quote leaves words out instead of running on", score)
         return failed(f"the quote is not in chunk {chunk_id} (closest match {score:.0f}%)", score)
     return QuoteCheck(quote=quote, chunk_id=chunk_id, score=score, problem=None)

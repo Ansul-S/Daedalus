@@ -66,6 +66,18 @@ def test_a_quote_has_to_be_in_the_chunk_it_names(quote: str, problem: str | None
         assert check.problem.startswith(problem)
 
 
+def test_a_quote_keeps_an_ellipsis_the_source_writes_itself() -> None:
+    """A paper that writes a sequence as (x_1, ..., x_n) is quoted faithfully with the dots
+    in it. Only a quote that stops matching its chunk is one that left words out."""
+    chunk = (
+        "The encoder maps an input sequence of symbol representations $(x_1, ..., x_n)$ to a "
+        "sequence of continuous representations $\\mathbf{z} = (z_1, ..., z_n)$."
+    )
+    quote = "maps an input sequence of symbol representations $(x_1, ..., x_n)$ to a sequence"
+
+    assert check_quote(quote, 1, chunk).grounded
+
+
 def test_a_quote_cannot_name_a_chunk_that_was_not_a_source() -> None:
     check = check_quote(GOOD_QUOTE, 999, None)
 
@@ -141,7 +153,7 @@ def test_a_question_whose_quotes_hold_up_is_written_in_one_call() -> None:
     assert generated.question.question.startswith("Why are the dot products")
     assert generated.usage["requests"] == 1
     assert generated.model == "function:respond:"
-    assert generated.prompt_version == "generate-v1"
+    assert generated.prompt_version == "generate-v2"
 
 
 def test_a_quote_that_is_not_in_the_sources_is_sent_back_once() -> None:

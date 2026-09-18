@@ -28,7 +28,7 @@ from app.questions.grounding import QuoteCheck, check_quote
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "generate-v1"
+PROMPT_VERSION = "generate-v2"
 # Enough for a question with its answer and reasoning; a runaway answer would otherwise eat
 # a whole minute of the token budget.
 MAX_TOKENS = 3000
@@ -43,8 +43,10 @@ STYLE_BRIEFS: dict[str, str] = {
     "compare": "ask the candidate to compare two things the sources describe",
     "tradeoffs": "ask about a trade-off, or when one choice is preferable to another",
     "failure_modes": "ask how something breaks, or what goes wrong when it is left out",
-    "connection": "ask how two ideas from different parts of the sources fit together",
-    "paper": "ask about the problem the paper attacks, its key idea, or where it stops",
+    "connection": "ask about the idea both passages turn on, and what each of them shows "
+    "about it -- not about a link between them that neither one draws",
+    "paper": "ask why the paper's approach works the way it does, what it gives up, or where "
+    "the authors say it stops -- never what it reports having achieved",
 }
 assert set(STYLE_BRIEFS) == set(QUESTION_STYLES)
 
@@ -57,6 +59,11 @@ fails, or how two ideas fit together. Never ask about the document itself -- its
 its figures, its numbering or its authors. It has to be answerable from the sources alone by
 someone who has not read them, and it is one question, not two joined by "and". A number or
 a name is only worth asking about when the sources also say what is behind it.
+
+Never build a question out of what a source reports rather than explains: an accuracy figure,
+a stage or component name, a claim about what some system achieves. If the answer is a
+sentence of the passage handed back, there is no question there -- ask instead why the thing
+the sentence states is so.
 
 The reference answer is what a strong candidate would say, in a few sentences, drawn only
 from what the sources state. Never add a fact of your own, however true it is.
