@@ -4,7 +4,7 @@ AI/ML interview practice built on your own study material. Daedalus generates co
 
 Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work.
 
-**Status:** Phase 1 (ingestion and retrieval) is complete. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable through the API, with page, cell or section citations. Next is Phase 2, question generation. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**Status:** Phase 1 (ingestion and retrieval) and Phase 2 (question generation) are built. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages, checked against them and served through the API. Next is Phase 3, grading answers against the same sources. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
 
 ## Prerequisites (macOS)
 
@@ -72,6 +72,81 @@ data/
                                    site) or v<N>.pdf; v<N>.no-html records a version without HTML
 ```
 
+## Generating questions
+
+Questions are written from the material you have ingested, in two steps. The first reads the
+library with the local model and has to run once after ingesting; the second writes questions
+and can run as often as you like.
+
+```sh
+make topics             # tag every chunk and cluster the tags into topics
+make generate N=20      # write 20 questions
+```
+
+### 1. The topic map
+
+`make topics` asks `qwen3.5:4b` what each chunk explains, for two to five concept tags, and
+whether the chunk is worth asking a question about. Every distinct tag is then embedded and
+clustered, so the same idea in a paper and in a notebook lands in one topic.
+
+Options go in `ARGS`, for example `make topics ARGS="--rules-only"`:
+
+| Option | Effect |
+|---|---|
+| `--document ID`, `--limit N` | Tag one document only, or at most N chunks |
+| `--retag` | Tag chunks again that already have tags, e.g. after changing the prompt |
+| `--tag-only`, `--cluster-only` | Stop before clustering, or cluster the tags there already are |
+| `--rules-only` | Judge the stored tags by the context-only rules again, with no model calls |
+| `--similarity X` | How close two tags have to be to share a topic (default `TOPIC_SIMILARITY`, 0.8) |
+
+- It takes about 12 s per chunk, so roughly 25 minutes for a library of 124 chunks. Ollama
+  must be running, and only one process may use the local models at a time.
+- A chunk is context-only, and never asked about, when the model says it explains nothing or
+  when a rule says so: chunks that are only code, and scaffolding such as roadmaps, learning
+  objectives, setup and imports, acknowledgments and front matter. Context-only chunks keep
+  their tags and can still be shown alongside a question.
+- Topics keep their ids as long as their names survive, so questions stay filed where they are.
+
+### 2. Writing questions
+
+`make generate N=20` plans the batch, writes it down, and then works through it. Each question
+goes to Groq's `gpt-oss-120b` (Gemini, then the local model, if Groq is unavailable) with its
+source chunks in delimiters, and comes back as JSON: the question, a reference answer, two to
+four key points each carrying an exact quote from a source, misconceptions, and a difficulty.
+
+Options go in `ARGS`, for example `make generate ARGS="--job 17"`:
+
+| Option | Effect |
+|---|---|
+| `--count N` | How many questions to write (also `N=` on `make generate`) |
+| `--document ID` | Ask about one document only |
+| `--job ID` | Carry on with a batch that stopped early |
+| `--verbose` | Show library log messages |
+
+- **Passages are picked a source at a time and a topic at a time,** so a batch spreads over
+  the whole library instead of the one document that happens to hold the most material. The
+  style rotates through intuition, why/how, compare, trade-offs, failure modes, connection and
+  paper questions.
+- **A chunk an accepted question already covers is left out,** so a second run breaks new ground.
+- **Before it runs, the whole plan is written down** as one row per question. Ctrl+C loses at
+  most the question in flight; `make generate ARGS="--job 16"` carries the rest on.
+- **Each provider keeps its own pace** (Groq's free tier allows 30 requests and 8,000 tokens a
+  minute, 200,000 a day). A provider that is briefly full is waited out rather than abandoned,
+  and the batch stops cleanly when the day's budget is gone, leaving the rest queued.
+- **Questions queued through the API** are written by the worker, the same one that ingests.
+
+### What a question has to pass
+
+Every question is stored either way, with the report behind the verdict, so a rejected one
+says why.
+
+| Check | A question is turned down when |
+|---|---|
+| quotes | a key point's quote is not in the chunk it names, after one round to repair it |
+| answerable | the local model, reading only the sources, cannot answer it |
+| trivia | that model reads it as recalling a fact rather than explaining something |
+| duplicate | it is within `DUPLICATE_SIMILARITY` of a question already accepted |
+
 ## API
 
 | Endpoint | Purpose |
@@ -82,17 +157,25 @@ data/
 | `GET /documents`, `GET /documents/{id}` | Documents with their status, details, chunk count and latest job |
 | `GET /jobs/{id}` | A job's status, progress and error |
 | `GET /search?q=…&limit=10&mode=hybrid` | Search all chunks. `mode` is `hybrid`, `vector` or `keyword`; `limit` is at most 50 |
+| `POST /questions/generate` | Plan and queue a batch: `{"count": 20}`, optionally `document_id`. Returns **202** with the job the worker will run |
+| `GET /questions` | The library, newest first. Filters: `status`, `topic_id`, `style`, `difficulty`, `document_id`, `source_updated`; `limit` and `offset`, with the total of the whole match |
+| `GET /questions/{id}` | One question with its sources, key points and quotes, misconceptions, validation report and token usage |
+| `GET /topics` | The topic map with the passages and questions behind each topic |
 
 - **Adding material.** Both `POST` endpoints return **202** while the document's job is queued or running, and **200** when there is nothing to wait for because the document is already ingested.
   - A file over `MAX_UPLOAD_MB` gets 413; any other file type gets 415.
   - With `ENVIRONMENT=production`, both return 403, since ingestion runs locally.
 - **Search results.** Each result has the chunk text, its section label, its page or cell range, and its rank in each retriever. It also has a citation, such as `RNN Intuition, pp. 7–8` or `Attention Is All You Need, § 3.2.1 Scaled Dot-Product Attention · 3.2.2 Multi-Head Attention`. For arXiv papers, a link points to the section or PDF page.
 - **Without Ollama,** hybrid search falls back to keyword search and says so in `warning`, and `mode=vector` returns 503.
+- **Starting a batch** needs the worker to be running, and returns the batch already in flight rather than planning a second one: two plans made at the same time would pick the same passages and pay for them twice. It returns **200** with no job when nothing is left to ask about, and 403 with `ENVIRONMENT=production`, since checking a question needs the local models.
+- **A question is served with everything behind it:** the passages it was written from, cited as search results are, what an answer has to cover with the quote that proves each point, and the report from every check it went through, whether it passed or failed.
 
 ```sh
 curl -X POST localhost:8000/documents/arxiv -H 'Content-Type: application/json' -d '{"arxiv_id": "1706.03762"}'
 curl -F file=@notes.pdf 'localhost:8000/documents/upload?formulas=false'
 curl 'localhost:8000/search?q=why+scale+dot-product+attention&limit=5'
+curl -X POST localhost:8000/questions/generate -H 'Content-Type: application/json' -d '{"count": 20}'
+curl 'localhost:8000/questions?status=accepted&difficulty=3&limit=5'
 ```
 
 ## Commands
@@ -104,7 +187,9 @@ curl 'localhost:8000/search?q=why+scale+dot-product+attention&limit=5'
 | `make ollama` | Runs Ollama with settings sized for a 16 GB Mac |
 | `make api`, `make web` | Runs the API on port 8000 / the frontend on port 3000 |
 | `make ingest SRC="…"` | Ingests files, folders and arXiv papers (see [Adding study material](#adding-study-material)) |
-| `make worker` | Processes ingestion jobs queued through the API |
+| `make topics` | Tags every chunk with the local model and clusters the tags into topics |
+| `make generate N=20` | Writes questions from the topic map (see [Generating questions](#generating-questions)) |
+| `make worker` | Processes jobs queued through the API, both ingestion and question batches |
 | `make check` | Checks the database and its migrations, Ollama and its models, and API keys. `make check LIVE=1` also sends a one-word prompt to each model. |
 | `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`). |
 | `make test-slow` | The end-to-end PDF test, which loads Docling's models |
@@ -128,18 +213,21 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `MAX_UPLOAD_MB` | `50` | Largest accepted file |
 | `CHUNK_MIN_TOKENS`, `CHUNK_MAX_TOKENS` | `300`, `800` | Chunk size range. Documents keep their chunks until they are ingested again with `--force`. |
 | `TOKENIZER_MODEL` | `Qwen/Qwen3-Embedding-0.6B` | Tokenizer that measures chunk sizes: the embedding model's own |
+| `TOPIC_SIMILARITY` | `0.8` | How close two concept tags have to be to share a topic. Higher keeps topics narrow; 0.7 merged RNN, LSTM, ReLU and dropout into one. |
+| `DUPLICATE_SIMILARITY` | `0.75` | Above this, two questions are the same question in other words. Short texts sit much closer together than passages do, so the line is far below the 0.9 it looks like it should be. |
 
 ## Layout
 
 ```
 backend/          FastAPI app (uv)
-  app/api/        HTTP routes: health, documents and jobs, search
+  app/api/        HTTP routes: health, documents and jobs, search, questions and topics
   app/core/       settings, setup checks
   app/db/         tables (SQLAlchemy) and Alembic migrations
   app/ingest/     parsers (PDF, arXiv, notebooks), chunking, file storage, job queue, pipeline
-  app/llm/        model routing, embeddings
+  app/llm/        model routing, per-provider pacing, embeddings
+  app/questions/  concept tags, topics, generation, quote grounding, validation, batch runs
   app/retrieval/  hybrid search and rank fusion
-  scripts/        setup check, ingest and worker commands
+  scripts/        setup check, ingest, worker, topics and generate commands
   tests/
 frontend/         Next.js (App Router, TypeScript, Tailwind)
 db/init/          SQL that runs when the database is first created (enables pgvector)
@@ -153,7 +241,10 @@ data/             Your material, uploads and downloads (not committed)
 
 - **Question generation:** Groq → Gemini → local `qwen3.5:9b`
 - **Grading:** local `qwen3.5:9b` → Groq → Gemini
+- **Tagging chunks and checking questions:** local `qwen3.5:4b` only, with no fallback. Both run over the whole library, so they stay off the cloud quotas, and both run with thinking off, temperature 0 and a fixed seed, which makes them repeatable.
 - With `ENVIRONMENT=production` (free cloud hosting), Ollama is skipped and only cloud models are used.
+
+In a batch, each cloud model also keeps its own pace: a sliding window of requests and tokens, a running daily total, and a wait when the provider says `retry-after`. A provider that is briefly full is waited out rather than abandoned, so a 429 doesn't spend the next provider's quota.
 
 ## Dependency safety
 

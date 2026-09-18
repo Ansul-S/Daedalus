@@ -164,6 +164,57 @@ Retrieval and grading are implemented directly rather than through a RAG framewo
   - Requests use a fixed `num_ctx` of 2048, since a different value makes Ollama reload the model.
   - Requests set `truncate: false`, so an over-long input fails instead of being cut silently.
 
+## Question generation (Phase 2)
+
+```
+ make topics ─► tag    qwen3.5:4b reads each chunk: what it explains, 2-5 concept tags,
+                       and whether it is worth asking about (thinking off, temperature 0)
+              ─► rules code-only and boilerplate chunks become context, whatever the model said
+              ─► group every distinct tag is embedded once and clustered across the library;
+                       a cluster is a topic, named after the tag most chunks used
+
+ make generate N=20 ─► plan   one task per question, written down before any of it runs:
+ POST /questions/generate      a source at a time, a topic at a time, styles in rotation
+              ─► write  Groq gpt-oss-120b writes one question against the chunk text in
+                        delimiters, in a strict JSON schema; every key point carries a quote
+              ─► ground rapidfuzz looks for each quote in its chunk; failures go back once
+                        with the problems named, and the model sends the question again
+              ─► check  the quotes hold · the local 4B can answer it from the sources alone ·
+                        it reads as explain, not recall · it is not a near-duplicate
+              ─► store  accepted or rejected, always with the report behind the verdict
+
+ Each task is committed as it finishes, so a batch that stops -- on Ctrl+C, on a provider
+ running out for the day -- carries on from where it stopped instead of paying again.
+```
+
+**Tables** (Alembic migrations `0002`-`0004`):
+- **`chunks.superseded_at`:** a chunk an ingestion replaced is kept, so the questions written from it keep their exact sources. The unique position index and both search indexes became partial (`WHERE superseded_at IS NULL`), and search and generation see current chunks only.
+- **`chunk_tags`:** one row per chunk: what it explains, its tags, the model's `worth_asking` flag, the verdict after the rules, the rule that vetoed it, the model and the prompt version.
+- **`topics`** (name, every tag in the cluster, centroid embedding) and **`chunk_topics`**.
+- **`questions`:** the question and its reference answer, `key_points` (JSON: text, weight, evidence quote, chunk), misconceptions, style, difficulty 1-5, topic, status (`accepted`, `rejected`, `retired`), the validation report (JSON), the generating model, prompt version, token usage and an embedding for the duplicate check.
+- **`question_sources`:** the chunks a question was written from, in the order the model saw them. The reference is `ON DELETE RESTRICT`: a document whose chunks back a saved question cannot be deleted while it does.
+- **`jobs.kind`** (`ingest` or `generate`, with a nullable `document_id`) and **`question_tasks`**: one row per planned question, with its chunks, style, status and result.
+- **"Source updated"** is derived, not stored: a question is flagged when any of its chunks has a `superseded_at`, so the flag cannot fall behind the chunks.
+
+### Question generation decisions
+- **Old chunks are kept, not re-linked.** Re-ingesting a document supersedes its chunks instead of deleting them. A question still points at the exact text it was written from, and is flagged "source updated" so it can be reviewed. Fuzzily re-attaching a question to a new chunk would silently change what it was asked about.
+- **The topic map is local.** Tagging the library is bulk work over every chunk, so it runs on `qwen3.5:4b` and stays off the cloud quotas. Fixed prompt version, temperature 0 and a fixed seed make a run repeatable; the tags are stored, so the topics can be re-clustered without reading the library again (`make topics --rules-only` re-applies the rules alone).
+- **Thinking is turned off explicitly for every small-model call.** Ollama turns thinking on by itself for a model that can think, and the profile Pydantic AI picks for qwen3.5 does not declare thinking support, so a unified `thinking=False` was dropped before the request was built. Declaring the support in `app/llm/models.py` lets it through as `reasoning_effort: "none"`. A test asserts the request body carries it, so a library change cannot quietly turn thinking back on.
+- **Worth asking is the model's flag *and* deterministic rules.** The 4B alone caught only two or three of five boilerplate chunks. Rules mark code-only chunks and scaffolding -- roadmaps, learning objectives, setup and imports, acknowledgments, front matter -- as context. A chunk counts as scaffolding only when *every* section it covers is: a chunk labelled "V. CONCLUSION AND FUTURE WORK · VI. ACKNOWLEDGMENT" was being thrown away whole.
+- **Topics are built from the chunks worth asking about only,** or "imports" becomes a topic. A topic keeps its id while its name survives, so questions stay filed where they were; topics nothing refers to any more are deleted.
+- **One question per request, with the sources in delimiters** and a strict JSON schema (`NativeOutput`). In the trial every schema-constrained request came back valid, while Groq's own validator rejected a tool call once.
+- **The prompt forbids questions built on what a source reports** rather than explains -- an accuracy figure, a component name, a claim about what a system achieves -- because that is what the first milestone run kept producing from papers that state results in prose. Saying so moved trivia rejections from 6 in 20 to 1, and unanswerable ones from 5 to 1.
+- **The repair round is explicit.** Quotes are checked first; if any is not in its chunk, the whole conversation goes back with the failures named and the model gets one chance to fix it. The question is returned either way with its quote report, so a rejected question says why. The round cost about 3.5K tokens against 2.3K for a question that came out right first time, and took quote grounding from 20 of 24 to 25 of 25 in the trial.
+- **Grounding is lenient about spelling and strict about stitching.** Text is compared after NFKC folding, hyphen mapping, Markdown stripping and whitespace collapsing, because a model re-wraps lines and drops the dollar signs around inline maths. A quote shorter than six words, or ending at a colon, is refused outright: neither states anything on its own. The threshold is 95, since a quote that only lost its dollar signs scored 98-99 while one with words left out reached 90.5.
+  - **An ellipsis is judged by the score, not on sight.** Refusing every quote containing one turned away the Transformer paper's own `(x_1, ..., x_n)`, which a faithful quote has to keep. A quote that really leaves a span out stops matching its chunk, so the score already catches it; the ellipsis only decides how the failure is explained to the model in the repair round.
+- **A batch is planned before it runs.** The tasks are written down first, so a run that stops loses at most the question in flight, and `--job` carries it on.
+- **Each provider keeps its own pace.** A 429 is not a reason to spend the next provider's quota: `PacedModel` holds a sliding 60-second window for requests and tokens and a running daily total, waits out a `retry-after` plus a margin, and only gives up on a provider when it has run out of attempts or of the day's budget. Groq's own client retrying is turned off, since it sleeps through a 429 before anything else sees it.
+- **A style that needs two passages picks a topic that can spare one.** Blind rotation meant `compare` and `connection` almost never fired, because most topics cover a single chunk, and quietly fell back to a plain question.
+- **Every source gets a fair share of a batch.** Taking the biggest topic first follows the shape of the library rather than the shape of the revision: the three biggest topics are all notebook retrieval, so twenty questions took twelve passages from the notebook and one from the shortest source. A batch now takes its next passage from the source asked about least so far, and the topic ring decides which passage of that source comes next.
+- **The answerability check reads for recall or explanation first.** Asking a model outright whether a question is trivia caught none of it in the trial; asking it to classify the question as "recall" or "explain", with examples, caught all four trivia questions with no false alarms.
+- **No second model call for a quote-support check.** `answer_agreement` records the cosine between the reference answer and the answer the checker wrote from the passages alone. It is recorded and judges nothing, and the milestone run says it should stay that way: over twenty questions the accepted ones scored 0.74 to 0.92 and the rejected ones 0.56 to 0.96, and the highest score of the run belonged to a question that was turned down.
+- **Gemini is pinned to `gemini-3.5-flash`.** The `-latest` alias moved to 3.8 Flash, which returned 503 on 11 of 13 attempts, and Pydantic AI's profile for the alias drops thinking settings.
+
 ## Tech stack (free tiers as of September 2026)
 
 ### Models
@@ -284,6 +335,42 @@ Measured on the same Mac with the sample material: lecture notes (PDF), a notebo
   - The 149 fast tests take 10–13 s, including creating the test database.
   - The slow PDF test takes about 15 s.
 
+## Phase 2 measurements
+Measured on the same Mac and the same four sources as Phase 1: 124 chunks, of which 83 are
+worth asking a question about (notebook 48 of 84, lecture notes 9 of 9, 1706.03762 14 of 15,
+2510.10824 12 of 16).
+
+- **Tagging the library** with `qwen3.5:4b`, thinking off: **12.3 s per chunk**, about 25
+  minutes for 124. Tagging the same chunk twice gives the same tags.
+  - Thinking on takes 101–262 s per chunk, which would be about 7 hours for the library, and
+    changes no verdict that was checked.
+  - The rules held back 25 chunks the model would have asked about (23 only code, 2
+    scaffolding), and the model rejected 16 more that no rule caught. Both halves earn their
+    place.
+- **Clustering:** 215 distinct tags became **145 topics** over 344 chunk-topic links, 4.1
+  topics per chunk. Swept from 0.60 to 0.90: at 0.70 RNN, LSTM, ReLU and dropout merge into
+  one topic; at 0.85 "embedding model" splits from "text embeddings". **0.80** keeps topics
+  that span documents, such as `text embeddings` over three of them.
+- **Writing a question** on Groq `gpt-oss-120b`: 1.8 s for one passage, 5.0 s for two.
+- **Cost, over two runs of 20:** **3.9K and 3.8K tokens per question** (77.4K over 34
+  requests, then 76.2K over 32). The estimate before building was 3–4.5K. A repair round
+  costs about 3.5K against 2.3K for a question that comes out right first time, and **14 of
+  the first 20 needed one, 12 of the second 20**.
+  - A batch of 20 takes **12 minutes**, paced by Groq's 8,000 tokens a minute rather than by
+    the models themselves, and uses about 38% of the 200,000 free tokens in a day. Neither
+    run fell through to Gemini or to the local model.
+- **Quote grounding:** 59 of 63 quotes cleared the threshold of 95 in the first run, mean
+  score 96.4; 56 of 64 in the second, mean 90.7. The failures are stitched quotes rather than
+  invented ones: one ran two paragraphs together across a heading and a rule, scoring 93.5,
+  and two others stopped at a colon.
+- **The answerability checker** on the twenty questions of a real run: **20 of 20 identical
+  verdicts** when the same questions were checked again, so temperature 0 with a fixed seed
+  holds. **Median 14.0 s** (8.1–27.6), against 9.0 s on the short labelled controls of the
+  trial: real questions carry one or two full passages.
+- **Search latency is unchanged** by the partial indexes: the filtered vector query still
+  plans as an index scan.
+- **Tests:** 260 fast tests in about 20 s, including creating the test database.
+
 ## Roadmap
 **Phase 0: Setup**
 - Postgres + pgvector (Docker), FastAPI backend, Next.js frontend, setup checks (`make check`).
@@ -302,8 +389,8 @@ Measured on the same Mac with the sample material: lecture notes (PDF), a notebo
 - A Postgres job queue with a worker (`make worker`) and a command-line ingester (`make ingest`).
 - API endpoints: upload a file or add an arXiv ID, list documents, ingestion job status, and search with citations and source links.
 
-**Phase 2: Question generation**
-- Topic map: concept tags per chunk, then clustering.
+**Phase 2: Question generation** (built; see [Question generation](#question-generation-phase-2) and the [milestone result](#phase-2-milestone-result))
+- Topic map: concept tags per chunk from the local model, then clustering (`make topics`).
 - Question fields:
   - `question`, `topic`, `difficulty`
   - `reference_answer`
@@ -317,13 +404,16 @@ Measured on the same Mac with the sample material: lecture notes (PDF), a notebo
   - trade-offs and when to use something
   - failure modes
   - connecting two concepts (multiple chunks)
-  - paper questions: problem, key idea, limitations, extensions
+  - paper questions: why the approach, what it gives up, where it stops
 - Validation drops a question when:
   - an evidence quote isn't found in its chunk
   - a second model can't answer it from the sources alone
-  - it nearly duplicates an existing question (similarity > 0.9)
-  - it is trivia
-- Runs as a resumable, rate-limited batch job.
+  - it reads as recalling a fact rather than explaining something
+  - it nearly duplicates an existing question (cosine ≥ `DUPLICATE_SIMILARITY`, measured at 0.75)
+- Runs as a resumable, provider-paced batch job (`make generate`), queued through the API and
+  worked through by the same worker that ingests.
+- API endpoints: start a batch, list and filter questions, read one with its sources and
+  validation report, and browse the topic map.
 
 **Phase 3: Grading against sources**
 - Grader output fields:
@@ -375,11 +465,11 @@ Daedalus/
 │   ├── pyproject.toml        # uv; main deps = API; groups: ingest | eval | dev
 │   ├── app/
 │   │   ├── main.py           # FastAPI app + routers
-│   │   ├── api/              # health, documents + jobs, search (citations, source links);
-│   │   │                     #   questions, sessions, stats (planned)
+│   │   ├── api/              # health, documents + jobs, search (citations, source links),
+│   │   │                     #   questions + topics; sessions, stats (planned)
 │   │   ├── core/             # settings, dependency checks
 │   │   ├── db/               # SQLAlchemy models, sessions, Alembic migrations
-│   │   ├── llm/              # model routing (fallback chains), embeddings; prompts (planned)
+│   │   ├── llm/              # model routing (fallback chains), per-provider pacing, embeddings
 │   │   ├── ingest/
 │   │   │   ├── storage.py        # uploads stored once per content hash
 │   │   │   ├── queue.py          # Postgres job queue and ingest lock
@@ -392,10 +482,16 @@ Daedalus/
 │   │   │   ├── chunking.py       # shared chunk packer and section labels
 │   │   │   └── tokens.py         # token counts with the embedding model's tokenizer
 │   │   ├── retrieval/        # search (vector, full-text, hybrid), fusion (RRF); reranker (planned)
-│   │   ├── generation/       # topic map, generator, validators (planned)
+│   │   ├── questions/
+│   │   │   ├── tagging.py        # concept tags and worth-asking, model plus rules
+│   │   │   ├── topics.py         # tag clustering into topics, topic of a question
+│   │   │   ├── generation.py     # prompts, schema, the quote-repair round
+│   │   │   ├── grounding.py      # is this quote really in its chunk
+│   │   │   ├── validation.py     # the checks a question has to pass, and storing it
+│   │   │   └── batch.py          # planning a batch and working through it
 │   │   ├── grading/          # grader pipeline, scoring (planned)
 │   │   └── scheduling/       # FSRS + topic mastery (planned)
-│   ├── scripts/              # check_setup, ingest, worker; generate / calibrate CLIs (planned)
+│   ├── scripts/              # check_setup, ingest, worker, topics, generate; calibrate (planned)
 │   └── tests/                # unit and database tests, slow PDF test;
 │                             #   DeepEval regression, calibration fixtures (planned)
 └── frontend/                 # Next.js + Tailwind; shadcn/ui (planned)
@@ -407,7 +503,7 @@ Daedalus/
 |---|---|
 | 0 | `make check LIVE=1` passes: database, Ollama and all four models, Groq and Gemini each answer a test prompt. The home page lists every check as ok. |
 | 1 | One PDF, one arXiv paper and one notebook ingested; chunk counts look right and math and code survive; `/search` returns relevant chunks with page or cell citations. **Passed**; see below. |
-| 2 | 20 generated questions; at least 90% pass validation; 10 reviewed by hand. |
+| 2 | 20 generated questions; at least 90% pass validation; 10 reviewed by hand. **Not met on the pass rate**: 35% of the first 20 and 45% of the second; see below. |
 | 3 | Grader agreement with hand grades reaches Spearman ρ ≥ 0.7 before scores are trusted. |
 | 4 | A Playwright test covers upload → generate → practice → cited feedback → dashboard update. |
 | 5 | Retrieval report produced; DeepEval suite runs in CI (LLM-dependent tests on demand, to save free quota). |
@@ -450,6 +546,65 @@ Results, as hit@1 / hit@5 / MRR@5:
 
   The arXiv links resolve.
 - **Caveat:** 20 questions is a small set, and the same set guided the chunking and ranking choices, so these scores are optimistic. The Phase 5 evaluation, built from the generated questions, is the check that counts.
+
+## Phase 2 milestone result
+Two batches of 20 questions were written from the four sources, the second after changing
+what the first one showed. **The pass rate target of 90% was not met: 7 of 20 passed in the
+first run (35%) and 9 of 20 in the second (45%).** Ten questions were exported for review by
+hand.
+
+Every rejection in the first run was read individually, and all thirteen were correct calls:
+the checks were not the problem. What they caught was the generator writing questions that
+could not stand up -- built on a figure a paper reports, on what a code cell does, or on a
+link between two passages that neither of them draws.
+
+**What each check turned down**, over the two runs. A question can fail more than one.
+
+| Check | Run 1 | Run 2 | |
+|---|---|---|---|
+| trivia (read as recall, not explanation) | 6 | **1** | the prompt now forbids questions built on what a source reports |
+| answerable (the checker cannot answer it) | 5 | **1** | the same change, plus a connection style that asks about the shared idea |
+| duplicate | 5 | 5 | the threshold moved from 0.7 to 0.75, but the library it compares against had grown |
+| quotes | 4 | **7** | the remaining failure, and now the largest |
+
+**By source** (each run planned five questions per source, and got them): the second run
+accepted 2, 3, 2 and 2 from the notebook, the lecture notes, 1706.03762 and 2510.10824. The
+first accepted 2, 3, 1 and 1. Spreading a batch over the sources costs pass rate -- the
+notebook alone holds more than half the passages worth asking about, and it is the richest --
+but a milestone measured on one source would say nothing about the other three.
+
+**By style, second run:** trade-offs 3 of 3, why and how 2 of 3, comparison 1 of 3,
+connection 1 of 3, intuition 1 of 3, paper 1 of 2, failure modes 0 of 3. The model relabels a
+style it was asked for when it disagrees: every connection question and both paper questions
+came back under another name. Difficulty never left 2 and 3 in either run, although the
+prompt describes 1 to 5.
+
+**What the run settled:**
+- **`duplicate_similarity` was 0.7, and it was too tight.** Two questions in the first run
+  were turned away as duplicates that were not: "What limitation of recurrent
+  sequence-to-sequence models does the Transformer overcome?" scored 0.707 against "When
+  would you choose a simple RNN over a Transformer?". Nothing worth keeping scored above
+  0.65, and a real reworded pair scored 0.85, so the line moved to **0.75**. In the second
+  run it sat between 0.724 accepted and 0.756 rejected, which is a narrower margin than it
+  looks and worth watching.
+- **`answer_agreement` should keep gating nothing.** Accepted questions scored 0.74 to 0.92,
+  rejected ones 0.56 to 0.96, and the highest score of the first run belonged to a question
+  that was turned down. It measures whether the reference answer matches the checker's, which
+  is not the same as whether the question is any good.
+- **The 4B checker stays** (decision 3). Re-checking the twenty questions of the first run
+  gave **20 of 20 identical verdicts**, so temperature 0 with a fixed seed is enough to make
+  it reproducible, and every call it made was defensible on reading. Median 14.0 s, against
+  9.0 s on the short controls of the trial, because a real question carries one or two whole
+  passages. A 9B would be slower on 16 GB with no accuracy argument behind it.
+
+**What is left to close the gap:**
+- **Quotes are now the main cause.** Of the seven in the second run, two stopped at a colon
+  and one kept the ellipsis that the source itself writes in `(x_1, ..., x_n)`. The ellipsis
+  rule was fixed to judge by the match score instead of on sight; the colon habit survives a
+  repair round that names it, and needs the instruction sharpened.
+- **Failure modes and intuition** are the weakest styles and have not been looked at.
+- **The duplicate check compares a new question against everything accepted**, so the rate
+  falls as the library grows. Twenty questions from 83 passages is already dense.
 
 ## References
 - Groq limits: https://console.groq.com/docs/rate-limits · models: https://console.groq.com/docs/models
