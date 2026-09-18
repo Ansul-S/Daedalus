@@ -1,4 +1,4 @@
-.PHONY: help ollama db-up db-down migrate api web worker ingest check test test-slow lint
+.PHONY: help ollama db-up db-down migrate api web worker ingest topics check test test-slow lint
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
@@ -27,6 +27,9 @@ worker: ## Process ingestion jobs queued through the API (Ctrl+C to stop)
 
 ingest: ## Ingest files, folders or arXiv IDs: make ingest SRC="data/notes.pdf 1706.03762"
 	cd backend && uv run --group ingest python -m scripts.ingest $(SRC)
+
+topics: ## Build the topic map: tag chunks with the local model, then cluster the tags
+	cd backend && uv run --group ingest python -m scripts.topics $(ARGS)
 
 check: ## Check database, Ollama and API keys (LIVE=1 also sends a test prompt to each model)
 	cd backend && uv run python -m scripts.check_setup $(if $(LIVE),--live,)

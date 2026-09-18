@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # Hugging Face tokenizer of the embedding model, used to measure chunk sizes.
     tokenizer_model: str = "Qwen/Qwen3-Embedding-0.6B"
 
+    # Topic map: how close two concept tags have to be, in cosine similarity, to become one
+    # topic. Higher keeps topics narrow, lower merges more of them.
+    topic_similarity: float = 0.8
+
     @property
     def local_chat_models(self) -> list[str]:
         return [self.grader_model, self.helper_model, self.second_opinion_model]
