@@ -91,8 +91,8 @@ async def _enqueue(
     return Enqueued(document, job, "queued")
 
 
-async def claim_next_job(session: AsyncSession) -> int | None:
-    """Mark the oldest queued job as running and return its id."""
+async def claim_next_job(session: AsyncSession, kind: str = "ingest") -> int | None:
+    """Mark the oldest queued job of this kind as running and return its id."""
     job_id = await session.scalar(
         text(
             """
@@ -101,27 +101,29 @@ async def claim_next_job(session: AsyncSession) -> int | None:
                 error = NULL, progress = 'starting', attempts = attempts + 1
             WHERE id = (
                 SELECT id FROM jobs
-                WHERE status = 'queued'
+                WHERE status = 'queued' AND kind = :kind
                 ORDER BY created_at, id
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             )
             RETURNING id
             """
-        )
+        ),
+        {"kind": kind},
     )
     await session.commit()
     return job_id
 
 
-async def requeue_interrupted(session: AsyncSession) -> int:
+async def requeue_interrupted(session: AsyncSession, kind: str | None = None) -> int:
     """Jobs still marked running belong to a process that stopped. Only safe to call while
     holding the ingest lock, since then no other process can be running them."""
     result = await session.execute(
         text(
             "UPDATE jobs SET status = 'queued', progress = 'queued again after an interruption' "
-            "WHERE status = 'running'"
-        )
+            "WHERE status = 'running' AND (CAST(:kind AS text) IS NULL OR kind = :kind)"
+        ),
+        {"kind": kind},
     )
     await session.commit()
     return result.rowcount

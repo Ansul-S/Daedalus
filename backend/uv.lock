@@ -477,6 +477,7 @@ dependencies = [
     { name = "pydantic-ai-slim", extra = ["google", "groq", "openai"] },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
+    { name = "rapidfuzz" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -495,7 +496,6 @@ ingest = [
     { name = "docling" },
     { name = "lxml" },
     { name = "nbformat" },
-    { name = "rapidfuzz" },
     { name = "scikit-learn" },
     { name = "sentence-transformers" },
     { name = "tokenizers" },
@@ -511,6 +511,7 @@ requires-dist = [
     { name = "pydantic-ai-slim", extras = ["google", "groq", "openai"], specifier = ">=2.42.0" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "python-multipart", specifier = ">=0.0.32" },
+    { name = "rapidfuzz", specifier = ">=3.14.6" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.52" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.52.4" },
 ]
@@ -529,7 +530,6 @@ ingest = [
     { name = "docling", specifier = ">=2.126.0" },
     { name = "lxml", specifier = ">=6.1.3" },
     { name = "nbformat", specifier = ">=5.11.1" },
-    { name = "rapidfuzz", specifier = ">=3.14.6" },
     { name = "scikit-learn", specifier = ">=1.9.0" },
     { name = "sentence-transformers", specifier = ">=6.0.1" },
     { name = "tokenizers", specifier = ">=0.23.2" },

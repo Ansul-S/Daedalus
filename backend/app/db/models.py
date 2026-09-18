@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Text,
+    UniqueConstraint,
     func,
     select,
     text,
@@ -26,6 +27,8 @@ EMBEDDING_DIMENSIONS = 1024
 SOURCE_TYPES = ("pdf", "notebook", "arxiv")
 DOCUMENT_STATUSES = ("pending", "ready", "failed")
 JOB_STATUSES = ("queued", "running", "done", "failed")
+JOB_KINDS = ("ingest", "generate")
+TASK_STATUSES = ("queued", "running", "done", "failed")
 CONTENT_TYPES = ("text", "code", "formula", "table")
 QUESTION_STATUSES = ("accepted", "rejected", "retired")
 # The shapes a question can take, from the design notes: an intuition check, a why or how
@@ -160,16 +163,18 @@ class Chunk(Base):
 
 
 class Job(Base):
-    """One ingestion run for a document. Postgres doubles as the job queue."""
+    """One run of a long job. Postgres doubles as the queue, for ingesting a document and for
+    generating a batch of questions alike; a generating job belongs to no document."""
 
     __tablename__ = "jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    document_id: Mapped[int] = mapped_column(
+    kind: Mapped[str] = mapped_column(Text, server_default="ingest")
+    document_id: Mapped[int | None] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     status: Mapped[str] = mapped_column(Text, server_default="queued")
-    # Parser options, e.g. {"ocr": false, "formulas": true}
+    # Parser options, e.g. {"ocr": false, "formulas": true}, or what to generate
     options: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     # Current step, e.g. "embedding 40/120"
     progress: Mapped[str | None] = mapped_column(Text)
@@ -183,8 +188,10 @@ class Job(Base):
 
     __table_args__ = (
         _one_of("status", JOB_STATUSES),
-        # Keeps "find the oldest queued job" cheap however many finished jobs pile up
-        Index("jobs_queued_idx", "created_at", postgresql_where=text("status = 'queued'")),
+        _one_of("kind", JOB_KINDS),
+        # Keeps "find the oldest queued job of this kind" cheap however many finished jobs
+        # pile up. A worker claims one kind, so the kind leads.
+        Index("jobs_queued_idx", "kind", "created_at", postgresql_where=text("status = 'queued'")),
     )
 
 
@@ -325,4 +332,35 @@ def source_updated() -> ColumnElement[bool]:
         .join(Chunk, Chunk.id == QuestionSource.chunk_id)
         .where(QuestionSource.question_id == Question.id, Chunk.superseded_at.is_not(None))
         .exists()
+    )
+
+
+class QuestionTask(Base):
+    """One question a generating job set out to write.
+
+    The plan is written down before any of it runs, so a job that is interrupted -- or that
+    runs out of the day's tokens -- picks up where it stopped instead of starting over.
+    """
+
+    __tablename__ = "question_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), index=True)
+    # Order within the job
+    position: Mapped[int]
+    # The chunks to write from, in the order the model is shown them
+    chunk_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger))
+    style: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="queued")
+    # The question that came out, whether it was accepted or rejected
+    question_id: Mapped[int | None] = mapped_column(ForeignKey("questions.id", ondelete="SET NULL"))
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        _one_of("status", TASK_STATUSES),
+        _one_of("style", QUESTION_STYLES),
+        UniqueConstraint("job_id", "position"),
     )

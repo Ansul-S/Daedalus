@@ -9,6 +9,7 @@ no Ollama, so only cloud models are used.
 
 from typing import Any
 
+from groq import AsyncGroq
 from pydantic_ai.models import Model
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.google import GoogleModel
@@ -21,9 +22,26 @@ from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.settings import ModelSettings
 
 from app.core.config import Settings
+from app.llm.pacing import Limits, PacedModel, Pacer
 
 # Ollama serves the same output for the same prompt at this seed.
 HELPER_SEED = 7
+
+# Measured on the free tier in the trial
+GROQ_FREE = Limits(
+    requests_per_minute=30,
+    tokens_per_minute=8_000,
+    requests_per_day=1_000,
+    tokens_per_day=200_000,
+)
+# Not measured: the trial only ever saw 503s from Gemini, never a rate limit. These are held
+# deliberately low so the pacer errs towards waiting rather than towards being refused.
+GEMINI_FREE = Limits(
+    requests_per_minute=10,
+    tokens_per_minute=100_000,
+    requests_per_day=200,
+    tokens_per_day=1_000_000,
+)
 
 
 def ollama(settings: Settings, name: str, http_client: Any = None) -> OllamaModel | None:
@@ -50,10 +68,15 @@ def helper_settings() -> ModelSettings:
 
 
 def groq(settings: Settings) -> GroqModel | None:
+    """Groq, with the client's own retrying turned off.
+
+    Left on, it sleeps through a 429 twice before anything else sees the error, so our pacer
+    never learns the provider is full and never gets to apply its own margin.
+    """
     if settings.groq_api_key is None:
         return None
-    provider = GroqProvider(api_key=settings.groq_api_key.get_secret_value())
-    return GroqModel(settings.groq_model, provider=provider)
+    client = AsyncGroq(api_key=settings.groq_api_key.get_secret_value(), max_retries=0)
+    return GroqModel(settings.groq_model, provider=GroqProvider(groq_client=client))
 
 
 def gemini(settings: Settings) -> GoogleModel | None:
@@ -78,6 +101,24 @@ def generation_model(settings: Settings) -> Model:
 def grading_model(settings: Settings) -> Model:
     """Answer grading: the local grader model, then Groq, then Gemini."""
     return _chain(ollama(settings, settings.grader_model), groq(settings), gemini(settings))
+
+
+def paced_generation_model(settings: Settings) -> Model:
+    """Question generation in bulk: Groq, then Gemini, then the local grader.
+
+    Each cloud model keeps its own pace, so a provider that is full for the moment is waited
+    out rather than abandoned; the chain moves on only once a provider has run out of
+    attempts or out of the day's budget.
+    """
+    return _chain(
+        _paced(groq(settings), "groq", GROQ_FREE),
+        _paced(gemini(settings), "gemini", GEMINI_FREE),
+        ollama(settings, settings.grader_model),
+    )
+
+
+def _paced(model: Model | None, name: str, limits: Limits) -> Model | None:
+    return None if model is None else PacedModel(model, Pacer(name, limits))
 
 
 def helper_model(settings: Settings, http_client: Any = None) -> OllamaModel:

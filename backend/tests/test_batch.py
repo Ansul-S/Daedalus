@@ -1,0 +1,307 @@
+"""Planning a batch of questions, working through it, and picking it up again."""
+
+import asyncio
+import json
+import re
+
+import pytest
+from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.profiles import ModelProfile
+from sqlalchemy import func, select, update
+
+from app.db.models import Chunk, ChunkTags, ChunkTopic, Job, Question, QuestionTask, Topic
+from app.llm.pacing import QuotaExhausted
+from app.questions.batch import (
+    TaskPlan,
+    candidates,
+    partner_for,
+    plan_tasks,
+    run_job,
+    start_run,
+)
+
+# (topic, chunk, document)
+FOUND = [
+    (1, 10, 1),
+    (1, 11, 1),
+    (1, 12, 2),
+    (2, 20, 1),
+    (2, 21, 2),
+    (3, 30, 3),
+]
+
+
+def test_chunks_are_taken_a_topic_at_a_time() -> None:
+    plans = plan_tasks(FOUND, count=5)
+
+    # Every topic is asked about, biggest first, before any topic is returned to.
+    assert [plan.chunk_ids[0] for plan in plans] == [10, 20, 11, 21, 30]
+    assert [plan.style for plan in plans] == [
+        "why_how",
+        "intuition",
+        "compare",
+        "tradeoffs",
+        "failure_modes",
+    ]
+
+
+def test_a_style_that_needs_two_passages_gets_one_from_another_document() -> None:
+    # "compare" falls third in the rotation, "connection" sixth.
+    plans = plan_tasks(FOUND, count=6)
+
+    # The comparison skips topic 3, which has one chunk, for a topic that can spare two.
+    [paired] = [plan for plan in plans if len(plan.chunk_ids) == 2]
+    assert (paired.style, paired.chunk_ids) == ("compare", [11, 12])
+    # A style that wants a partner and finds none asks a plain question instead.
+    assert all(
+        plan.style not in ("compare", "connection") for plan in plans if len(plan.chunk_ids) == 1
+    )
+
+
+@pytest.mark.parametrize(
+    ("style", "rest", "expected"),
+    [
+        ("connection", [(11, 1), (12, 2)], 12),
+        ("connection", [(11, 1)], None),
+        ("compare", [(11, 1)], 11),
+        ("why_how", [(11, 1)], None),
+    ],
+)
+def test_a_second_passage_is_chosen_for_the_styles_that_want_one(style, rest, expected) -> None:
+    assert partner_for(style, rest, document_id=1) == expected
+
+
+def test_planning_stops_when_the_library_runs_out() -> None:
+    plans = plan_tasks([(1, 10, 1)], count=5)
+
+    assert plans == [TaskPlan(chunk_ids=[10], style="why_how")]
+
+
+@pytest.fixture
+def library(sessions, embedder, corpus):
+    """The corpus tagged and filed under topics, ready to be asked about."""
+
+    async def prepare() -> dict[str, int]:
+        async with sessions() as session, session.begin():
+            topics = [
+                Topic(name=name, tags=[name], embedding=embedder.vector(name))
+                for name in ("attention", "retrieval")
+            ]
+            session.add_all(topics)
+            await session.flush()
+            attention, retrieval = (topic.id for topic in topics)
+            for chunk_id in (corpus.scaling, corpus.positions, corpus.softmax, corpus.vanishing):
+                session.add(
+                    ChunkTags(
+                        chunk_id=chunk_id,
+                        explains="something",
+                        tags=["attention"],
+                        worth_asking=True,
+                        model_worth_asking=True,
+                        model="test",
+                        prompt_version="tags-v2",
+                    )
+                )
+                session.add(ChunkTopic(chunk_id=chunk_id, topic_id=attention))
+            # Tagged, but not worth asking about
+            session.add(
+                ChunkTags(
+                    chunk_id=corpus.retriever,
+                    explains="nothing",
+                    tags=["retrieval"],
+                    worth_asking=False,
+                    model_worth_asking=True,
+                    model="test",
+                    prompt_version="tags-v2",
+                )
+            )
+            session.add(ChunkTopic(chunk_id=corpus.retriever, topic_id=retrieval))
+            return {"attention": attention, "retrieval": retrieval}
+
+    return asyncio.run(prepare())
+
+
+def test_only_chunks_worth_asking_about_are_candidates(sessions, corpus, library) -> None:
+    async def scenario():
+        async with sessions() as session, session.begin():
+            await session.execute(
+                update(Chunk).where(Chunk.id == corpus.softmax).values(superseded_at=func.now())
+            )
+        async with sessions() as session:
+            return await candidates(session)
+
+    found = asyncio.run(scenario())
+
+    # The superseded one and the one not worth asking about are both left out.
+    assert sorted(chunk for _, chunk, _ in found) == sorted(
+        [corpus.scaling, corpus.positions, corpus.vanishing]
+    )
+
+
+def a_question(messages: list[ModelMessage]) -> ModelResponse:
+    """Quote the passage that was given, so the question is grounded by construction and
+    worded differently from every other one in the run."""
+    prompt = str(messages[-1].parts[-1].content)
+    chunk_id = int(re.search(r"\[chunk (\d+)\]", prompt).group(1))
+    passage = re.search(r"<<<\n(.*?)\n>>>", prompt, re.S).group(1)
+    quote = " ".join(passage.split()[:10])
+    point = {"text": "a point", "weight": 2, "evidence_quote": quote, "chunk_id": chunk_id}
+    return ModelResponse(
+        parts=[
+            TextPart(
+                json.dumps(
+                    {
+                        "question": f"Why is it that {quote}?",
+                        "style": "why_how",
+                        "difficulty": 3,
+                        "reference_answer": f"Because {quote}.",
+                        "key_points": [point, point | {"weight": 1}],
+                        "misconceptions": [],
+                        "source_chunk_ids": [chunk_id],
+                    }
+                )
+            )
+        ]
+    )
+
+
+def writer_model(raises: Exception | None = None) -> FunctionModel:
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        if raises is not None:
+            raise raises
+        return a_question(messages)
+
+    return FunctionModel(respond, profile=ModelProfile(supports_json_schema_output=True))
+
+
+def checker_model(**overrides) -> FunctionModel:
+    verdict = {
+        "kind": "explain",
+        "answer": "Because of what the passage says.",
+        "answerable": True,
+        "missing": "nothing",
+    } | overrides
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        return ModelResponse(parts=[TextPart(json.dumps(verdict))])
+
+    return FunctionModel(respond, profile=ModelProfile(supports_json_schema_output=True))
+
+
+async def go(sessions, embedder, job_id, writer=None, checker=None):
+    return await run_job(
+        sessions,
+        job_id,
+        model=writer or writer_model(),
+        checker=checker or checker_model(),
+        embedder=embedder,
+        similarity=0.7,
+        report=lambda message: None,
+    )
+
+
+def test_a_run_writes_every_planned_question_and_files_it(sessions, embedder, library) -> None:
+    async def scenario():
+        async with sessions() as session:
+            job, tasks = await start_run(session, 3)
+            await session.commit()
+            job_id = job.id
+        summary = await go(sessions, embedder, job_id)
+        async with sessions() as session:
+            job = await session.get_one(Job, job_id)
+            stored = list(
+                await session.scalars(select(QuestionTask).order_by(QuestionTask.position))
+            )
+            questions = list(await session.scalars(select(Question)))
+            return summary, job, stored, questions
+
+    summary, job, tasks, questions = asyncio.run(scenario())
+
+    assert (summary.written, summary.accepted, summary.failed) == (3, 3, 0)
+    assert [task.status for task in tasks] == ["done"] * 3
+    assert all(task.question_id is not None for task in tasks)
+    assert all(task.attempts == 1 for task in tasks)
+    assert (job.status, job.progress) == ("done", "3 accepted, 0 rejected")
+    assert len(questions) == 3
+    # Every question is filed under the topic its chunk belongs to.
+    assert {question.topic_id for question in questions} == {library["attention"]}
+
+
+def test_the_days_budget_running_out_leaves_the_rest_for_later(sessions, embedder, library):
+    async def scenario():
+        async with sessions() as session:
+            job, _ = await start_run(session, 3)
+            await session.commit()
+            job_id = job.id
+        summary = await go(
+            sessions, embedder, job_id, writer=writer_model(QuotaExhausted("groq", "out of tokens"))
+        )
+        async with sessions() as session:
+            job = await session.get_one(Job, job_id)
+            statuses = list(
+                await session.scalars(select(QuestionTask.status).order_by(QuestionTask.position))
+            )
+            return summary, job, statuses
+
+    summary, job, statuses = asyncio.run(scenario())
+
+    # The first task stops the run, and nothing is marked failed: the work is only unfinished.
+    assert (summary.written, summary.failed) == (0, 0)
+    assert summary.stopped.startswith("QuotaExhausted")
+    assert statuses == ["queued"] * 3
+    assert job.status == "queued"
+    assert job.error.startswith("QuotaExhausted")
+
+
+def test_a_run_picks_up_where_it_stopped(sessions, embedder, library) -> None:
+    async def scenario():
+        async with sessions() as session:
+            job, tasks = await start_run(session, 3)
+            await session.commit()
+            job_id, first = job.id, tasks[0].id
+        async with sessions() as session, session.begin():
+            await session.execute(
+                update(QuestionTask).where(QuestionTask.id == first).values(status="done")
+            )
+        summary = await go(sessions, embedder, job_id)
+        async with sessions() as session:
+            written = await session.scalar(select(func.count()).select_from(Question))
+            return summary, written
+
+    summary, written = asyncio.run(scenario())
+
+    # The finished task is left alone, so only two questions are paid for.
+    assert summary.written == 2
+    assert written == 2
+
+
+def test_a_task_that_fails_is_recorded_and_the_rest_carry_on(sessions, embedder, library) -> None:
+    calls: list[int] = []
+
+    def flaky(messages, info):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("the provider fell over")
+        return a_question(messages)
+
+    async def scenario():
+        async with sessions() as session:
+            job, _ = await start_run(session, 3)
+            await session.commit()
+            job_id = job.id
+        model = FunctionModel(flaky, profile=ModelProfile(supports_json_schema_output=True))
+        summary = await go(sessions, embedder, job_id, writer=model)
+        async with sessions() as session:
+            job = await session.get_one(Job, job_id)
+            tasks = list(
+                await session.scalars(select(QuestionTask).order_by(QuestionTask.position))
+            )
+            return summary, job, tasks
+
+    summary, job, tasks = asyncio.run(scenario())
+
+    assert (summary.written, summary.failed) == (2, 1)
+    assert [task.status for task in tasks] == ["failed", "done", "done"]
+    assert tasks[0].error.startswith("RuntimeError: the provider fell over")
+    assert job.status == "done"

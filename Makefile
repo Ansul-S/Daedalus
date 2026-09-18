@@ -1,4 +1,4 @@
-.PHONY: help ollama db-up db-down migrate api web worker ingest topics check test test-slow lint
+.PHONY: help ollama db-up db-down migrate api web worker ingest topics generate check test test-slow lint
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
@@ -30,6 +30,9 @@ ingest: ## Ingest files, folders or arXiv IDs: make ingest SRC="data/notes.pdf 1
 
 topics: ## Build the topic map: tag chunks with the local model, then cluster the tags
 	cd backend && uv run --group ingest python -m scripts.topics $(ARGS)
+
+generate: ## Write questions from the topic map: make generate N=20
+	cd backend && uv run python -m scripts.generate $(if $(N),--count $(N),) $(ARGS)
 
 check: ## Check database, Ollama and API keys (LIVE=1 also sends a test prompt to each model)
 	cd backend && uv run python -m scripts.check_setup $(if $(LIVE),--live,)
