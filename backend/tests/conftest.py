@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
-from app.db.models import EMBEDDING_DIMENSIONS, Chunk, Document
+from app.db.models import EMBEDDING_DIMENSIONS, Base, Chunk, Document
 from app.llm.embeddings import EmbeddingError, Progress
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -106,8 +106,10 @@ def engine(database_url: str) -> Iterator[AsyncEngine]:
 
 
 async def _empty_tables(engine: AsyncEngine) -> None:
+    # Every table at once: Postgres refuses to truncate one that another still references.
+    tables = ", ".join(table.name for table in Base.metadata.sorted_tables)
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE documents, chunks, jobs RESTART IDENTITY"))
+        await connection.execute(text(f"TRUNCATE {tables} RESTART IDENTITY"))
 
 
 @pytest.fixture

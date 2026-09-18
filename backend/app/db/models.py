@@ -1,4 +1,5 @@
-"""Database tables: source documents, their searchable chunks, and ingestion jobs."""
+"""Database tables: source documents, their searchable chunks and ingestion jobs, the topic
+map built over the chunks, and the generated questions."""
 
 from datetime import datetime
 from typing import Any
@@ -7,12 +8,14 @@ from pgvector.sqlalchemy import HALFVEC
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    ColumnElement,
     Computed,
     DateTime,
     ForeignKey,
     Index,
     Text,
     func,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
@@ -24,6 +27,19 @@ SOURCE_TYPES = ("pdf", "notebook", "arxiv")
 DOCUMENT_STATUSES = ("pending", "ready", "failed")
 JOB_STATUSES = ("queued", "running", "done", "failed")
 CONTENT_TYPES = ("text", "code", "formula", "table")
+QUESTION_STATUSES = ("accepted", "rejected", "retired")
+# The shapes a question can take, from the design notes: an intuition check, a why or how
+# explanation, a comparison, a trade-off, a failure mode, a link between two concepts that
+# sit in different chunks, or a question about a paper's problem, idea, limits and extensions
+QUESTION_STYLES = (
+    "intuition",
+    "why_how",
+    "compare",
+    "tradeoffs",
+    "failure_modes",
+    "connection",
+    "paper",
+)
 
 # Chunks left behind by an earlier ingestion are excluded from search and generation
 CURRENT_CHUNKS = text("superseded_at IS NULL")
@@ -169,4 +185,144 @@ class Job(Base):
         _one_of("status", JOB_STATUSES),
         # Keeps "find the oldest queued job" cheap however many finished jobs pile up
         Index("jobs_queued_idx", "created_at", postgresql_where=text("status = 'queued'")),
+    )
+
+
+class Topic(Base):
+    """A cluster of the concept tags that the topic map found, gathered across documents."""
+
+    __tablename__ = "topics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # The tag that stands for the cluster
+    name: Mapped[str] = mapped_column(Text, unique=True)
+    # Every distinct tag in the cluster, the name included
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    # Centroid of the tag embeddings. There are a few hundred topics at most, so the nearest
+    # one is found by scanning them; only the chunks need a vector index.
+    embedding: Mapped[list[float]] = mapped_column(HALFVEC(EMBEDDING_DIMENSIONS))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChunkTopic(Base):
+    """Which topics a chunk belongs to, through the tags it was given."""
+
+    __tablename__ = "chunk_topics"
+
+    chunk_id: Mapped[int] = mapped_column(
+        ForeignKey("chunks.id", ondelete="CASCADE"), primary_key=True
+    )
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("topics.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+
+
+class ChunkTags(Base):
+    """What the local tagger read out of one chunk, kept so that the topics can be re-clustered
+    without running the model over the whole library again."""
+
+    __tablename__ = "chunk_tags"
+
+    chunk_id: Mapped[int] = mapped_column(
+        ForeignKey("chunks.id", ondelete="CASCADE"), primary_key=True
+    )
+    # One line on what the chunk teaches, or "nothing" for boilerplate
+    explains: Mapped[str] = mapped_column(Text)
+    # Two to five concept tags
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    # The verdict used when choosing what to ask about: the model's flag unless a rule vetoes it
+    worth_asking: Mapped[bool]
+    # The model's own flag, kept to show how much the rules add
+    model_worth_asking: Mapped[bool]
+    # The rule that made the chunk context only, e.g. "code only" or "boilerplate"
+    skip_reason: Mapped[str | None] = mapped_column(Text)
+    model: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Question(Base):
+    __tablename__ = "questions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    text: Mapped[str] = mapped_column(Text)
+    reference_answer: Mapped[str] = mapped_column(Text)
+    # What an answer has to cover, as [{"text", "weight", "evidence_quote", "chunk_id"}].
+    # Grading in Phase 3 scores an answer against these.
+    key_points: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
+    # Wrong answers that are worth recognizing
+    misconceptions: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    style: Mapped[str] = mapped_column(Text)
+    # 1 (recall) to 5 (reasoning across sources)
+    difficulty: Mapped[int]
+    topic_id: Mapped[int | None] = mapped_column(
+        ForeignKey("topics.id", ondelete="SET NULL"), index=True
+    )
+    status: Mapped[str] = mapped_column(Text, server_default="accepted")
+    # What each validation check found, whether or not the question passed
+    validation: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    # The model that wrote the question, e.g. "groq:openai/gpt-oss-120b"
+    generator_model: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    # Requests and tokens the question cost
+    usage: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    # Compared against the other questions to catch near-duplicates; null while the local
+    # embedding model is unavailable
+    embedding: Mapped[list[float] | None] = mapped_column(HALFVEC(EMBEDDING_DIMENSIONS))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    topic: Mapped[Topic | None] = relationship()
+    sources: Mapped[list["QuestionSource"]] = relationship(
+        back_populates="question", passive_deletes=True, order_by="QuestionSource.position"
+    )
+
+    __table_args__ = (
+        _one_of("status", QUESTION_STATUSES),
+        _one_of("style", QUESTION_STYLES),
+        CheckConstraint("difficulty BETWEEN 1 AND 5", name="difficulty_valid"),
+        Index(
+            "questions_embedding_idx",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "halfvec_cosine_ops"},
+        ),
+    )
+
+
+class QuestionSource(Base):
+    """The chunks a question was written from, in the order the model was shown them.
+
+    The reference restricts deleting a chunk, and with it the document it belongs to, while a
+    question still cites it: a question without its sources can neither be graded nor checked.
+    """
+
+    __tablename__ = "question_sources"
+
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True
+    )
+    chunk_id: Mapped[int] = mapped_column(
+        ForeignKey("chunks.id", ondelete="RESTRICT"), primary_key=True, index=True
+    )
+    position: Mapped[int]
+
+    question: Mapped[Question] = relationship(back_populates="sources")
+    chunk: Mapped[Chunk] = relationship()
+
+
+def source_updated() -> ColumnElement[bool]:
+    """Whether a later ingestion has replaced any of a question's sources.
+
+    The question still points at the exact text it was written from, but the document has moved
+    on, so the question is worth reviewing. Derived rather than stored: it cannot fall behind
+    the chunks that way.
+    """
+    return (
+        select(QuestionSource.question_id)
+        .join(Chunk, Chunk.id == QuestionSource.chunk_id)
+        .where(QuestionSource.question_id == Question.id, Chunk.superseded_at.is_not(None))
+        .exists()
     )
