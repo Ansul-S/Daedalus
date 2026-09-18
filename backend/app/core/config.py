@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     groq_model: str = "openai/gpt-oss-120b"
     gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-flash-latest"
+    # Pinned rather than the "-latest" alias: the alias moved to 3.8 Flash, which answered
+    # 2 of 13 trial requests and whose profile drops the thinking setting.
+    gemini_model: str = "gemini-3.5-flash"
 
     # Ingestion (local only). Uploads and downloaded papers are stored under data_dir.
     data_dir: Path = REPO_ROOT / "data"
