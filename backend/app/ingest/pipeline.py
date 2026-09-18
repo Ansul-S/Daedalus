@@ -1,7 +1,9 @@
 """Runs ingestion jobs: parse the source, pack it into chunks, embed them, store them.
 
 A document's chunks are replaced in one transaction, so search never sees a half-ingested
-document, and a failed re-ingestion leaves the previous chunks in place.
+document, and a failed re-ingestion leaves the previous chunks in place. Replaced chunks are
+marked superseded rather than deleted, so that questions generated from them keep pointing at
+the exact text they were written from.
 """
 
 import asyncio
@@ -11,7 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, func, insert, update
+from sqlalchemy import func, insert, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
@@ -208,7 +210,11 @@ class Ingestor:
             for position, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True))
         ]
         async with self.sessions() as session, session.begin():
-            await session.execute(delete(Chunk).where(Chunk.document_id == document.id))
+            await session.execute(
+                update(Chunk)
+                .where(Chunk.document_id == document.id, Chunk.superseded_at.is_(None))
+                .values(superseded_at=func.now())
+            )
             if rows:
                 await session.execute(insert(Chunk), rows)
             await session.execute(

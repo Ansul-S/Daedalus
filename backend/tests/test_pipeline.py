@@ -133,30 +133,43 @@ def test_a_file_that_cannot_be_parsed_fails(settings, sessions, embedder) -> Non
     assert embedder.documents == []
 
 
-def test_ingesting_again_replaces_the_chunks_unless_it_fails(settings, sessions, embedder) -> None:
+def test_ingesting_again_supersedes_chunks_unless_it_fails(settings, sessions, embedder) -> None:
     stored = save_notebook(settings)
 
-    async def chunk_ids() -> list[int]:
+    async def chunk_rows() -> list[tuple[int, int, bool]]:
+        """Every chunk in the table as (id, position, superseded), oldest first."""
         async with sessions() as session:
-            return list(await session.scalars(select(Chunk.id).order_by(Chunk.position)))
+            chunks = await session.scalars(select(Chunk).order_by(Chunk.id))
+            return [(c.id, c.position, c.superseded_at is not None) for c in chunks]
 
     async def scenario():
         await add_notebook(sessions, stored)
         await run_queue(settings, sessions, embedder)
-        first = await chunk_ids()
+        first = await chunk_rows()
         await add_notebook(sessions, stored, force=True)
         await run_queue(settings, sessions, embedder)
-        second = await chunk_ids()
+        second = await chunk_rows()
         embedder.fail = True
         failed = await add_notebook(sessions, stored, force=True)
         await run_queue(settings, sessions, embedder)
-        return first, second, await chunk_ids(), *await load(sessions, failed)
+        return first, second, await chunk_rows(), *await load(sessions, failed)
 
     first, second, after_failure, document, job, _ = asyncio.run(scenario())
 
-    assert len(first) == len(second) == 2
-    assert set(first).isdisjoint(second)
-    # A failed run leaves the searchable chunks and the ready status alone.
+    assert [(position, superseded) for _, position, superseded in first] == [
+        (0, False),
+        (1, False),
+    ]
+    # The replaced chunks stay in the table with their ids and positions; the new ones take
+    # the same positions over, which only the current chunks have to keep distinct.
+    assert [(position, superseded) for _, position, superseded in second] == [
+        (0, True),
+        (1, True),
+        (0, False),
+        (1, False),
+    ]
+    assert second[:2] == [(chunk_id, position, True) for chunk_id, position, _ in first]
+    # A failed run supersedes nothing and leaves the ready status alone.
     assert after_failure == second
     assert (document.status, document.error) == ("ready", None)
     assert job.status == "failed"

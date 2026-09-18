@@ -65,6 +65,7 @@ class DocumentOut(BaseModel):
     details: dict[str, Any]
     created_at: datetime
     updated_at: datetime
+    # Chunks of the newest ingestion; the ones it replaced are kept but no longer counted
     chunk_count: int = 0
     latest_job: JobOut | None = None
 
@@ -90,7 +91,7 @@ async def _documents_out(session: AsyncSession, documents: list[Document]) -> li
     ids = [document.id for document in documents]
     counts = await session.execute(
         select(Chunk.document_id, func.count())
-        .where(Chunk.document_id.in_(ids))
+        .where(Chunk.document_id.in_(ids), Chunk.superseded_at.is_(None))
         .group_by(Chunk.document_id)
     )
     chunk_counts = dict(counts.tuples().all())

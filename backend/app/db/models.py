@@ -12,7 +12,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Text,
-    UniqueConstraint,
     func,
     text,
 )
@@ -25,6 +24,9 @@ SOURCE_TYPES = ("pdf", "notebook", "arxiv")
 DOCUMENT_STATUSES = ("pending", "ready", "failed")
 JOB_STATUSES = ("queued", "running", "done", "failed")
 CONTENT_TYPES = ("text", "code", "formula", "table")
+
+# Chunks left behind by an earlier ingestion are excluded from search and generation
+CURRENT_CHUNKS = text("superseded_at IS NULL")
 
 
 def _one_of(column: str, values: tuple[str, ...]) -> CheckConstraint:
@@ -64,7 +66,7 @@ class Document(Base):
     )
 
     chunks: Mapped[list["Chunk"]] = relationship(
-        back_populates="document", passive_deletes=True, order_by="Chunk.position"
+        back_populates="document", passive_deletes=True, order_by="Chunk.position, Chunk.id"
     )
     jobs: Mapped[list["Job"]] = relationship(back_populates="document", passive_deletes=True)
 
@@ -95,6 +97,9 @@ class Chunk(Base):
     cell_end: Mapped[int | None]
     # Fragment identifier of the section in an HTML source (arXiv), e.g. "S3.SS2"
     anchor: Mapped[str | None] = mapped_column(Text)
+    # When a later ingestion replaced this chunk. Superseded chunks are kept so that questions
+    # generated from them keep their exact sources; only current ones are searchable.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Half precision: half the storage of `vector`, and float16 is plenty for cosine ranking
     embedding: Mapped[list[float]] = mapped_column(HALFVEC(EMBEDDING_DIMENSIONS))
     # Full-text index input: the heading path ranks above the body text
@@ -110,14 +115,31 @@ class Chunk(Base):
     document: Mapped[Document] = relationship(back_populates="chunks")
 
     __table_args__ = (
-        UniqueConstraint("document_id", "position"),
+        # Positions are unique among the current chunks; the superseded ones keep theirs.
+        Index(
+            "chunks_current_position_idx",
+            "document_id",
+            "position",
+            unique=True,
+            postgresql_where=CURRENT_CHUNKS,
+        ),
+        Index("ix_chunks_document_id", "document_id"),
+        # The search indexes cover the current chunks only. Besides keeping them small, this
+        # keeps the candidate count honest: pgvector applies a WHERE clause after the index
+        # scan, so a full index would return fewer current chunks than were asked for.
         Index(
             "chunks_embedding_idx",
             "embedding",
             postgresql_using="hnsw",
             postgresql_ops={"embedding": "halfvec_cosine_ops"},
+            postgresql_where=CURRENT_CHUNKS,
         ),
-        Index("chunks_search_vector_idx", "search_vector", postgresql_using="gin"),
+        Index(
+            "chunks_search_vector_idx",
+            "search_vector",
+            postgresql_using="gin",
+            postgresql_where=CURRENT_CHUNKS,
+        ),
     )
 
 

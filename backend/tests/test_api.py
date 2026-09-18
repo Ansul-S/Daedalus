@@ -4,11 +4,11 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from app.api.search import get_embedder
 from app.core.config import Settings, get_settings
-from app.db.models import Document, Job
+from app.db.models import Chunk, Document, Job
 from app.db.session import get_session
 from app.main import app
 
@@ -161,6 +161,20 @@ def test_documents_show_their_chunk_count_and_latest_job(client, sessions, corpu
     assert client.get(f"/jobs/{finished_id}").json()["progress"] == "3 chunks"
     assert client.get("/documents/999").status_code == 404
     assert client.get("/jobs/999").status_code == 404
+
+
+def test_superseded_chunks_are_left_out_of_the_chunk_count(client, sessions, corpus) -> None:
+    async def supersede() -> int:
+        async with sessions() as session, session.begin():
+            paper = await session.scalar(select(Document).where(Document.arxiv_id == "1706.03762"))
+            await session.execute(
+                update(Chunk).where(Chunk.id == corpus.scaling).values(superseded_at=func.now())
+            )
+            return paper.id
+
+    paper_id = asyncio.run(supersede())
+
+    assert client.get(f"/documents/{paper_id}").json()["chunk_count"] == 2
 
 
 @pytest.mark.parametrize(

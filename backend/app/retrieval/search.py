@@ -2,6 +2,9 @@
 
 Vectors find paraphrases ("why scale the attention scores"); keywords find exact terms
 ("AdamW", "ntotal") that embeddings blur.
+
+Both retrievers read the current chunks only. The chunks a re-ingestion replaced stay in the
+table for the questions that cite them, but they are no longer material to search.
 """
 
 from dataclasses import dataclass
@@ -30,7 +33,7 @@ _KEYWORD_QUERY = text(
     )
     SELECT chunks.id
     FROM chunks, query
-    WHERE chunks.search_vector @@ query.terms
+    WHERE chunks.search_vector @@ query.terms AND chunks.superseded_at IS NULL
     ORDER BY ts_rank_cd(chunks.search_vector, query.terms, 2) DESC, chunks.id
     LIMIT :limit
     """
@@ -57,7 +60,10 @@ async def vector_ranking(session: AsyncSession, vector: list[float], limit: int)
     # The HNSW index returns at most ef_search rows (default 40).
     await session.execute(select(func.set_config("hnsw.ef_search", str(max(limit, 40)), True)))
     ids = await session.scalars(
-        select(Chunk.id).order_by(Chunk.embedding.cosine_distance(vector)).limit(limit)
+        select(Chunk.id)
+        .where(Chunk.superseded_at.is_(None))
+        .order_by(Chunk.embedding.cosine_distance(vector))
+        .limit(limit)
     )
     return list(ids)
 

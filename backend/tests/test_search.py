@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from sqlalchemy import func, update
 
 from app.api.search import citation, source_link
 from app.db.models import Chunk, Document
@@ -68,6 +69,31 @@ def test_keyword_ranking_is_divided_by_chunk_length(sessions, embedder) -> None:
     ranking, (long_chunk, short_chunk) = in_session(sessions, query)
 
     assert ranking == [short_chunk, long_chunk]
+
+
+def test_search_leaves_out_superseded_chunks(sessions, embedder, corpus) -> None:
+    """A chunk replaced by a later ingestion is kept for the questions that cite it, but no
+    retriever may offer it again."""
+
+    async def query(session):
+        await session.execute(
+            update(Chunk).where(Chunk.id == corpus.vanishing).values(superseded_at=func.now())
+        )
+        await session.commit()
+        vector = await embedder.embed_query("gradients shrink over many time steps")
+        return (
+            await keyword_ranking(session, "why do gradients vanish", 10),
+            await vector_ranking(session, vector, 10),
+            await search(session, "vanishing gradients", limit=3, embedder=embedder),
+        )
+
+    keyword, vector, hybrid = in_session(sessions, query)
+
+    assert keyword == [corpus.scaling]
+    assert corpus.vanishing not in vector
+    assert len(vector) == 4
+    assert ids(hybrid)[0] == corpus.scaling
+    assert corpus.vanishing not in ids(hybrid)
 
 
 def test_vector_search_ranks_every_chunk_by_similarity(sessions, embedder, corpus) -> None:
