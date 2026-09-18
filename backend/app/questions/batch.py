@@ -4,12 +4,14 @@ The plan is written down as tasks before any of it runs, so a batch that stops -
 on a provider running out for the day, or on a failure -- carries on from where it stopped
 instead of spending the tokens again. Each task is committed as it finishes.
 
-Chunks are picked a topic at a time, so twenty questions do not all come from one corner of
-the library, and the style rotates so they are not all "why does this work". A chunk that an
-accepted question already covers is left out, which makes a second run break new ground.
+Chunks are picked a source and a topic at a time, so twenty questions do not all come from
+one corner of the library, and the style rotates so they are not all "why does this work".
+A chunk that an accepted question already covers is left out, which makes a second run break
+new ground.
 """
 
 import logging
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -99,52 +101,76 @@ def partner_for(style: str, rest: list[tuple[int, int]], document_id: int) -> in
 
 
 def plan_tasks(found: list[tuple[int, int, int]], count: int) -> list[TaskPlan]:
-    """Take a chunk from each topic in turn, biggest topic first, until the count is met.
+    """Take a passage from the source with the fewest questions so far, and within it from
+    each topic in turn, biggest topic first, until the count is met.
+
+    Going by topic alone follows the shape of the library rather than the shape of the
+    revision: more than half the passages worth asking about are in one notebook, so twenty
+    questions took twelve from it and one from the shortest source. Cycling the sources as
+    well as the topics gives each of them a fair share, and the topic ring still decides
+    which passage of that source comes next.
 
     A style that wants two passages picks the next topic that can actually spare a second
     one, rather than taking whichever topic came up and quietly dropping to a plain question:
     most topics cover a single chunk, so the blind rotation almost never paired anything.
     """
     by_topic: dict[int, list[tuple[int, int]]] = {}
+    chunks_of: dict[int, set[int]] = {}
     for topic, chunk, document in found:
         by_topic.setdefault(topic, []).append((chunk, document))
+        chunks_of.setdefault(document, set()).add(chunk)
     order = sorted(by_topic, key=lambda topic: (-len(by_topic[topic]), topic))
 
     taken: set[int] = set()
+    written: Counter[int] = Counter()
     plans: list[TaskPlan] = []
     cursor = 0
 
     def free_of(topic: int) -> list[tuple[int, int]]:
         return [pair for pair in by_topic[topic] if pair[0] not in taken]
 
-    def next_topic(style: str | None) -> tuple[int, int] | None:
-        """The next topic round the ring with something to offer, and where to look next."""
+    def next_document() -> int | None:
+        """The source asked about least so far that still has a passage to spare. The one
+        with the most left breaks a tie, so no source is left with an unaskable remainder."""
+        left = {document: len(chunks - taken) for document, chunks in chunks_of.items()}
+        spare = [document for document, free in left.items() if free]
+        return min(
+            spare, key=lambda document: (written[document], -left[document], document), default=None
+        )
+
+    def take(style: str | None, document: int) -> tuple[int, list[tuple[int, int]], int] | None:
+        """The next topic round the ring holding a free passage of this source: the passage
+        to ask about, what is left in the topic to pair it with, and where to look next."""
         for step in range(len(order)):
             topic = order[(cursor + step) % len(order)]
             free = free_of(topic)
-            if not free:
+            lead = next((index for index, pair in enumerate(free) if pair[1] == document), None)
+            if lead is None:
                 continue
-            if style is not None and partner_for(style, free[1:], free[0][1]) is None:
+            rest = free[:lead] + free[lead + 1 :]
+            if style is not None and partner_for(style, rest, document) is None:
                 continue
-            return topic, (cursor + step + 1) % len(order)
+            return free[lead][0], rest, (cursor + step + 1) % len(order)
         return None
 
-    while len(plans) < count and order:
+    while len(plans) < count:
+        document = next_document()
+        if document is None:
+            # Every source is used up, so the library cannot fill the count asked for.
+            break
         style = ROTATION[len(plans) % len(ROTATION)]
-        found_topic = next_topic(style) if style in PAIRED else None
-        if found_topic is None:
+        chosen = take(style, document) if style in PAIRED else None
+        if chosen is None:
             if style in PAIRED:
                 style = FALLBACK_STYLE
-            found_topic = next_topic(None)
-        if found_topic is None:
-            # Every topic is used up, so the library cannot fill the count asked for.
+            chosen = take(None, document)
+        if chosen is None:
             break
-        topic, cursor = found_topic
-        free = free_of(topic)
-        chunk, document = free[0]
-        partner = partner_for(style, free[1:], document)
+        chunk, rest, cursor = chosen
+        partner = partner_for(style, rest, document)
         chunk_ids = [chunk] + ([partner] if partner is not None else [])
         taken.update(chunk_ids)
+        written[document] += 1
         plans.append(TaskPlan(chunk_ids=chunk_ids, style=style))
     return plans
 
@@ -251,6 +277,9 @@ async def run_job(
     say(f"{len(tasks)} question(s) to write")
 
     for number, task in enumerate(tasks, start=1):
+        # Written down before the question rather than after it: a batch takes minutes, and
+        # whoever is following the job through the API is watching this line.
+        await _progress(sessions, job_id, f"writing question {number} of {len(tasks)}")
         await _mark(sessions, task, "running", attempt=True)
         try:
             outcome, usage = await run_task(
@@ -296,6 +325,11 @@ async def _mark(
         values["attempts"] = Task.attempts + 1
     async with sessions() as session, session.begin():
         await session.execute(update(Task).where(Task.id == task.id).values(**values))
+
+
+async def _progress(sessions: async_sessionmaker[AsyncSession], job_id: int, message: str) -> None:
+    async with sessions() as session, session.begin():
+        await session.execute(update(Job).where(Job.id == job_id).values(progress=message))
 
 
 async def _finish(

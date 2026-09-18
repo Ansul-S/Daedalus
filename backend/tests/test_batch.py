@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+from collections import Counter
 
 import pytest
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
@@ -21,22 +22,39 @@ from app.questions.batch import (
     start_run,
 )
 
-# (topic, chunk, document)
+# (topic, chunk, document). Topic 1 spans all three sources, topic 4 sits in one.
 FOUND = [
     (1, 10, 1),
     (1, 11, 1),
     (1, 12, 2),
+    (1, 13, 3),
     (2, 20, 1),
     (2, 21, 2),
-    (3, 30, 3),
+    (3, 30, 1),
+    (3, 31, 1),
+    (4, 40, 3),
 ]
 
+# The shape of the real library: the biggest topics all belong to one source
+LOPSIDED = (
+    [(1, chunk, 1) for chunk in (10, 11, 12, 13, 14)]
+    + [(2, chunk, 1) for chunk in (20, 21, 22, 23)]
+    + [(3, chunk, 1) for chunk in (30, 31, 32)]
+    + [(4, chunk, 2) for chunk in (40, 41, 42)]
+    + [(5, chunk, 3) for chunk in (50, 51, 52)]
+)
 
-def test_chunks_are_taken_a_topic_at_a_time() -> None:
+# Six topics, each holding one passage from either source
+CROSSING = [(topic, topic * 10 + offset, offset + 1) for topic in range(1, 7) for offset in (0, 1)]
+
+
+def test_passages_are_taken_a_source_and_a_topic_at_a_time() -> None:
     plans = plan_tasks(FOUND, count=5)
+    document_of = {chunk: document for _, chunk, document in FOUND}
 
-    # Every topic is asked about, biggest first, before any topic is returned to.
-    assert [plan.chunk_ids[0] for plan in plans] == [10, 20, 11, 21, 30]
+    # Every source is asked about in turn, and within one the topic ring decides
+    assert [document_of[plan.chunk_ids[0]] for plan in plans] == [1, 2, 3, 1, 2]
+    assert [plan.chunk_ids[0] for plan in plans] == [10, 21, 13, 20, 12]
     assert [plan.style for plan in plans] == [
         "why_how",
         "intuition",
@@ -46,17 +64,35 @@ def test_chunks_are_taken_a_topic_at_a_time() -> None:
     ]
 
 
-def test_a_style_that_needs_two_passages_gets_one_from_another_document() -> None:
-    # "compare" falls third in the rotation, "connection" sixth.
-    plans = plan_tasks(FOUND, count=6)
+def test_the_plan_is_spread_over_the_sources() -> None:
+    plans = plan_tasks(LOPSIDED, count=9)
+    document_of = {chunk: document for _, chunk, document in LOPSIDED}
 
-    # The comparison skips topic 3, which has one chunk, for a topic that can spare two.
+    # Biggest topic first alone would have given the first source six of the nine, since its
+    # three topics are the biggest in the library and the other two sources hold one each.
+    assert Counter(document_of[plan.chunk_ids[0]] for plan in plans) == {1: 4, 2: 3, 3: 2}
+
+
+def test_a_comparison_takes_a_second_passage_from_the_same_topic() -> None:
+    plans = plan_tasks(FOUND, count=5)
+
+    # The comparison skips topic 4, which holds one passage, for a topic that can spare two.
     [paired] = [plan for plan in plans if len(plan.chunk_ids) == 2]
-    assert (paired.style, paired.chunk_ids) == ("compare", [11, 12])
+    assert (paired.style, paired.chunk_ids) == ("compare", [13, 11])
     # A style that wants a partner and finds none asks a plain question instead.
     assert all(
         plan.style not in ("compare", "connection") for plan in plans if len(plan.chunk_ids) == 1
     )
+
+
+def test_a_connection_question_joins_two_sources() -> None:
+    # "connection" falls sixth in the rotation
+    plans = plan_tasks(CROSSING, count=6)
+    document_of = {chunk: document for _, chunk, document in CROSSING}
+
+    joined = plans[5]
+    assert joined.style == "connection"
+    assert [document_of[chunk] for chunk in joined.chunk_ids] == [2, 1]
 
 
 @pytest.mark.parametrize(
@@ -223,9 +259,41 @@ def test_a_run_writes_every_planned_question_and_files_it(sessions, embedder, li
     assert all(task.question_id is not None for task in tasks)
     assert all(task.attempts == 1 for task in tasks)
     assert (job.status, job.progress) == ("done", "3 accepted, 0 rejected")
+    assert job.error is None
     assert len(questions) == 3
     # Every question is filed under the topic its chunk belongs to.
     assert {question.topic_id for question in questions} == {library["attention"]}
+
+
+def test_a_run_says_which_question_it_is_writing(sessions, embedder, library) -> None:
+    """A batch takes minutes, so the job has to say where it is while it is still going."""
+
+    async def scenario():
+        async with sessions() as session:
+            job, _ = await start_run(session, 3)
+            await session.commit()
+            job_id = job.id
+        writing, carry_on = asyncio.Event(), asyncio.Event()
+
+        async def slowly(messages, info):
+            writing.set()
+            await carry_on.wait()
+            return a_question(messages)
+
+        model = FunctionModel(slowly, profile=ModelProfile(supports_json_schema_output=True))
+        run = asyncio.ensure_future(go(sessions, embedder, job_id, writer=model))
+        await writing.wait()
+        async with sessions() as session:
+            midway = (await session.get_one(Job, job_id)).progress
+        carry_on.set()
+        await run
+        async with sessions() as session:
+            return midway, (await session.get_one(Job, job_id)).progress
+
+    midway, finished = asyncio.run(scenario())
+
+    assert midway == "writing question 1 of 3"
+    assert finished == "3 accepted, 0 rejected"
 
 
 def test_the_days_budget_running_out_leaves_the_rest_for_later(sessions, embedder, library):
