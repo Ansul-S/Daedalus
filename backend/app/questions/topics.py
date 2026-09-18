@@ -15,7 +15,7 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -158,3 +158,29 @@ async def build_topics(
         await save(session, drafts, tagged)
     say(f"{len(drafts)} topics")
     return drafts
+
+
+async def topic_for(session: AsyncSession, chunk_ids: list[int]) -> int | None:
+    """The topic a question written from these chunks belongs under.
+
+    The topic most of the chunks share; among equals, the one covering the most of the
+    library, because the broader name is the one a person looks under.
+    """
+    shared = (
+        select(ChunkTopic.topic_id, func.count().label("shared"))
+        .where(ChunkTopic.chunk_id.in_(chunk_ids))
+        .group_by(ChunkTopic.topic_id)
+        .subquery()
+    )
+    overall = (
+        select(ChunkTopic.topic_id, func.count().label("overall"))
+        .group_by(ChunkTopic.topic_id)
+        .subquery()
+    )
+    return await session.scalar(
+        select(shared.c.topic_id)
+        .join(overall, overall.c.topic_id == shared.c.topic_id)
+        .join(Topic, Topic.id == shared.c.topic_id)
+        .order_by(shared.c.shared.desc(), overall.c.overall.desc(), Topic.name)
+        .limit(1)
+    )

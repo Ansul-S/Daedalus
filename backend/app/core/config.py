@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # Topic map: how close two concept tags have to be, in cosine similarity, to become one
     # topic. Higher keeps topics narrow, lower merges more of them.
     topic_similarity: float = 0.8
+    # Above this similarity two questions are the same question in other words. Measured on
+    # seven pairs: real near-duplicates scored 0.75 to 0.86, while two different questions
+    # about one topic reached only 0.61, so the gap to sit in is narrow and low. The
+    # embedding model keeps short texts much closer together than whole passages.
+    duplicate_similarity: float = 0.7
 
     @property
     def local_chat_models(self) -> list[str]:

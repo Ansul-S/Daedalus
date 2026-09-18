@@ -70,8 +70,10 @@ came from.
 
 Misconceptions are up to three answers that sound right and are not, a sentence each.
 
-Difficulty is 1 for recalling something stated outright, 3 for explaining a mechanism, and 5
-for reasoning across more than one source.
+Difficulty is 1 when the sources explain the answer directly, 3 when the answer has to put a
+mechanism together, and 5 when it has to reason across more than one source. Never ask for a
+fact that can be read straight off the page -- a number, a name, a date or a section -- as
+the question itself; that is trivia even when the sources state it.
 """
 
 REQUEST = """\
