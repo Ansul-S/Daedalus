@@ -220,11 +220,14 @@ def plan_tasks(
 
 async def start_run(
     session: AsyncSession, count: int, *, document_id: int | None = None
-) -> tuple[Job, list[Task]]:
-    """Write down a job and the tasks it means to work through."""
+) -> tuple[Job, list[Task]] | None:
+    """Write down a job and the tasks it means to work through, or nothing at all when there
+    is nothing left to ask about: an empty job would sit queued and hold up the next batch."""
     found = await candidates(session, document_id=document_id)
     failures = await failure_passages(session, {chunk for _, chunk, _ in found})
     plans = plan_tasks(found, count, failures=failures)
+    if not plans:
+        return None
     job = Job(
         kind="generate",
         options={"count": count, "document_id": document_id, "planned": len(plans)},

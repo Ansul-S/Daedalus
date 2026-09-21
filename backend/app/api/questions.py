@@ -227,17 +227,17 @@ async def generate_questions(
             job=JobOut.model_validate(active),
         )
 
-    job, tasks = await start_run(session, body.count, document_id=body.document_id)
-    if not tasks:
+    started = await start_run(session, body.count, document_id=body.document_id)
+    if started is None:
         # Nothing to do, so nothing is written down: the library holds no passage that is
         # worth asking about and not already covered by an accepted question.
-        await session.rollback()
         response.status_code = status.HTTP_200_OK
         return GenerateOut(
             message="nothing left to ask about; add material, or build the topic map first",
             planned=0,
             job=None,
         )
+    job, tasks = started
     await session.commit()
     await session.refresh(job)
     return GenerateOut(message="queued", planned=len(tasks), job=JobOut.model_validate(job))

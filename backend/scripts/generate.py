@@ -45,12 +45,13 @@ async def main(args: argparse.Namespace) -> int:
             job_id = args.job
             if job_id is None:
                 async with SessionFactory() as session:
-                    job, tasks = await start_run(session, args.count, document_id=args.document)
+                    started = await start_run(session, args.count, document_id=args.document)
+                    if started is None:
+                        print("Nothing left to ask about; build the topic map with `make topics`.")
+                        return 1
                     await session.commit()
+                    job, tasks = started
                     job_id, planned = job.id, len(tasks)
-                if not planned:
-                    print("Nothing left to ask about; build the topic map with `make topics`.")
-                    return 1
                 print(f"Job {job_id}: {planned} question(s) planned.")
 
             async with Embedder(settings) as embedder:

@@ -230,6 +230,20 @@ def test_the_passages_about_a_failure_are_read_from_their_tagging(sessions, corp
     assert asyncio.run(scenario()) == {corpus.vanishing}
 
 
+def test_a_library_with_nothing_left_to_ask_writes_nothing_down(sessions, corpus) -> None:
+    """An empty job would sit queued, and hold up the next batch asked for through the API."""
+
+    async def scenario():
+        # The corpus is there but was never tagged, so no passage is a candidate.
+        async with sessions() as session:
+            started = await start_run(session, 3)
+            await session.commit()
+        async with sessions() as session:
+            return started, await session.scalar(select(func.count()).select_from(Job))
+
+    assert asyncio.run(scenario()) == (None, 0)
+
+
 def a_question(messages: list[ModelMessage]) -> ModelResponse:
     """Quote the passage that was given, so the question is grounded by construction and
     worded differently from every other one in the run."""
