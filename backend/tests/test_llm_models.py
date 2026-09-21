@@ -15,6 +15,7 @@ from app.llm.models import (
     generation_model,
     grading_model,
     groq,
+    groq_grader,
     helper_model,
     helper_settings,
     paced_generation_model,
@@ -117,6 +118,16 @@ def test_the_local_helper_asks_ollama_not_to_think() -> None:
     # Ollama's OpenAI-compatible endpoint samples at 1.0 for anything it is not sent.
     assert (body["temperature"], body["top_p"], body["seed"]) == (0.0, 1.0, 7)
     assert body["model"] == "qwen3.5:4b"
+
+
+def test_the_grader_can_be_measured_alone() -> None:
+    """Calibration grades with the grader and nothing else: a fallback would measure another
+    model, or load a local one nobody asked for."""
+    grader = groq_grader(make_settings(groq_api_key=KEY), {"qwen/qwen3.8-27b": (4, 7_000)})
+
+    assert grader.model_name == "qwen/qwen3.8-27b"
+    assert grader.pacer.spent == (4, 7_000)
+    assert groq_grader(make_settings(groq_api_key=None)) is None
 
 
 class Verdict(BaseModel):

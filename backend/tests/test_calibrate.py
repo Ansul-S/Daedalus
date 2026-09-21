@@ -11,6 +11,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.profiles import ModelProfile
 
 from app.db.models import Question, QuestionSource
+from app.llm.pacing import QuotaExhausted
 from scripts.calibrate import (
     AnswerFileError,
     HandGrade,
@@ -216,6 +217,32 @@ def test_an_answer_is_graded_once_and_a_failed_grade_is_tried_again(
         0.6667,
         "grade-v1",
     )
+
+
+def test_grading_stops_once_the_provider_is_out_for_the_day(sessions, corpus, tmp_path) -> None:
+    results = tmp_path / "grades.jsonl"
+    calls: list[int] = []
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        calls.append(1)
+        raise QuotaExhausted("groq-grading", "groq-grading says it is out of quota for today")
+
+    async def scenario():
+        question_id = await add_question(sessions, corpus.scaling)
+        async with sessions() as session:
+            questions = await accepted_questions(session)
+            first = GOOD.replace("question = 5", f"question = {question_id}")
+            hand = load(
+                answer_file(first, first.replace("scaled", "shrunk"), first.replace("so", "and")),
+                questions,
+            )
+            model = FunctionModel(respond, profile=ModelProfile(supports_json_schema_output=True))
+            return await grade_all(session, model, hand, questions, results, say=print)
+
+    # All three are left for the next run, and only one request was spent finding out.
+    assert asyncio.run(scenario()) == 3
+    assert len(calls) == 1
+    assert read_results(results) == {}
 
 
 # ---- Agreement

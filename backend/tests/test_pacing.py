@@ -15,6 +15,7 @@ from app.llm.pacing import (
     QuotaExhausted,
     asked_delay,
     estimate_tokens,
+    refused_for_the_day,
 )
 
 LIMITS = Limits(
@@ -233,4 +234,49 @@ def test_a_refusal_that_will_not_pass_is_raised_at_once() -> None:
     with pytest.raises(ModelHTTPError):
         asyncio.run(Agent(PacedModel(model, pacer)).run("write a question"))
 
+    assert (len(calls), time.slept) == (1, [])
+
+
+GROQ_DAY = (
+    "Rate limit reached for model `qwen/qwen3.8-27b` in organization `org` service tier "
+    "`on_demand` on tokens per day (TPD): Limit 200000, Used 199500, Requested 1200. "
+    "Please try again in 5m42.144s."
+)
+GROQ_MINUTE = (
+    "Rate limit reached for model `qwen/qwen3.8-27b` on output tokens per minute (OTPM): "
+    "Limit 1000, Used 356, Requested 774. Please try again in 7.8s."
+)
+
+
+@pytest.mark.parametrize(
+    ("exc", "daily"),
+    [
+        (refusal(body=GROQ_DAY), True),
+        (refusal(body=GROQ_DAY.replace("tokens per day (TPD)", "requests per day (RPD)")), True),
+        (refusal(body="quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier"), True),
+        (refusal(body=GROQ_MINUTE), False),
+        (refusal(body="quotaId: GenerateRequestsPerMinutePerProjectPerModel-FreeTier"), False),
+        (refusal(status=503, body="per day"), False),
+    ],
+)
+def test_a_refusal_for_the_day_is_told_from_one_for_the_minute(exc, daily) -> None:
+    assert refused_for_the_day(exc) is daily
+
+
+def test_a_provider_out_for_the_day_is_not_waited_out() -> None:
+    """Waiting out the minutes it names would only be refused again, answer after answer."""
+    pacer, time = a_pacer(Limits(30, 8_000, 1_000, 200_000))
+    calls: list[int] = []
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        calls.append(1)
+        raise refusal(retry_after="342", body=GROQ_DAY)
+
+    agent = Agent(PacedModel(FunctionModel(respond), pacer))
+
+    for _ in range(2):
+        with pytest.raises(QuotaExhausted):
+            asyncio.run(agent.run("grade this"))
+
+    # One request found out; the second never went.
     assert (len(calls), time.slept) == (1, [])

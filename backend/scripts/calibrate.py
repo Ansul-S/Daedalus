@@ -12,9 +12,11 @@ the score the same formula gives those hand labels (Spearman rank correlation; s
 trusted from 0.7), its key-point labels with the hand labels (Cohen's kappa), and its
 contradictions with the hand count.
 
-Grades are kept in data/calibration/grades.jsonl, one per answer and prompt version, so
-running again grades only what is new. The file is personal practice data and stays out of
-the repository with the rest of data/.
+The answers are graded by the grader alone, with no fallback: a grade from another model
+would measure that model instead. When the provider says the day is spent, grading stops and
+the rest waits for the next run. Grades are kept in data/calibration/grades.jsonl, one per
+answer and prompt version, so running again grades only what is new. The file is personal
+practice data and stays out of the repository with the rest of data/.
 """
 
 import argparse
@@ -41,7 +43,8 @@ from app.db.models import Question
 from app.db.session import SessionFactory, engine
 from app.grading.grader import PROMPT_VERSION, grade_answer, question_sources, spent_today
 from app.grading.scoring import score
-from app.llm.models import grading_model
+from app.llm.models import groq_grader
+from app.questions.batch import out_of_budget
 
 STATUSES = ("covered", "partial", "missing")
 # Scores are trusted once they rank answers the way the hand grades do this well.
@@ -91,6 +94,11 @@ class HandGrade:
         """Identifies the answer as graded: the same question and the same words."""
         digest = hashlib.sha256(f"{self.question_id}\n{self.text.strip()}".encode()).hexdigest()
         return digest[:16]
+
+
+def say(message: str) -> None:
+    # Flushed, so progress shows as it happens even when the output goes to a file
+    print(message, flush=True)
 
 
 def calibration_dir() -> Path:
@@ -193,10 +201,11 @@ async def grade_all(
     hand: list[HandGrade],
     questions: dict[int, Question],
     results_path: Path,
-    say=print,
+    say=say,
 ) -> int:
     """Grade every answer that has no grade under the current prompt version yet. A grade
-    that failed is not written down, so the next run tries again. Returns how many failed."""
+    that failed is not written down, so the next run tries again, and once the provider is out
+    of quota for the day nothing more is tried. Returns how many are left ungraded."""
     done = read_results(results_path)
     todo = [grade for grade in hand if (grade.key, PROMPT_VERSION) not in done]
     say(f"{len(hand)} answers, {len(hand) - len(todo)} graded already, {len(todo)} to grade.")
@@ -209,6 +218,10 @@ async def grade_all(
                 model, question.text, question.key_points, sources, grade.text
             )
         except (AgentRunError, ExceptionGroup) as exc:
+            if out_of_budget(exc):
+                left = len(todo) - count + 1
+                say(f"Out of quota for today ({exc}); {left} left to grade on the next run.")
+                return failed + left
             failed += 1
             say(f"{count}/{len(todo)} q{grade.question_id} answer {grade.number}: failed ({exc})")
             continue
@@ -337,7 +350,7 @@ def agreement(
     )
 
 
-def report(found: Agreement | None, total: int, say=print) -> None:
+def report(found: Agreement | None, total: int, say=say) -> None:
     if found is None:
         say("Nothing graded yet: run `make calibrate` to grade the answers.")
         return
@@ -403,7 +416,10 @@ async def run(args: argparse.Namespace) -> int:
             return 1
         failed = 0
         if args.command == "grade":
-            model = grading_model(get_settings(), await spent_today(session))
+            model = groq_grader(get_settings(), await spent_today(session))
+            if model is None:
+                print("Grading is measured on the Groq grader: set GROQ_API_KEY.")
+                return 1
             failed = await grade_all(session, model, hand, questions, results_path)
     weights = {qid: [int(p["weight"]) for p in q.key_points] for qid, q in questions.items()}
     report(agreement(hand, read_results(results_path), weights), len(hand))

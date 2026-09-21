@@ -38,6 +38,9 @@ RETRY_MARGIN = 2.0
 # Used when a refusal names no delay, doubling per attempt
 BACKOFF = 5.0
 RETRYABLE = frozenset({429, 500, 502, 503, 504})
+# How a refusal says the day's allowance is gone rather than the minute's: Groq names the
+# limit, "tokens per day (TPD)" or "(RPD)", and Gemini's quota ids read "PerDay".
+DAILY = re.compile(r"per ?day|\((?:TPD|RPD)\)", re.IGNORECASE)
 
 Clock = Callable[[], float]
 Sleep = Callable[[float], Awaitable[None]]
@@ -70,6 +73,10 @@ def estimate_tokens(messages: list[ModelMessage]) -> int:
         for part in message.parts
     )
     return characters // 4 + RESPONSE_ALLOWANCE
+
+
+def refused_for_the_day(exc: ModelHTTPError) -> bool:
+    return exc.status_code == 429 and bool(DAILY.search(str(exc.body or "")))
 
 
 def asked_delay(exc: ModelHTTPError) -> float | None:
@@ -149,6 +156,11 @@ class Pacer:
             self._tokens_today += estimate
             return entry
 
+    def exhaust(self) -> None:
+        """The provider says the day is spent, whatever this pacer counted: nothing more
+        goes to it today."""
+        self._requests_today = max(self._requests_today, self.limits.requests_per_day)
+
     def record(self, entry: list[float], tokens: int, output: int = 0) -> None:
         """Correct the estimates booked by `acquire` once the real cost is known."""
         self._tokens_today += tokens - int(entry[1])
@@ -192,6 +204,12 @@ class PacedModel(WrapperModel):
                 response = await super().request(messages, model_settings, model_request_parameters)
             except ModelHTTPError as exc:
                 self.pacer.record(entry, 0)
+                if refused_for_the_day(exc):
+                    # Waiting out the delay it names would only be refused again.
+                    self.pacer.exhaust()
+                    raise QuotaExhausted(
+                        self.pacer.name, f"{self.pacer.name} says it is out of quota for today"
+                    ) from exc
                 if attempt == self.attempts or exc.status_code not in RETRYABLE:
                     raise
                 await self.pacer.wait_out(exc, attempt)

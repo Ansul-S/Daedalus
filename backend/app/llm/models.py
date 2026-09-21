@@ -132,12 +132,19 @@ def grading_model(settings: Settings, spent: Mapping[str, tuple[int, int]] | Non
     generation.
     """
     spent = spent or {}
-    name = settings.groq_grading_model
     return _chain(
-        _paced(groq(settings, name), "groq-grading", GROQ_QWEN_FREE, spent.get(name)),
+        groq_grader(settings, spent),
         ollama(settings, settings.grader_model),
         _paced(gemini(settings), "gemini", GEMINI_FREE, spent.get(settings.gemini_model)),
     )
+
+
+def groq_grader(
+    settings: Settings, spent: Mapping[str, tuple[int, int]] | None = None
+) -> Model | None:
+    """The grader alone, paced, with nothing to fall back to: for measuring it."""
+    name = settings.groq_grading_model
+    return _paced(groq(settings, name), "groq-grading", GROQ_QWEN_FREE, (spent or {}).get(name))
 
 
 def paced_generation_model(
