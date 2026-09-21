@@ -1,5 +1,6 @@
 """Database tables: source documents, their searchable chunks and ingestion jobs, the topic
-map built over the chunks, and the generated questions."""
+map built over the chunks, the generated questions, and the answers given to them with their
+grades."""
 
 from datetime import datetime
 from typing import Any
@@ -31,6 +32,7 @@ JOB_KINDS = ("ingest", "generate")
 TASK_STATUSES = ("queued", "running", "done", "failed")
 CONTENT_TYPES = ("text", "code", "formula", "table")
 QUESTION_STATUSES = ("accepted", "rejected", "retired")
+GRADE_STATUSES = ("graded", "failed")
 # The shapes a question can take, from the design notes: an intuition check, a why or how
 # explanation, a comparison, a trade-off, a failure mode, a link between two concepts that
 # sit in different chunks, or a question about a paper's problem, idea, limits and extensions
@@ -363,4 +365,80 @@ class QuestionTask(Base):
         _one_of("status", TASK_STATUSES),
         _one_of("style", QUESTION_STYLES),
         UniqueConstraint("job_id", "position"),
+    )
+
+
+class Attempt(Base):
+    """One answer given to a question, kept whatever became of its grading."""
+
+    __tablename__ = "attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("questions.id", ondelete="CASCADE"), index=True
+    )
+    answer: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    question: Mapped[Question] = relationship()
+    grades: Mapped[list["Grade"]] = relationship(
+        back_populates="attempt", passive_deletes=True, order_by="Grade.id"
+    )
+
+
+class Grade(Base):
+    """What a grader made of an attempt, and the score computed from it.
+
+    The model only labels: each key point covered, partial or missing, and each claim in the
+    answer supported, contradicted or unverified against the sources. The score is computed
+    from those labels and the key points' weights, so the same labels always give the same
+    score. An attempt can be graded more than once -- again after a failure, or by a second
+    model -- and each grade is kept. A failed grade records why and nothing else.
+    """
+
+    __tablename__ = "grades"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("attempts.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    # The model that answered, e.g. "groq:qwen/qwen3.8-27b"; null when none did
+    grader_model: Mapped[str | None] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    # [{"id", "status", "answer_quote"}], one per key point of the question, in its order
+    key_points: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
+    # [{"claim", "verdict", "chunk_id", "why"}]; chunk_id is null for an unverified claim
+    claims: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
+    # 1 to 5, how clearly the answer is written, apart from what it says
+    clarity: Mapped[int | None]
+    strengths: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    gaps: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    errors: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
+    improved_answer: Mapped[str | None] = mapped_column(Text)
+    follow_up: Mapped[str | None] = mapped_column(Text)
+    # Weighted key-point coverage, 0 to 1, before the penalty for contradicted claims
+    coverage: Mapped[float | None]
+    contradicted: Mapped[int | None]
+    # Coverage less the penalty, never below 0
+    score: Mapped[float | None]
+    # Requests and tokens the grade cost, and how long it took
+    usage: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    seconds: Mapped[float | None]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    attempt: Mapped[Attempt] = relationship(back_populates="grades")
+
+    __table_args__ = (
+        _one_of("status", GRADE_STATUSES),
+        CheckConstraint("clarity BETWEEN 1 AND 5", name="clarity_valid"),
+        CheckConstraint("score BETWEEN 0 AND 1 AND coverage BETWEEN 0 AND 1", name="score_valid"),
+        # A grade either carries everything a score needs, or the reason there is none.
+        CheckConstraint(
+            "(status = 'graded' AND score IS NOT NULL AND coverage IS NOT NULL "
+            "AND contradicted IS NOT NULL AND clarity IS NOT NULL AND grader_model IS NOT NULL) "
+            "OR (status = 'failed' AND error IS NOT NULL AND score IS NULL)",
+            name="graded_or_failed",
+        ),
     )
