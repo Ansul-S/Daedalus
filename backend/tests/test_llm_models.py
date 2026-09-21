@@ -9,7 +9,13 @@ from pydantic_ai import Agent
 from pydantic_ai.models.fallback import FallbackModel
 
 from app.core.config import Settings
-from app.llm.models import generation_model, grading_model, helper_model, helper_settings
+from app.llm.models import (
+    generation_model,
+    grading_model,
+    helper_model,
+    helper_settings,
+    paced_generation_model,
+)
 
 KEY = SecretStr("test-key")
 COMPLETION = {
@@ -44,6 +50,15 @@ def test_generation_prefers_cloud_and_grading_prefers_local() -> None:
     assert isinstance(grading, FallbackModel)
     assert [model.system for model in generation.models] == ["groq", "google", "ollama"]
     assert [model.system for model in grading.models] == ["ollama", "groq", "google"]
+
+
+def test_a_paced_batch_starts_each_provider_from_its_spend_today() -> None:
+    settings = make_settings(groq_api_key=KEY, gemini_api_key=KEY)
+
+    chain = paced_generation_model(settings, {settings.groq_model: (12, 45_000)})
+
+    groq, gemini, _ = chain.models
+    assert (groq.pacer.spent, gemini.pacer.spent) == ((12, 45_000), (0, 0))
 
 
 def test_production_never_uses_ollama() -> None:

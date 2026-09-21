@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 from collections import Counter
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
@@ -21,6 +22,7 @@ from app.questions.batch import (
     partner_for,
     plan_tasks,
     run_job,
+    spent_today,
     start_run,
 )
 
@@ -242,6 +244,42 @@ def test_a_library_with_nothing_left_to_ask_writes_nothing_down(sessions, corpus
             return started, await session.scalar(select(func.count()).select_from(Job))
 
     assert asyncio.run(scenario()) == (None, 0)
+
+
+def test_a_batch_knows_what_was_spent_in_the_last_day(sessions) -> None:
+    """Read at the start of every batch, so that the day's budget is the day's."""
+
+    def written(model: str, requests: int, tokens: int, days_ago: float = 0.0) -> Question:
+        return Question(
+            text="Why?",
+            reference_answer="Because.",
+            style="why_how",
+            difficulty=3,
+            status="accepted",
+            generator_model=model,
+            prompt_version="generate-v3",
+            usage={"requests": requests, "input_tokens": tokens - 100, "output_tokens": 100},
+            created_at=datetime.now(UTC) - timedelta(days=days_ago),
+        )
+
+    async def scenario():
+        async with sessions() as session, session.begin():
+            session.add_all(
+                [
+                    written("openai/gpt-oss-120b", 2, 4_000),
+                    written("openai/gpt-oss-120b", 1, 2_500),
+                    written("gemini-3.5-flash", 1, 3_000),
+                    # Yesterday's batch has had its day.
+                    written("openai/gpt-oss-120b", 5, 20_000, days_ago=1.5),
+                ]
+            )
+        async with sessions() as session:
+            return await spent_today(session)
+
+    assert asyncio.run(scenario()) == {
+        "openai/gpt-oss-120b": (3, 6_500),
+        "gemini-3.5-flash": (1, 3_000),
+    }
 
 
 def a_question(messages: list[ModelMessage]) -> ModelResponse:

@@ -81,13 +81,18 @@ def asked_delay(exc: ModelHTTPError) -> float | None:
 
 
 class Pacer:
-    """One provider's budget: a minute window for its rates and a running total for its day."""
+    """One provider's budget: a minute window for its rates and a running total for its day.
+
+    The day starts from what was already spent in it: a pacer is built for every batch, and
+    without that a second batch in a day would think it had the whole day to itself.
+    """
 
     def __init__(
         self,
         name: str,
         limits: Limits,
         *,
+        spent: tuple[int, int] = (0, 0),
         clock: Clock = time.monotonic,
         sleep: Sleep = asyncio.sleep,
         margin: float = RETRY_MARGIN,
@@ -99,8 +104,7 @@ class Pacer:
         self._margin = margin
         # [when it started, tokens it cost] per request in the last minute
         self._window: list[list[float]] = []
-        self._requests_today = 0
-        self._tokens_today = 0
+        self._requests_today, self._tokens_today = spent
         self._blocked_until = 0.0
 
     @property

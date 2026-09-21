@@ -17,7 +17,7 @@ from app.db.session import SessionFactory, engine
 from app.ingest import queue
 from app.llm.embeddings import Embedder
 from app.llm.models import helper_model, paced_generation_model
-from app.questions.batch import run_job, start_run
+from app.questions.batch import run_job, spent_today, start_run
 from scripts.ingest import configure_logging
 
 
@@ -54,11 +54,16 @@ async def main(args: argparse.Namespace) -> int:
                     job_id, planned = job.id, len(tasks)
                 print(f"Job {job_id}: {planned} question(s) planned.")
 
+            async with SessionFactory() as session:
+                spent = await spent_today(session)
+            for name, (requests, tokens) in spent.items():
+                print(f"{name} in the last day: {requests} requests, {tokens:,} tokens.")
+
             async with Embedder(settings) as embedder:
                 summary = await run_job(
                     SessionFactory,
                     job_id,
-                    model=paced_generation_model(settings),
+                    model=paced_generation_model(settings, spent),
                     checker=helper_model(settings),
                     embedder=embedder,
                     similarity=settings.duplicate_similarity,

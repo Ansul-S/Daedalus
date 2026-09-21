@@ -20,7 +20,7 @@ from app.ingest.arxiv import ArxivClient
 from app.ingest.pipeline import Ingestor
 from app.llm.embeddings import Embedder
 from app.llm.models import helper_model, paced_generation_model
-from app.questions.batch import run_job
+from app.questions.batch import run_job, spent_today
 from scripts.ingest import configure_logging, print_progress
 
 POLL_SECONDS = 2.0
@@ -43,10 +43,12 @@ async def take_a_job(settings: Settings, ingestor: Ingestor, embedder: Embedder)
     if job_id is None:
         return False
     print(f"Writing questions for job {job_id}.", flush=True)
+    async with SessionFactory() as session:
+        spent = await spent_today(session)
     summary = await run_job(
         SessionFactory,
         job_id,
-        model=paced_generation_model(settings),
+        model=paced_generation_model(settings, spent),
         checker=helper_model(settings),
         embedder=embedder,
         similarity=settings.duplicate_similarity,

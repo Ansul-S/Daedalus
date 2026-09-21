@@ -7,6 +7,7 @@ that a question is answerable are light local work with no fallback. In producti
 no Ollama, so only cloud models are used.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
 from groq import AsyncGroq
@@ -103,22 +104,31 @@ def grading_model(settings: Settings) -> Model:
     return _chain(ollama(settings, settings.grader_model), groq(settings), gemini(settings))
 
 
-def paced_generation_model(settings: Settings) -> Model:
+def paced_generation_model(
+    settings: Settings, spent: Mapping[str, tuple[int, int]] | None = None
+) -> Model:
     """Question generation in bulk: Groq, then Gemini, then the local grader.
 
     Each cloud model keeps its own pace, so a provider that is full for the moment is waited
     out rather than abandoned; the chain moves on only once a provider has run out of
-    attempts or out of the day's budget.
+    attempts or out of the day's budget. `spent` is the requests and tokens each model has
+    already used today, by model name, so that the day's budget is the day's and not the
+    batch's.
     """
+    spent = spent or {}
     return _chain(
-        _paced(groq(settings), "groq", GROQ_FREE),
-        _paced(gemini(settings), "gemini", GEMINI_FREE),
+        _paced(groq(settings), "groq", GROQ_FREE, spent.get(settings.groq_model)),
+        _paced(gemini(settings), "gemini", GEMINI_FREE, spent.get(settings.gemini_model)),
         ollama(settings, settings.grader_model),
     )
 
 
-def _paced(model: Model | None, name: str, limits: Limits) -> Model | None:
-    return None if model is None else PacedModel(model, Pacer(name, limits))
+def _paced(
+    model: Model | None, name: str, limits: Limits, spent: tuple[int, int] | None
+) -> Model | None:
+    if model is None:
+        return None
+    return PacedModel(model, Pacer(name, limits, spent=spent or (0, 0)))
 
 
 def helper_model(settings: Settings, http_client: Any = None) -> OllamaModel:

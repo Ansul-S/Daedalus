@@ -16,6 +16,7 @@ import re
 from collections import Counter
 from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 
 from pydantic_ai.models import Model
@@ -252,6 +253,25 @@ async def sources_for(session: AsyncSession, chunk_ids: list[int]) -> list[Sourc
     )
     found = {chunk.id: source_of(title, chunk) for title, chunk in rows.tuples()}
     return [found[chunk_id] for chunk_id in chunk_ids if chunk_id in found]
+
+
+async def spent_today(session: AsyncSession) -> dict[str, tuple[int, int]]:
+    """The requests and tokens each generator model has spent in the last day, by model name,
+    as the questions it wrote record them. A task that failed before its question was written
+    down is not counted."""
+    usage = Question.usage
+    rows = await session.execute(
+        select(
+            Question.generator_model,
+            func.sum(usage["requests"].as_integer()),
+            func.sum(usage["input_tokens"].as_integer() + usage["output_tokens"].as_integer()),
+        )
+        .where(Question.created_at > func.now() - timedelta(days=1))
+        .group_by(Question.generator_model)
+    )
+    return {
+        model: (int(requests or 0), int(tokens or 0)) for model, requests, tokens in rows.tuples()
+    }
 
 
 def out_of_budget(exc: BaseException, seen: set[int] | None = None) -> bool:

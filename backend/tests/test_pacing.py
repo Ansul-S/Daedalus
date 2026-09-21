@@ -94,6 +94,21 @@ def test_running_out_for_the_day_reads_as_a_model_error() -> None:
         asyncio.run(scenario())
 
 
+def test_the_day_starts_from_what_earlier_batches_spent() -> None:
+    """A pacer is built for every batch, so it has to be told what the day has already used."""
+    time = FakeTime()
+    pacer = Pacer("groq", LIMITS, spent=(2, 3_500), clock=time.clock, sleep=time.sleep)
+
+    async def scenario():
+        await pacer.acquire(400)
+        await pacer.acquire(400)
+
+    with pytest.raises(QuotaExhausted, match="out of tokens"):
+        asyncio.run(scenario())
+    # The first fitted in what was left of the day's 4,000; the second did not.
+    assert pacer.spent == (3, 3_900)
+
+
 def test_a_refusal_is_waited_out_with_a_margin_on_top() -> None:
     pacer, time = a_pacer()
 
