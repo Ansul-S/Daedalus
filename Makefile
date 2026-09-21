@@ -1,4 +1,4 @@
-.PHONY: help ollama db-up db-down migrate api web worker ingest topics generate check test test-slow lint
+.PHONY: help ollama db-up db-down migrate api web worker ingest topics generate calibrate check test test-slow lint
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
@@ -33,6 +33,9 @@ topics: ## Build the topic map: tag chunks with the local model, then cluster th
 
 generate: ## Write questions from the topic map: make generate N=20
 	cd backend && uv run python -m scripts.generate $(if $(N),--count $(N),) $(ARGS)
+
+calibrate: ## Grade hand-graded answers and measure agreement: make calibrate [ARGS=template|report]
+	cd backend && uv run --group eval python -m scripts.calibrate $(ARGS)
 
 check: ## Check database, Ollama and API keys (LIVE=1 also sends a test prompt to each model)
 	cd backend && uv run python -m scripts.check_setup $(if $(LIVE),--live,)
