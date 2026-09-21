@@ -205,8 +205,9 @@ Retrieval and grading are implemented directly rather than through a RAG framewo
 - **One question per request, with the sources in delimiters** and a strict JSON schema (`NativeOutput`). In the trial every schema-constrained request came back valid, while Groq's own validator rejected a tool call once.
 - **The prompt forbids questions built on what a source reports** rather than explains -- an accuracy figure, a component name, a claim about what a system achieves -- because that is what the first milestone run kept producing from papers that state results in prose. Saying so moved trivia rejections from 6 in 20 to 1, and unanswerable ones from 5 to 1.
 - **The repair round is explicit.** Quotes are checked first; if any is not in its chunk, the whole conversation goes back with the failures named and the model gets one chance to fix it. The question is returned either way with its quote report, so a rejected question says why. The round cost about 3.5K tokens against 2.3K for a question that came out right first time, and took quote grounding from 20 of 24 to 25 of 25 in the trial.
-- **Grounding is lenient about spelling and strict about stitching.** Text is compared after NFKC folding, hyphen mapping, Markdown stripping and whitespace collapsing, because a model re-wraps lines and drops the dollar signs around inline maths. A quote shorter than six words, or ending at a colon, is refused outright: neither states anything on its own. The threshold is 95, since a quote that only lost its dollar signs scored 98-99 while one with words left out reached 90.5.
+- **Grounding is lenient about spelling and strict about stitching.** Text is compared after NFKC folding, hyphen mapping, Markdown stripping and whitespace collapsing, because a model re-wraps lines and drops the dollar signs around inline maths. A quote shorter than six words is refused outright: it states nothing on its own. The threshold is 95, since a quote that only lost its dollar signs scored 98-99 while one with words left out reached 90.5.
   - **An ellipsis is judged by the score, not on sight.** Refusing every quote containing one turned away the Transformer paper's own `(x_1, ..., x_n)`, which a faithful quote has to keep. A quote that really leaves a span out stops matching its chunk, so the score already catches it; the ellipsis only decides how the failure is explained to the model in the repair round.
+  - **So is the punctuation a quote ends on.** Refusing every quote that ended at a colon turned away three in the second milestone run that were copied character for character up to the list they introduce; each matches its chunk at 100 without the rule. Trailing punctuation is trimmed before anything is judged, the six-word count included, so a mark left at the end cannot pass for a word either.
 - **A batch is planned before it runs.** The tasks are written down first, so a run that stops loses at most the question in flight, and `--job` carries it on.
 - **Each provider keeps its own pace.** A 429 is not a reason to spend the next provider's quota: `PacedModel` holds a sliding 60-second window for requests and tokens and a running daily total, waits out a `retry-after` plus a margin, and only gives up on a provider when it has run out of attempts or of the day's budget. Groq's own client retrying is turned off, since it sleeps through a 429 before anything else sees it.
 - **A style that needs two passages picks a topic that can spare one.** Blind rotation meant `compare` and `connection` almost never fired, because most topics cover a single chunk, and quietly fell back to a plain question.
@@ -361,8 +362,10 @@ worth asking a question about (notebook 48 of 84, lecture notes 9 of 9, 1706.037
     run fell through to Gemini or to the local model.
 - **Quote grounding:** 59 of 63 quotes cleared the threshold of 95 in the first run, mean
   score 96.4; 56 of 64 in the second, mean 90.7. The failures are stitched quotes rather than
-  invented ones: one ran two paragraphs together across a heading and a rule, scoring 93.5,
-  and two others stopped at a colon.
+  invented ones: one ran two paragraphs together across a heading and a rule, scoring 93.5.
+  Three more, all in the second run, were exact copies that stopped at a colon, which a rule
+  since removed refused on sight. A quote refused before it was scored is recorded at 0, which
+  is what pulls the second mean down: five of that run's quotes were never scored.
 - **The answerability checker** on the twenty questions of a real run: **20 of 20 identical
   verdicts** when the same questions were checked again, so temperature 0 with a fixed seed
   holds. **Median 14.0 s** (8.1–27.6), against 9.0 s on the short labelled controls of the
@@ -598,10 +601,12 @@ prompt describes 1 to 5.
   passages. A 9B would be slower on 16 GB with no accuracy argument behind it.
 
 **What is left to close the gap:**
-- **Quotes are now the main cause.** Of the seven in the second run, two stopped at a colon
-  and one kept the ellipsis that the source itself writes in `(x_1, ..., x_n)`. The ellipsis
-  rule was fixed to judge by the match score instead of on sight; the colon habit survives a
-  repair round that names it, and needs the instruction sharpened.
+- **Quotes are now the main cause.** Of the seven in the second run, three stopped at a colon
+  and one kept the ellipsis that the source itself writes in `(x_1, ..., x_n)`. All four were
+  copied character for character: the check refused the colon and the ellipsis on sight, so a
+  repair round that named them could not help. Both are now judged by the match score.
+  Re-judged that way, with every check replayed in order, the second run's own questions pass
+  11 of 20 instead of 9.
 - **Failure modes and intuition** are the weakest styles and have not been looked at.
 - **The duplicate check compares a new question against everything accepted**, so the rate
   falls as the library grows. Twenty questions from 83 passages is already dense.

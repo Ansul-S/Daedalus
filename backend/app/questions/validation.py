@@ -156,8 +156,10 @@ async def validate(
     embedding: list[float] | None = None
     duplicate_of: int | None = None
     try:
-        embedding, reference = await embedder.embed_documents(
-            [question.question, question.reference_answer]
+        # One request for all three, so the embedding model cannot drop out between them and
+        # leave the question judged on half of what it needs.
+        embedding, reference, checked = await embedder.embed_documents(
+            [question.question, question.reference_answer, check.answer]
         )
     except EmbeddingError as exc:
         # The duplicate check is the only one that needs the embedding model, so a question
@@ -173,7 +175,6 @@ async def validate(
             failed.append("duplicate")
         # How far the reference answer drifts from what the sources alone support. Recorded
         # rather than judged: the number needs real questions behind it first.
-        checked = (await embedder.embed_documents([check.answer]))[0]
         report["answer_agreement"] = round(
             sum(a * b for a, b in zip(reference, checked, strict=True)), 4
         )

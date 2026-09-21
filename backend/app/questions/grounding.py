@@ -4,8 +4,9 @@ A question is only worth keeping when every key point can be traced to words tha
 sources. The comparison is deliberately lenient about how a passage is written down: models
 reproduce it faithfully but re-wrap the lines, drop the dollar signs around inline maths or
 turn a non-breaking hyphen into a plain one. It is strict about what hides a paraphrase --
-an ellipsis can stand for anything, six words can be found in any text, and a quote that
-stops at a colon states nothing.
+an ellipsis inside a quote can stand for anything, and six words can be found in any text.
+The punctuation a quote ends on hides nothing, so a quote that stops at the colon opening a
+list, or trails off into an ellipsis, is judged on its words alone.
 """
 
 import re
@@ -23,6 +24,9 @@ MIN_WORDS = 6
 HYPHENS = dict.fromkeys([0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2212], "-")
 MARKDOWN = re.compile(r"[$`*_#]+")
 ELLIPSIS = re.compile(r"\.\.\.|…")
+# What a normalized quote can end on without it being part of what it says. Refusing a colon
+# on sight turned away quotes copied character for character up to the list they introduce.
+TRAILING = " .,:;!?-"
 
 
 @dataclass
@@ -50,16 +54,17 @@ def check_quote(quote: str, chunk_id: int, chunk_text: str | None) -> QuoteCheck
 
     if chunk_text is None:
         return failed(f"chunk {chunk_id} is not one of the sources")
-    if len(normalize(quote).split()) < MIN_WORDS:
+    # Trimmed before anything is judged: a detached mark at the end would count as a word, and
+    # one the source does not have would cost a faithful copy its match.
+    words = normalize(quote).rstrip(TRAILING)
+    if len(words.split()) < MIN_WORDS:
         return failed(f"the quote is shorter than {MIN_WORDS} words")
-    if quote.rstrip().endswith(":"):
-        return failed("the quote stops at a colon, so it states nothing on its own")
     # The score decides whether an ellipsis is the model eliding a span or the source's own
     # notation: a paper that writes a sequence as (x_1, ..., x_n) is quoted faithfully with
     # the dots in it, while a quote that really leaves words out stops matching the chunk.
-    score = float(fuzz.partial_ratio(normalize(quote), normalize(chunk_text)))
+    score = float(fuzz.partial_ratio(words, normalize(chunk_text)))
     if score < THRESHOLD:
-        if ELLIPSIS.search(quote):
+        if ELLIPSIS.search(words):
             return failed("the quote leaves words out instead of running on", score)
         return failed(f"the quote is not in chunk {chunk_id} (closest match {score:.0f}%)", score)
     return QuoteCheck(quote=quote, chunk_id=chunk_id, score=score, problem=None)

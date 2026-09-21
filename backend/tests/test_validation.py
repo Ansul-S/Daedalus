@@ -10,6 +10,7 @@ from pydantic_ai.profiles import ModelProfile
 from sqlalchemy import select
 
 from app.db.models import Chunk, ChunkTopic, Document, Question, QuestionSource, Topic
+from app.llm.embeddings import EmbeddingError
 from app.questions.generation import Generated, GeneratedQuestion, Source
 from app.questions.grounding import QuoteCheck
 from app.questions.topics import topic_for
@@ -234,6 +235,29 @@ def test_without_the_embedding_model_the_duplicate_check_is_recorded_as_skipped(
     assert (validation.passed, validation.embedding) == (True, None)
     assert validation.report["duplicate"] == "not checked"
     assert "answer_agreement" not in validation.report
+
+
+def test_the_embedding_model_is_asked_once_so_it_cannot_drop_out_halfway(
+    sessions, embedder, chunk_id, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ollama going away between two requests used to fail the whole task, where going away
+    before the first only left the duplicate check recorded as not checked."""
+    requests: list[int] = []
+    embed = embedder.embed_documents
+
+    async def answers_once(texts, progress=None):
+        requests.append(len(texts))
+        if len(requests) > 1:
+            raise EmbeddingError("Ollama is not reachable (ConnectError)")
+        return await embed(texts, progress)
+
+    monkeypatch.setattr(embedder, "embed_documents", answers_once)
+
+    validation = run_validate(sessions, embedder, chunk_id)
+
+    assert (validation.passed, requests) == (True, [3])
+    assert "duplicate" not in validation.report
+    assert 0.0 <= validation.report["answer_agreement"] <= 1.0
 
 
 def test_a_stored_question_keeps_its_sources_report_and_usage(sessions, embedder, chunk_id):

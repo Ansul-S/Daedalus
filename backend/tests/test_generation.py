@@ -43,15 +43,17 @@ GOOD_QUOTE = "the dot products grow large in magnitude, pushing the softmax func
         # U+2011 for the plain hyphen, and NFKC-foldable characters.
         ("we scale the dot‑products by 1/\\sqrt{d_k}", None),
         ("THE DOT PRODUCTS GROW LARGE IN MAGNITUDE, PUSHING", None),
+        # The punctuation a quote ends on is spelling too: a colon, or an ellipsis saying the
+        # sentence runs on, is judged by the score like the words before it.
+        ("To counteract this effect, we scale the dot products by:", None),
+        ("pushing the softmax function into regions where...", None),
         (
             "the dot products grow large ... extremely small gradients",
             "the quote leaves words out instead of running on",
         ),
         ("we scale the dot products", "the quote is shorter than 6 words"),
-        (
-            "To counteract this effect, we scale the dot products by:",
-            "the quote stops at a colon, so it states nothing on its own",
-        ),
+        # A mark left standing at the end is not a sixth word.
+        ("we scale the dot products …", "the quote is shorter than 6 words"),
         (
             "the learning rate is decayed over the first four thousand steps",
             "the quote is not in chunk 248",
@@ -76,6 +78,20 @@ def test_a_quote_keeps_an_ellipsis_the_source_writes_itself() -> None:
     quote = "maps an input sequence of symbol representations $(x_1, ..., x_n)$ to a sequence"
 
     assert check_quote(quote, 1, chunk).grounded
+
+
+def test_a_quote_may_stop_at_the_colon_that_opens_a_list() -> None:
+    """Refusing a colon on sight turned away quotes copied character for character up to the
+    list they introduce. The quote is trimmed to be judged, and kept as it was written."""
+    chunk = (
+        "Keeping retrieval separate makes the output easier to debug, because we can inspect:"
+        "\n\n- which chunks were retrieved\n- how each one was scored"
+    )
+    quote = "makes the output easier to debug, because we can inspect:"
+
+    check = check_quote(quote, 1, chunk)
+
+    assert (check.grounded, check.score, check.quote) == (True, 100.0, quote)
 
 
 def test_a_quote_cannot_name_a_chunk_that_was_not_a_source() -> None:
