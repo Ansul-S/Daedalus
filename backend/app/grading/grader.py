@@ -18,6 +18,7 @@ import re
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -26,12 +27,12 @@ from pydantic_ai.exceptions import AgentRunError
 from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
 from rapidfuzz import fuzz
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Attempt, Grade, Question, QuestionSource
 from app.grading.scoring import Score, score
-from app.questions.batch import sources_for
+from app.questions import batch
 from app.questions.generation import Source
 from app.questions.grounding import normalize
 
@@ -325,7 +326,7 @@ async def question_sources(session: AsyncSession, question_id: int) -> list[Sour
             .order_by(QuestionSource.position)
         )
     )
-    return await sources_for(session, chunk_ids)
+    return await batch.sources_for(session, chunk_ids)
 
 
 async def grade_attempt(session: AsyncSession, model: Model, attempt: Attempt) -> Grade:
@@ -368,3 +369,24 @@ async def grade_attempt(session: AsyncSession, model: Model, attempt: Attempt) -
     session.add(grade)
     await session.flush()
     return grade
+
+
+async def spent_today(session: AsyncSession) -> dict[str, tuple[int, int]]:
+    """The requests and tokens each model has spent in the last day, by model name, counting
+    the grades it gave and the questions it wrote together: a free tier's allowance belongs to
+    the model, whatever the work, and Gemini both writes and grades."""
+    spent = dict(await batch.spent_today(session))
+    usage = Grade.usage
+    rows = await session.execute(
+        select(
+            Grade.grader_model,
+            func.sum(usage["requests"].as_integer()),
+            func.sum(usage["input_tokens"].as_integer() + usage["output_tokens"].as_integer()),
+        )
+        .where(Grade.created_at > func.now() - timedelta(days=1), Grade.grader_model.is_not(None))
+        .group_by(Grade.grader_model)
+    )
+    for model, requests, tokens in rows.tuples():
+        before = spent.get(model, (0, 0))
+        spent[model] = (before[0] + int(requests or 0), before[1] + int(tokens or 0))
+    return spent
