@@ -75,7 +75,11 @@ async def main(live: bool) -> int:
             for name in settings.local_chat_models
             if name in installed
         ]
-        chat_models += [models.groq(settings), models.gemini(settings)]
+        chat_models += [
+            models.groq(settings),
+            models.groq(settings, settings.groq_grading_model),
+            models.gemini(settings),
+        ]
         for model in chat_models:
             if model is not None:
                 result = await ping_chat_model(model)

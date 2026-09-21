@@ -1,10 +1,12 @@
 """Which model handles which task, and what each task falls back to.
 
 Question generation is bulk work, so it prefers the free cloud tiers and keeps the local
-model as a last resort. Grading is interactive and handles the user's own answers, so it
-prefers the local model and falls back to Groq, then Gemini. Tagging chunks and checking
-that a question is answerable are light local work with no fallback. In production there is
-no Ollama, so only cloud models are used.
+model as a last resort. Grading is interactive: it goes to Qwen on Groq first, which grades
+in about two seconds where the local model on a 16 GB machine takes a minute or two, then to
+the local model, then to Gemini. The generator is gpt-oss, so grading never falls back to
+it -- a model family does not grade its own questions. Tagging chunks and checking that a
+question is answerable are light local work with no fallback. In production there is no
+Ollama, so only cloud models are used.
 """
 
 from collections.abc import Mapping
@@ -17,6 +19,7 @@ from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.models.groq import GroqModel
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.profiles import ModelProfile, merge_profile
+from pydantic_ai.profiles.openai import OpenAIJsonSchemaTransformer
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.groq import GroqProvider
 from pydantic_ai.providers.ollama import OllamaProvider
@@ -35,12 +38,20 @@ GROQ_FREE = Limits(
     requests_per_day=1_000,
     tokens_per_day=200_000,
 )
-# Not measured: the trial only ever saw 503s from Gemini, never a rate limit. These are held
-# deliberately low so the pacer errs towards waiting rather than towards being refused.
+# Qwen on Groq has the same limits, plus one on what it writes that Groq names only in its 429s
+GROQ_QWEN_FREE = Limits(
+    requests_per_minute=30,
+    tokens_per_minute=8_000,
+    requests_per_day=1_000,
+    tokens_per_day=200_000,
+    output_tokens_per_minute=1_000,
+)
+# Requests a day as Gemini's 429 states it for the free tier; the minute rates are not
+# measured and are held low so the pacer errs towards waiting rather than being refused.
 GEMINI_FREE = Limits(
     requests_per_minute=10,
     tokens_per_minute=100_000,
-    requests_per_day=200,
+    requests_per_day=20,
     tokens_per_day=1_000_000,
 )
 
@@ -68,16 +79,31 @@ def helper_settings() -> ModelSettings:
     return ModelSettings(thinking=False, temperature=0.0, top_p=1.0, seed=HELPER_SEED)
 
 
-def groq(settings: Settings) -> GroqModel | None:
-    """Groq, with the client's own retrying turned off.
+def groq(settings: Settings, name: str | None = None, http_client: Any = None) -> GroqModel | None:
+    """Groq, the generation model unless another is named, with the client's own retrying
+    turned off.
 
     Left on, it sleeps through a 429 twice before anything else sees the error, so our pacer
     never learns the provider is full and never gets to apply its own margin.
+
+    Groq constrains every model used here to a strict JSON schema, but the profile Pydantic
+    AI picks for Qwen does not say so and refuses structured output outright. Declaring it
+    changes nothing for gpt-oss, whose profile already does.
     """
     if settings.groq_api_key is None:
         return None
-    client = AsyncGroq(api_key=settings.groq_api_key.get_secret_value(), max_retries=0)
-    return GroqModel(settings.groq_model, provider=GroqProvider(groq_client=client))
+    client = AsyncGroq(
+        api_key=settings.groq_api_key.get_secret_value(), max_retries=0, http_client=http_client
+    )
+    provider = GroqProvider(groq_client=client)
+    name = name or settings.groq_model
+    profile = merge_profile(
+        provider.model_profile(name),
+        ModelProfile(
+            supports_json_schema_output=True, json_schema_transformer=OpenAIJsonSchemaTransformer
+        ),
+    )
+    return GroqModel(name, provider=provider, profile=profile)
 
 
 def gemini(settings: Settings) -> GoogleModel | None:
@@ -99,9 +125,19 @@ def generation_model(settings: Settings) -> Model:
     return _chain(groq(settings), gemini(settings), ollama(settings, settings.grader_model))
 
 
-def grading_model(settings: Settings) -> Model:
-    """Answer grading: the local grader model, then Groq, then Gemini."""
-    return _chain(ollama(settings, settings.grader_model), groq(settings), gemini(settings))
+def grading_model(settings: Settings, spent: Mapping[str, tuple[int, int]] | None = None) -> Model:
+    """Answer grading: Qwen on Groq, then the local grader model, then Gemini.
+
+    Both cloud models are paced; `spent` is what each has used today, by model name, as for
+    generation.
+    """
+    spent = spent or {}
+    name = settings.groq_grading_model
+    return _chain(
+        _paced(groq(settings, name), "groq-grading", GROQ_QWEN_FREE, spent.get(name)),
+        ollama(settings, settings.grader_model),
+        _paced(gemini(settings), "gemini", GEMINI_FREE, spent.get(settings.gemini_model)),
+    )
 
 
 def paced_generation_model(

@@ -72,6 +72,48 @@ def test_a_big_request_waits_for_the_token_ceiling() -> None:
     assert time.slept == [60.0]
 
 
+def test_what_a_model_writes_is_held_to_its_own_ceiling() -> None:
+    """Groq caps what Qwen writes at 1,000 tokens a minute, apart from what it reads. An
+    answer is booked at the allowance until its real length is known."""
+    pacer, time = a_pacer(Limits(30, 8_000, 1_000, 200_000, output_tokens_per_minute=1_000))
+
+    async def scenario():
+        entry = await pacer.acquire(100)
+        pacer.record(entry, 700, output=600)
+        await pacer.acquire(100)
+
+    asyncio.run(scenario())
+
+    # 600 written plus another answer's allowance of 900 would pass 1,000.
+    assert time.slept == [60.0]
+
+
+def test_a_short_answer_leaves_room_for_the_next() -> None:
+    pacer, time = a_pacer(Limits(30, 8_000, 1_000, 200_000, output_tokens_per_minute=1_000))
+
+    async def scenario():
+        entry = await pacer.acquire(100)
+        pacer.record(entry, 150, output=50)
+        await pacer.acquire(100)
+
+    asyncio.run(scenario())
+
+    assert time.slept == []
+
+
+def test_a_provider_without_an_output_ceiling_is_not_held_to_one() -> None:
+    pacer, time = a_pacer(Limits(30, 8_000, 1_000, 200_000))
+
+    async def scenario():
+        for _ in range(3):
+            entry = await pacer.acquire(100)
+            pacer.record(entry, 1_000, output=900)
+
+    asyncio.run(scenario())
+
+    assert time.slept == []
+
+
 def test_the_estimate_is_corrected_by_what_was_really_spent() -> None:
     pacer, _ = a_pacer()
 

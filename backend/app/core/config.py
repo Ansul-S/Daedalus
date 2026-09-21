@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # Free cloud models (optional locally)
     groq_api_key: SecretStr | None = None
     groq_model: str = "openai/gpt-oss-120b"
+    # Grades answers. Not gpt-oss: the model family that writes the questions does not grade
+    # the answers to them.
+    groq_grading_model: str = "qwen/qwen3.8-27b"
     gemini_api_key: SecretStr | None = None
     # Pinned rather than the "-latest" alias: the alias moved to 3.8 Flash, which answered
     # 2 of 13 trial requests and whose profile drops the thinking setting.

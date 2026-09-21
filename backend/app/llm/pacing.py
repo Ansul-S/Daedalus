@@ -11,6 +11,8 @@ attempts or out of budget for the day.
 The trial measured what this is built on: Groq answers 30 requests and 8,000 tokens a minute
 on the free tier, its 429 names the tokens it wanted (the prompt plus 400 to 900, with
 max_tokens not reserved), and twice the retry-after it sent was too short to succeed on.
+Some models are also held to a ceiling on the tokens they write a minute: Groq caps Qwen 3.8
+at 1,000, and names that limit only in its 429s.
 """
 
 import asyncio
@@ -47,6 +49,8 @@ class Limits:
     tokens_per_minute: int
     requests_per_day: int
     tokens_per_day: int
+    # Only some models have one; None means the provider does not count output separately.
+    output_tokens_per_minute: int | None = None
 
 
 class QuotaExhausted(ModelAPIError):
@@ -102,7 +106,7 @@ class Pacer:
         self._clock = clock
         self._sleep = sleep
         self._margin = margin
-        # [when it started, tokens it cost] per request in the last minute
+        # [when it started, tokens it cost, tokens it wrote] per request in the last minute
         self._window: list[list[float]] = []
         self._requests_today, self._tokens_today = spent
         self._blocked_until = 0.0
@@ -125,9 +129,12 @@ class Pacer:
             waits = [self._blocked_until - now]
             requests = len(self._window)
             tokens = sum(entry[1] for entry in self._window)
+            written = sum(entry[2] for entry in self._window)
+            output_limit = self.limits.output_tokens_per_minute
             if (
                 requests + 1 > self.limits.requests_per_minute
                 or tokens + estimate > self.limits.tokens_per_minute
+                or (output_limit is not None and written + RESPONSE_ALLOWANCE > output_limit)
             ):
                 waits.append(self._window[0][0] + WINDOW - now if self._window else 0.0)
             if (wait := max(waits)) > 0:
@@ -135,16 +142,18 @@ class Pacer:
                 await self._sleep(wait)
                 continue
 
-            entry = [now, float(estimate)]
+            # The answer is booked at the allowance until its real length is known.
+            entry = [now, float(estimate), float(RESPONSE_ALLOWANCE)]
             self._window.append(entry)
             self._requests_today += 1
             self._tokens_today += estimate
             return entry
 
-    def record(self, entry: list[float], tokens: int) -> None:
-        """Correct the estimate booked by `acquire` once the real cost is known."""
+    def record(self, entry: list[float], tokens: int, output: int = 0) -> None:
+        """Correct the estimates booked by `acquire` once the real cost is known."""
         self._tokens_today += tokens - int(entry[1])
         entry[1] = float(tokens)
+        entry[2] = float(output)
 
     async def wait_out(self, exc: ModelHTTPError, attempt: int) -> float:
         """Sleep off a refusal, and hold anything else back for as long."""
@@ -188,6 +197,6 @@ class PacedModel(WrapperModel):
                 await self.pacer.wait_out(exc, attempt)
                 continue
             usage = response.usage
-            self.pacer.record(entry, usage.input_tokens + usage.output_tokens)
+            self.pacer.record(entry, usage.input_tokens + usage.output_tokens, usage.output_tokens)
             return response
         raise AssertionError("unreachable")
