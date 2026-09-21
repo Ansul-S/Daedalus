@@ -208,7 +208,7 @@ async def store_question(
         reference_answer=written.reference_answer,
         key_points=[point.model_dump() for point in written.key_points],
         misconceptions=written.misconceptions,
-        style=written.style,
+        style=generated.style,
         difficulty=written.difficulty,
         topic_id=topic_id,
         status="accepted" if validation.passed else "rejected",

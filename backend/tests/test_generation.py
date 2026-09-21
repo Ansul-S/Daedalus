@@ -10,6 +10,7 @@ from pydantic_ai.profiles import ModelProfile
 
 from app.db.models import Chunk
 from app.questions.generation import (
+    GeneratedQuestion,
     Source,
     generate_question,
     request,
@@ -126,7 +127,6 @@ def answer(quote: str) -> str:
     return json.dumps(
         {
             "question": "Why are the dot products scaled before the softmax?",
-            "style": "why_how",
             "difficulty": 3,
             "reference_answer": "Their magnitude grows with the key dimension, and a large "
             "softmax input leaves almost no gradient.",
@@ -169,7 +169,18 @@ def test_a_question_whose_quotes_hold_up_is_written_in_one_call() -> None:
     assert generated.question.question.startswith("Why are the dot products")
     assert generated.usage["requests"] == 1
     assert generated.model == "function:respond:"
-    assert generated.prompt_version == "generate-v2"
+    assert generated.prompt_version == "generate-v3"
+
+
+def test_a_question_is_filed_under_the_style_it_was_asked_for() -> None:
+    """The model is shown a style's brief, never its name, so a label it picked was a guess.
+    It is not asked for one: the question is filed under the style the task asked for."""
+    seen: list[list[ModelMessage]] = []
+
+    generated = asyncio.run(generate_question(writer([GOOD_QUOTE], seen), SOURCES, "tradeoffs"))
+
+    assert generated.style == "tradeoffs"
+    assert "style" not in GeneratedQuestion.model_json_schema()["properties"]
 
 
 def test_a_quote_that_is_not_in_the_sources_is_sent_back_once() -> None:

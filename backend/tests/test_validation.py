@@ -61,7 +61,6 @@ def sources_for(chunk_id: int) -> list[Source]:
 def a_generated(chunk_id: int, question: str = QUESTION, problem: str | None = None) -> Generated:
     written = GeneratedQuestion(
         question=question,
-        style="why_how",
         difficulty=3,
         reference_answer="Their magnitude grows with the key dimension, which flattens the "
         "softmax gradient.",
@@ -94,6 +93,7 @@ def a_generated(chunk_id: int, question: str = QUESTION, problem: str | None = N
             ),
         ],
         model="groq:openai/gpt-oss-120b",
+        style="why_how",
         usage={"requests": 1, "input_tokens": 1552, "output_tokens": 555},
     )
 

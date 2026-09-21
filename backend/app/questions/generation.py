@@ -1,11 +1,11 @@
 """Writing one interview question from a handful of source chunks.
 
-The model is given the chunks in delimiters, asked for one question in a named style, and
-made to answer in a fixed schema. Every key point it writes has to carry a quote copied from
-one of those chunks; when a quote turns out not to be in them, the whole conversation goes
-back with the failures named and the model gets one chance to fix it. That repair round cost
-about 3.5K tokens in the trial against 2.3K for a question that came out right the first
-time, and it took quote grounding from 20 of 24 to 25 of 25.
+The model is given the chunks in delimiters, asked for one question in a style described to
+it, and made to answer in a fixed schema. Every key point it writes has to carry a quote
+copied from one of those chunks; when a quote turns out not to be in them, the whole
+conversation goes back with the failures named and the model gets one chance to fix it. That
+repair round cost about 3.5K tokens in the trial against 2.3K for a question that came out
+right the first time, and it took quote grounding from 20 of 24 to 25 of 25.
 
 Structured output goes through a strict JSON schema. The same trial had Groq's own validator
 reject a tool call once, while every schema-constrained request came back valid.
@@ -28,7 +28,7 @@ from app.questions.grounding import QuoteCheck, check_quote
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "generate-v2"
+PROMPT_VERSION = "generate-v3"
 # Enough for a question with its answer and reasoning; a runaway answer would otherwise eat
 # a whole minute of the token budget.
 MAX_TOKENS = 3000
@@ -116,8 +116,9 @@ class KeyPoint(BaseModel):
 
 
 class GeneratedQuestion(BaseModel):
+    # No style: the model is shown a style's brief, never its name. Asked to name one anyway,
+    # it filed six of the seven questions it relabelled under why_how.
     question: str
-    style: Style
     difficulty: Literal[1, 2, 3, 4, 5]
     reference_answer: str
     key_points: list[KeyPoint] = Field(min_length=2, max_length=4)
@@ -139,6 +140,8 @@ class Generated:
     quotes: list[QuoteCheck]
     # The model that answered, which under a fallback chain is not always the first one
     model: str
+    # The style the question was asked in, which is what it is filed under
+    style: str
     prompt_version: str = PROMPT_VERSION
     usage: dict[str, int] = field(default_factory=dict)
     # 1 when the quotes were right the first time, 2 after one repair round
@@ -224,6 +227,7 @@ async def generate_question(
                 question=result.output,
                 quotes=quotes,
                 model=getattr(answered, "model_name", None) or model.model_name,
+                style=style,
                 usage=usage,
                 attempts=attempt,
             )

@@ -189,7 +189,6 @@ def a_question(messages: list[ModelMessage]) -> ModelResponse:
                 json.dumps(
                     {
                         "question": f"Why is it that {quote}?",
-                        "style": "why_how",
                         "difficulty": 3,
                         "reference_answer": f"Because {quote}.",
                         "key_points": [point, point | {"weight": 1}],
@@ -261,8 +260,12 @@ def test_a_run_writes_every_planned_question_and_files_it(sessions, embedder, li
     assert (job.status, job.progress) == ("done", "3 accepted, 0 rejected")
     assert job.error is None
     assert len(questions) == 3
-    # Every question is filed under the topic its chunk belongs to.
+    # Every question is filed under the topic its chunk belongs to, and the style it was asked in.
     assert {question.topic_id for question in questions} == {library["attention"]}
+    assert {question.id: question.style for question in questions} == {
+        task.question_id: task.style for task in tasks
+    }
+    assert sorted(task.style for task in tasks) == ["compare", "intuition", "why_how"]
 
 
 def test_a_run_says_which_question_it_is_writing(sessions, embedder, library) -> None:
