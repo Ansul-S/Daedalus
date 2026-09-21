@@ -16,6 +16,8 @@ from app.llm.pacing import QuotaExhausted
 from app.questions.batch import (
     TaskPlan,
     candidates,
+    failure_passages,
+    is_about_failure,
     partner_for,
     plan_tasks,
     run_job,
@@ -47,9 +49,13 @@ LOPSIDED = (
 # Six topics, each holding one passage from either source
 CROSSING = [(topic, topic * 10 + offset, offset + 1) for topic in range(1, 7) for offset in (0, 1)]
 
+# One source, seven topics of one passage each
+SINGLES = [(topic, topic * 10, 1) for topic in range(1, 8)]
+
 
 def test_passages_are_taken_a_source_and_a_topic_at_a_time() -> None:
-    plans = plan_tasks(FOUND, count=5)
+    # Every passage could take any style, so the rotation shows in full.
+    plans = plan_tasks(FOUND, count=5, failures={chunk for _, chunk, _ in FOUND})
     document_of = {chunk: document for _, chunk, document in FOUND}
 
     # Every source is asked about in turn, and within one the topic ring decides
@@ -106,6 +112,39 @@ def test_a_connection_question_joins_two_sources() -> None:
 )
 def test_a_second_passage_is_chosen_for_the_styles_that_want_one(style, rest, expected) -> None:
     assert partner_for(style, rest, document_id=1) == expected
+
+
+@pytest.mark.parametrize(
+    ("failures", "fifth"),
+    [
+        # It passes over the next two passages for the one about something going wrong...
+        ({70}, TaskPlan(chunk_ids=[70], style="failure_modes")),
+        # ...and with none to hand asks a plain question of the next passage instead.
+        (set(), TaskPlan(chunk_ids=[50], style="why_how")),
+    ],
+)
+def test_failure_modes_is_asked_only_of_a_passage_about_a_failure(failures, fifth) -> None:
+    """Asked of any passage, the style asked what goes wrong when something is left out, and
+    the passages mostly never say."""
+    plans = plan_tasks(SINGLES, count=5, failures=failures)
+
+    assert [plan.style for plan in plans[:4]] == ["why_how", "intuition", "why_how", "tradeoffs"]
+    assert plans[4] == fifth
+
+
+@pytest.mark.parametrize(
+    ("explains", "tags", "expected"),
+    [
+        ("describes limitations of simple RNNs regarding long-term memory", ["rnn"], True),
+        ("identifies gaps in current AI and RAG approaches for software testing", [], True),
+        # The tag says what the summary does not.
+        ("defines scaled dot-product attention", ["softmax", "vanishing gradient"], True),
+        ("defines vocabulary, tokens, and tokenization", ["tokenization"], False),
+        ("describes a five-layer prompt architecture", ["prompt engineering"], False),
+    ],
+)
+def test_a_passage_is_about_a_failure_when_its_tagging_says_so(explains, tags, expected) -> None:
+    assert is_about_failure(explains, tags) == expected
 
 
 def test_planning_stops_when_the_library_runs_out() -> None:
@@ -173,6 +212,22 @@ def test_only_chunks_worth_asking_about_are_candidates(sessions, corpus, library
     assert sorted(chunk for _, chunk, _ in found) == sorted(
         [corpus.scaling, corpus.positions, corpus.vanishing]
     )
+
+
+def test_the_passages_about_a_failure_are_read_from_their_tagging(sessions, corpus, library):
+    async def scenario():
+        async with sessions() as session, session.begin():
+            await session.execute(
+                update(ChunkTags)
+                .where(ChunkTags.chunk_id == corpus.vanishing)
+                .values(explains="why a simple RNN fails to carry information far back")
+            )
+        async with sessions() as session:
+            return await failure_passages(
+                session, [corpus.scaling, corpus.positions, corpus.vanishing]
+            )
+
+    assert asyncio.run(scenario()) == {corpus.vanishing}
 
 
 def a_question(messages: list[ModelMessage]) -> ModelResponse:

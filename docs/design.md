@@ -212,6 +212,7 @@ Retrieval and grading are implemented directly rather than through a RAG framewo
 - **Each provider keeps its own pace.** A 429 is not a reason to spend the next provider's quota: `PacedModel` holds a sliding 60-second window for requests and tokens and a running daily total, waits out a `retry-after` plus a margin, and only gives up on a provider when it has run out of attempts or of the day's budget. Groq's own client retrying is turned off, since it sleeps through a 429 before anything else sees it.
 - **A style that needs two passages picks a topic that can spare one.** Blind rotation meant `compare` and `connection` almost never fired, because most topics cover a single chunk, and quietly fell back to a plain question.
 - **A question is filed under the style it was asked in.** The request describes a style by its brief and never names it, yet the schema asked the model to name one: over the two milestone runs it relabelled seven questions, six of them as why and how, and six of the seven after a repair round. A count by style was counting its guess. The schema no longer has the field; the style is written from the task, the way the schema's `question` is written to `text`.
+- **Failure modes are asked only of a passage about a failure.** Asked of any passage, the style asked what goes wrong when something is left out, which the passages mostly never say: of the four milestone questions written from passages the rule below does not match, three were turned away as unanswerable. Whether a passage is about a failure is read from the tagger's summary of what it explains and from its tags, not from its text. Seven chunks of the library match and every one is about something going wrong, while the same words in the text also match a notebook that uses "What are the limitations mentioned?" as sample input. When the source whose turn it is has no such passage left, the question falls back to a plain one, as a comparison without a second passage does.
 - **Every source gets a fair share of a batch.** Taking the biggest topic first follows the shape of the library rather than the shape of the revision: the three biggest topics are all notebook retrieval, so twenty questions took twelve passages from the notebook and one from the shortest source. A batch now takes its next passage from the source asked about least so far, and the topic ring decides which passage of that source comes next.
 - **The answerability check reads for recall or explanation first.** Asking a model outright whether a question is trivia caught none of it in the trial; asking it to classify the question as "recall" or "explain", with examples, caught all four trivia questions with no false alarms.
 - **No second model call for a quote-support check.** `answer_agreement` records the cosine between the reference answer and the answer the checker wrote from the passages alone. It is recorded and judges nothing, and the milestone run says it should stay that way: over twenty questions the accepted ones scored 0.74 to 0.92 and the rejected ones 0.56 to 0.96, and the highest score of the run belonged to a question that was turned down.
@@ -608,7 +609,10 @@ prompt describes 1 to 5.
   repair round that named them could not help. Both are now judged by the match score.
   Re-judged that way, with every check replayed in order, the second run's own questions pass
   11 of 20 instead of 9.
-- **Failure modes and intuition** are the weakest styles and have not been looked at.
+- **Failure modes and intuition** were the weakest styles. Failure modes is now asked only of
+  a passage about a failure, which leaves it three of the passages still to be asked about.
+  Every intuition question turned down in the two runs was a duplicate; none was unanswerable
+  or trivia.
 - **The duplicate check compares a new question against everything accepted**, so the rate
   falls as the library grows. Twenty questions from 83 passages is already dense.
 

@@ -6,13 +6,15 @@ instead of spending the tokens again. Each task is committed as it finishes.
 
 Chunks are picked a source and a topic at a time, so twenty questions do not all come from
 one corner of the library, and the style rotates so they are not all "why does this work".
-A chunk that an accepted question already covers is left out, which makes a second run break
-new ground.
+A style only goes to a passage it can be asked of: a comparison to one with a second passage
+to hand, failure modes to one about something going wrong. A chunk that an accepted question
+already covers is left out, which makes a second run break new ground.
 """
 
 import logging
+import re
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -41,7 +43,19 @@ ROTATION = (
 )
 # Styles that need a second passage to be worth asking
 PAIRED = {"compare", "connection"}
+# Styles that need a passage about something going wrong. Asked of any passage, failure_modes
+# asks what goes wrong when something is left out: of the milestone questions written from
+# passages FAILURE does not match, three of four were turned away as unanswerable.
+ABOUT_FAILURE = {"failure_modes"}
 FALLBACK_STYLE = "why_how"
+# Matched against the tagger's summary of what a chunk explains and the tags it gave it. Seven
+# chunks of the library match and every one is about a failure; the same words in the text
+# itself also match a notebook that uses "What are the limitations mentioned?" as sample input.
+FAILURE = re.compile(
+    r"\b(limitation|problem|fail|vanish|explod|drawback|weakness|shortcoming|bottleneck"
+    r"|struggl|degrad|suffer|instabilit|unstabl|overfit|hallucinat|pitfall|issue|gaps?\b)",
+    re.IGNORECASE,
+)
 
 Reporter = Callable[[str], None]
 
@@ -90,6 +104,20 @@ async def candidates(
     return [(topic, chunk, document) for topic, chunk, document in rows.tuples()]
 
 
+def is_about_failure(explains: str, tags: list[str]) -> bool:
+    return FAILURE.search(" ".join([explains, *tags])) is not None
+
+
+async def failure_passages(session: AsyncSession, chunk_ids: Collection[int]) -> set[int]:
+    """The chunks among these that the tagger read as being about something going wrong."""
+    rows = await session.execute(
+        select(ChunkTags.chunk_id, ChunkTags.explains, ChunkTags.tags).where(
+            ChunkTags.chunk_id.in_(chunk_ids)
+        )
+    )
+    return {chunk for chunk, explains, tags in rows.tuples() if is_about_failure(explains, tags)}
+
+
 def partner_for(style: str, rest: list[tuple[int, int]], document_id: int) -> int | None:
     """A second passage for the styles that want one: another document for a question that
     joins two ideas up, any other passage on the topic for a comparison."""
@@ -100,7 +128,9 @@ def partner_for(style: str, rest: list[tuple[int, int]], document_id: int) -> in
     return None
 
 
-def plan_tasks(found: list[tuple[int, int, int]], count: int) -> list[TaskPlan]:
+def plan_tasks(
+    found: list[tuple[int, int, int]], count: int, *, failures: Collection[int] = frozenset()
+) -> list[TaskPlan]:
     """Take a passage from the source with the fewest questions so far, and within it from
     each topic in turn, biggest topic first, until the count is met.
 
@@ -112,7 +142,9 @@ def plan_tasks(found: list[tuple[int, int, int]], count: int) -> list[TaskPlan]:
 
     A style that wants two passages picks the next topic that can actually spare a second
     one, rather than taking whichever topic came up and quietly dropping to a plain question:
-    most topics cover a single chunk, so the blind rotation almost never paired anything.
+    most topics cover a single chunk, so the blind rotation almost never paired anything. A
+    question about failure modes looks round the ring the same way, for one of `failures`:
+    the passages about something going wrong.
     """
     by_topic: dict[int, list[tuple[int, int]]] = {}
     chunks_of: dict[int, set[int]] = {}
@@ -138,17 +170,28 @@ def plan_tasks(found: list[tuple[int, int, int]], count: int) -> list[TaskPlan]:
             spare, key=lambda document: (written[document], -left[document], document), default=None
         )
 
-    def take(style: str | None, document: int) -> tuple[int, list[tuple[int, int]], int] | None:
-        """The next topic round the ring holding a free passage of this source: the passage
-        to ask about, what is left in the topic to pair it with, and where to look next."""
+    def suits(style: str, chunk: int) -> bool:
+        return style not in ABOUT_FAILURE or chunk in failures
+
+    def take(style: str, document: int) -> tuple[int, list[tuple[int, int]], int] | None:
+        """The next topic round the ring holding a free passage of this source that suits the
+        style: the passage to ask about, what is left in the topic to pair it with, and where
+        to look next."""
         for step in range(len(order)):
             topic = order[(cursor + step) % len(order)]
             free = free_of(topic)
-            lead = next((index for index, pair in enumerate(free) if pair[1] == document), None)
+            lead = next(
+                (
+                    index
+                    for index, (chunk, owner) in enumerate(free)
+                    if owner == document and suits(style, chunk)
+                ),
+                None,
+            )
             if lead is None:
                 continue
             rest = free[:lead] + free[lead + 1 :]
-            if style is not None and partner_for(style, rest, document) is None:
+            if style in PAIRED and partner_for(style, rest, document) is None:
                 continue
             return free[lead][0], rest, (cursor + step + 1) % len(order)
         return None
@@ -159,11 +202,11 @@ def plan_tasks(found: list[tuple[int, int, int]], count: int) -> list[TaskPlan]:
             # Every source is used up, so the library cannot fill the count asked for.
             break
         style = ROTATION[len(plans) % len(ROTATION)]
-        chosen = take(style, document) if style in PAIRED else None
-        if chosen is None:
-            if style in PAIRED:
-                style = FALLBACK_STYLE
-            chosen = take(None, document)
+        chosen = take(style, document)
+        if chosen is None and style in PAIRED | ABOUT_FAILURE:
+            # No passage of this source suits the style, so it asks a plain question instead.
+            style = FALLBACK_STYLE
+            chosen = take(style, document)
         if chosen is None:
             break
         chunk, rest, cursor = chosen
@@ -179,7 +222,9 @@ async def start_run(
     session: AsyncSession, count: int, *, document_id: int | None = None
 ) -> tuple[Job, list[Task]]:
     """Write down a job and the tasks it means to work through."""
-    plans = plan_tasks(await candidates(session, document_id=document_id), count)
+    found = await candidates(session, document_id=document_id)
+    failures = await failure_passages(session, {chunk for _, chunk, _ in found})
+    plans = plan_tasks(found, count, failures=failures)
     job = Job(
         kind="generate",
         options={"count": count, "document_id": document_id, "planned": len(plans)},
