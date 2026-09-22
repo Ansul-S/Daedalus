@@ -10,7 +10,8 @@ covered, partial or missing, in the key points' order; how many of its claims co
 the sources; and, optionally, an overall score out of 10. The grader's score is compared with
 the score the same formula gives those hand labels (Spearman rank correlation; scores are
 trusted from 0.7), its key-point labels with the hand labels (Cohen's kappa), and its
-contradictions with the hand count.
+contradictions with the hand count. An answer keeps counting after its question is retired
+from practice: it was graded against the question as it stood, whose passages are still there.
 
 The answers are graded by the grader alone, with no fallback: a grade from another model
 would measure that model instead. When the provider says the day is spent, grading stops and
@@ -112,6 +113,15 @@ async def accepted_questions(session: AsyncSession) -> dict[int, Question]:
     return {question.id: question for question in rows}
 
 
+async def calibration_questions(session: AsyncSession) -> dict[int, Question]:
+    """The questions answers are graded against: those in the library, and those retired from
+    it since. No answer is written for a rejected one."""
+    rows = await session.scalars(
+        select(Question).where(Question.status.in_(("accepted", "retired"))).order_by(Question.id)
+    )
+    return {question.id: question for question in rows}
+
+
 def template(questions: dict[int, Question]) -> str:
     blocks = [HEADER]
     for question in questions.values():
@@ -147,7 +157,9 @@ def load(text: str, questions: dict[int, Question]) -> list[HandGrade]:
         question_id = entry.get("question")
         question = questions.get(question_id) if isinstance(question_id, int) else None
         if question is None:
-            problems.append(f"{where}: question {question_id!r} is not an accepted question")
+            problems.append(
+                f"{where}: question {question_id!r} is not an accepted or retired question"
+            )
             continue
         where = f"answer {number} (q{question_id})"
         answer = entry.get("text")
@@ -399,13 +411,14 @@ async def run(args: argparse.Namespace) -> int:
     folder = calibration_dir()
     answers_path, results_path = folder / "answers.toml", folder / "grades.jsonl"
     async with SessionFactory() as session:
-        questions = await accepted_questions(session)
         if args.command == "template":
+            questions = await accepted_questions(session)
             if write_template(answers_path, questions):
                 print(f"Wrote {answers_path} with {len(questions)} questions; add your answers.")
                 return 0
             print(f"{answers_path} is there already; it is not overwritten.")
             return 1
+        questions = await calibration_questions(session)
         if not answers_path.exists():
             print(f"No {answers_path}: start with `make calibrate ARGS=template`.")
             return 1

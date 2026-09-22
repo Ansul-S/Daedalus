@@ -17,6 +17,7 @@ from scripts.calibrate import (
     HandGrade,
     accepted_questions,
     agreement,
+    calibration_questions,
     grade_all,
     load,
     read_results,
@@ -133,7 +134,7 @@ def test_a_bad_answer_file_is_refused_with_every_problem_listed() -> None:
 
     problems = str(refused.value).splitlines()
     assert problems == [
-        "answer 1: question 99 is not an accepted question",
+        "answer 1: question 99 is not an accepted or retired question",
         "answer 2 (q5): needs 2 labels, one per key point",
         "answer 3 (q5): labels must be covered, partial or missing, not ['absent']",
         "answer 4 (q5): contradicted must be a whole number, 0 or more",
@@ -142,6 +143,29 @@ def test_a_bad_answer_file_is_refused_with_every_problem_listed() -> None:
         "answer 7 (q5): needs 2 labels, one per key point",
         "answer 7 (q5): contradicted must be a whole number, 0 or more",
     ]
+
+
+def test_an_answer_keeps_counting_once_its_question_is_retired(sessions, corpus) -> None:
+    async def scenario():
+        retired = await add_question(sessions, corpus.scaling, status="retired")
+        rejected = await add_question(sessions, corpus.scaling, status="rejected")
+        async with sessions() as session:
+            return (
+                retired,
+                rejected,
+                await calibration_questions(session),
+                await accepted_questions(session),
+            )
+
+    retired, rejected, questions, library = asyncio.run(scenario())
+    [grade] = load(answer_file(GOOD.replace("question = 5", f"question = {retired}")), questions)
+
+    assert list(questions) == [retired]
+    assert grade.question_id == retired
+    # No answer was written for a rejected question, and a new template lists only the library
+    with pytest.raises(AnswerFileError, match="not an accepted or retired question"):
+        load(answer_file(GOOD.replace("question = 5", f"question = {rejected}")), questions)
+    assert library == {}
 
 
 def test_a_file_that_is_not_toml_says_so() -> None:

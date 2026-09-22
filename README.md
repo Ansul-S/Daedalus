@@ -194,7 +194,7 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 
 - **In the file,** add each answer under its question, with one label per key point, how many
   of its claims contradict the sources and, optionally, your own score out of 10. The file's
-  header shows the format.
+  header shows the format. An answer keeps counting after its question is retired.
 - **The report** gives Spearman's ρ between the grader's scores and the scores your labels
   give (trusted from 0.7), the same against your own scores, Cohen's κ on the key-point
   labels, where the two disagree, and the largest differences.
@@ -218,6 +218,7 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 | `POST /questions/generate` | Plan and queue a batch: `{"count": 20}`, optionally `document_id`. Returns **202** with the job the worker will run |
 | `GET /questions` | The library, newest first. Filters: `status`, `topic_id`, `style`, `difficulty`, `document_id`, `source_updated`; `limit` and `offset`, with the total of the whole match |
 | `GET /questions/{id}` | One question with its sources, key points and quotes, misconceptions, validation report and token usage |
+| `PATCH /questions/{id}` | Correct or retire a question: any of `text`, `reference_answer`, `key_points` (two to four, replaced as a whole) and `status` (`accepted` or `retired`), with an optional `reason`. Returns the question as `GET` does |
 | `GET /topics` | The topic map with the passages and questions behind each topic |
 | `POST /questions/{id}/attempts` | Answer an accepted question: `{"answer": "…"}`, at most 8,000 characters, optionally with `seconds` taken and an interview `time_limit`. Returns **201** with the attempt, its grade and, once graded, when the question comes back |
 | `POST /attempts/{id}/grades` | Grade an attempt again, e.g. after a failed grade. Earlier grades are kept |
@@ -232,6 +233,11 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 - **Without Ollama,** hybrid search falls back to keyword search and says so in `warning`, and `mode=vector` returns 503.
 - **Starting a batch** needs the worker to be running, and returns the batch already in flight rather than planning a second one: two plans made at the same time would pick the same passages and pay for them twice. It returns **200** with no job when nothing is left to ask about, and 403 with `ENVIRONMENT=production`, since checking a question needs the local models.
 - **A question is served with everything behind it:** the passages it was written from, cited as search results are, what an answer has to cover with the quote that proves each point, and the report from every check it went through, whether it passed or failed.
+- **Correcting a question** holds it to the rule generation works to: each key point's quote has to be in the passage it names, one of the question's sources. Otherwise the edit is refused with 422, each problem pointing at its field, and nothing changes.
+  - A new question text is embedded again for the duplicate check. Without Ollama the question is left without an embedding, and the check passes over it.
+  - Every change is written into the question's validation report, with what it replaced and why.
+  - Retiring a question takes it out of practice and out of the duplicate check, and keeps it and its answers; `{"status": "accepted"}` puts it back where its schedule left off.
+  - A rejected question can't be edited (409).
 - **A grade is served with what it refers to:** each key point's text and weight next to its label, and each claim with the passage behind its verdict, cited and linked. A question that was rejected or retired can't be answered (404). Grading runs on the cloud models first, so unlike writing questions it also works with `ENVIRONMENT=production`.
 - **Practice follows a review schedule (FSRS).** An answer's first successful grade earns a rating: Again below 0.4, Hard below 0.7, Good below 0.9, Easy from 0.9, and Again whenever a claim contradicts the sources. The rating decides the practice day the question comes back, between 1 and 30 days later. `GET /practice/next` serves the question most overdue for review, then a new one from the weakest topic, then practice ahead on the question likeliest to have been forgotten. Grading an answer again doesn't reschedule it.
 
@@ -241,6 +247,7 @@ curl -F file=@notes.pdf 'localhost:8000/documents/upload?formulas=false'
 curl 'localhost:8000/search?q=why+scale+dot-product+attention&limit=5'
 curl -X POST localhost:8000/questions/generate -H 'Content-Type: application/json' -d '{"count": 20}'
 curl 'localhost:8000/questions?status=accepted&difficulty=3&limit=5'
+curl -X PATCH localhost:8000/questions/31 -H 'Content-Type: application/json' -d '{"status": "retired", "reason": "asks for a reported number"}'
 curl 'localhost:8000/questions/31/attempts?limit=5'
 ```
 
