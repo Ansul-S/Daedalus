@@ -1,4 +1,7 @@
+from zoneinfo import ZoneInfo
+
 import pytest
+from pydantic import ValidationError
 
 from app.core.checks import check_cloud_keys, is_installed
 from app.core.config import Settings
@@ -32,3 +35,11 @@ def test_untagged_model_names_match_latest() -> None:
     assert is_installed("qwen3.5", {"qwen3.5:latest"})
     assert is_installed("qwen3.5:9b", {"qwen3.5:9b"})
     assert not is_installed("qwen3.5:9b", {"qwen3.5:4b"})
+
+
+def test_practice_days_are_counted_in_a_known_time_zone() -> None:
+    assert Settings(_env_file=None).practice_timezone == "UTC"
+    settings = Settings(_env_file=None, practice_timezone="Asia/Kolkata")
+    assert settings.practice_zone == ZoneInfo("Asia/Kolkata")
+    with pytest.raises(ValidationError, match="unknown time zone"):
+        Settings(_env_file=None, practice_timezone="India/Standard")

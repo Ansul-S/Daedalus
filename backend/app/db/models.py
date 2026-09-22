@@ -1,8 +1,8 @@
 """Database tables: source documents, their searchable chunks and ingestion jobs, the topic
-map built over the chunks, the generated questions, and the answers given to them with their
-grades."""
+map built over the chunks, the generated questions, the answers given to them with their
+grades, and the review schedule those grades drive."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pgvector.sqlalchemy import HALFVEC
@@ -11,9 +11,11 @@ from sqlalchemy import (
     CheckConstraint,
     ColumnElement,
     Computed,
+    Date,
     DateTime,
     ForeignKey,
     Index,
+    SmallInteger,
     Text,
     UniqueConstraint,
     func,
@@ -378,11 +380,20 @@ class Attempt(Base):
         ForeignKey("questions.id", ondelete="CASCADE"), index=True
     )
     answer: Mapped[str] = mapped_column(Text)
+    # How long the answer took, and the limit it was given in interview mode
+    seconds: Mapped[float | None]
+    time_limit: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     question: Mapped[Question] = relationship()
     grades: Mapped[list["Grade"]] = relationship(
         back_populates="attempt", passive_deletes=True, order_by="Grade.id"
+    )
+    review: Mapped["Review | None"] = relationship(back_populates="attempt", passive_deletes=True)
+
+    __table_args__ = (
+        CheckConstraint("seconds >= 0", name="seconds_valid"),
+        CheckConstraint("time_limit > 0", name="time_limit_valid"),
     )
 
 
@@ -441,4 +452,62 @@ class Grade(Base):
             "OR (status = 'failed' AND error IS NOT NULL AND score IS NULL)",
             name="graded_or_failed",
         ),
+    )
+
+
+class Card(Base):
+    """A practised question's place in the review schedule: the memory model's state after
+    its last review, and the practice day the question is due again.
+
+    Only a question that has been answered and graded has a card; the others are new. A card
+    outlives its question's retirement, so a question put back in the library picks up where
+    it left off.
+    """
+
+    __tablename__ = "cards"
+
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True
+    )
+    # The FSRS card as py-fsrs writes it out: stability, difficulty, state and dates
+    state: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    # The practice day the question is due again. It is in `state` too, but only a column
+    # can be indexed.
+    due: Mapped[date] = mapped_column(Date, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Review(Base):
+    """What one answer did to the schedule: the rating its grade earned, and the practice day
+    the question is due after it. An attempt is reviewed once, by its first successful grade;
+    grading it again leaves the schedule alone."""
+
+    __tablename__ = "reviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("questions.id", ondelete="CASCADE"), index=True
+    )
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("attempts.id", ondelete="CASCADE"), unique=True
+    )
+    grade_id: Mapped[int] = mapped_column(ForeignKey("grades.id", ondelete="CASCADE"))
+    # FSRS rating: 1 Again, 2 Hard, 3 Good, 4 Easy
+    rating: Mapped[int] = mapped_column(SmallInteger)
+    # The grade's score the rating came from
+    score: Mapped[float]
+    # The practice day the answer counted for, and the one the question is due after it
+    day: Mapped[date] = mapped_column(Date)
+    due: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    attempt: Mapped[Attempt] = relationship(back_populates="review")
+
+    __table_args__ = (
+        CheckConstraint("rating BETWEEN 1 AND 4", name="rating_valid"),
+        CheckConstraint("score BETWEEN 0 AND 1", name="score_valid"),
+        # The shortest interval is a day
+        CheckConstraint("due > day", name="due_valid"),
     )

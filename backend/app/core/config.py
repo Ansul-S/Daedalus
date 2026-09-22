@@ -1,8 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -63,6 +64,26 @@ class Settings(BaseSettings):
     # pair that was really one question twice reached 0.85, while two different questions
     # about one concept reached 0.75, and nothing a reader would keep scored above 0.65.
     duplicate_similarity: float = 0.75
+
+    # Practice: the time zone a practice day is counted in, as an IANA name such as
+    # "Asia/Kolkata". A day starts at 04:00 there, so a session that runs past midnight
+    # still counts as one day.
+    practice_timezone: str = "UTC"
+
+    @field_validator("practice_timezone")
+    @classmethod
+    def known_time_zone(cls, name: str) -> str:
+        try:
+            ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(
+                f"unknown time zone {name!r}; use an IANA name such as Asia/Kolkata"
+            ) from exc
+        return name
+
+    @property
+    def practice_zone(self) -> ZoneInfo:
+        return ZoneInfo(self.practice_timezone)
 
     @property
     def local_chat_models(self) -> list[str]:

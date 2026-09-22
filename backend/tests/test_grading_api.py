@@ -143,6 +143,36 @@ def test_an_answer_has_to_say_something_and_not_too_much(client, sessions, corpu
     assert response.status_code == 422
 
 
+def test_an_answer_keeps_how_long_it_took(client, sessions, corpus) -> None:
+    question_id = asyncio.run(add_question(sessions, corpus.scaling))
+    use_grader(grading(corpus.scaling))
+
+    timed = {"answer": ANSWER, "seconds": 95.5, "time_limit": 180}
+    attempt = client.post(f"/questions/{question_id}/attempts", json=timed).json()
+    untimed = client.post(f"/questions/{question_id}/attempts", json={"answer": ANSWER}).json()
+
+    assert (attempt["seconds"], attempt["time_limit"]) == (95.5, 180)
+    assert client.get(f"/attempts/{attempt['id']}").json()["seconds"] == 95.5
+    assert (untimed["seconds"], untimed["time_limit"]) == (None, None)
+
+
+@pytest.mark.parametrize(
+    "timing",
+    [
+        pytest.param({"seconds": -1}, id="negative time"),
+        pytest.param({"seconds": 2 * 24 * 60 * 60}, id="two days"),
+        pytest.param({"time_limit": 0}, id="no time at all"),
+    ],
+)
+def test_an_answer_s_timing_has_to_make_sense(client, sessions, corpus, timing) -> None:
+    question_id = asyncio.run(add_question(sessions, corpus.scaling))
+    use_grader(grading(corpus.scaling))
+
+    response = client.post(f"/questions/{question_id}/attempts", json={"answer": ANSWER} | timing)
+
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize("state", ["rejected", "retired", None])
 def test_only_a_question_in_the_library_can_be_answered(client, sessions, corpus, state) -> None:
     question_id = asyncio.run(add_question(sessions, corpus.scaling, state)) if state else 999

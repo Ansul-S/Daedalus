@@ -5,14 +5,18 @@ it; such an attempt carries a failed grade saying why, and can be graded again l
 grade is shown with each key point's text next to its label, and each claim with the passage
 behind its verdict, cited and linked the way search results are.
 
+A graded answer also reschedules its question: the score earns a rating, and the rating
+decides the practice day the question comes back (`app.scheduling`). Only an attempt's first
+successful grade does this, so grading an answer again never counts it twice.
+
 Grading runs on cloud models first, so unlike writing questions it also works in production.
 The grading model is built once per process: its pacer has to remember the minute's requests
 across answers. It starts from what the day has already spent, and the day's allowance
 refills while the process runs, however long that is.
 """
 
-from datetime import datetime
-from typing import Annotated, Any
+from datetime import date, datetime
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
@@ -23,10 +27,11 @@ from sqlalchemy.orm import selectinload
 
 from app.api.search import citation, source_link
 from app.core.config import Settings, get_settings
-from app.db.models import Attempt, Chunk, Document, Grade, Question
+from app.db.models import Attempt, Chunk, Document, Grade, Question, Review
 from app.db.session import get_session
 from app.grading.grader import grade_attempt, spent_today
 from app.llm.models import grading_model
+from app.scheduling.schedule import rating_name, record_review
 
 router = APIRouter(tags=["grading"])
 
@@ -35,6 +40,10 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 # About two thousand tokens: room for a thorough answer, not for pasting in a paper
 MAX_ANSWER_CHARS = 8000
+# A day: a stopwatch left running overnight, not an answer
+MAX_SECONDS = 24 * 60 * 60
+# An hour: interview mode gives three minutes
+MAX_TIME_LIMIT = 60 * 60
 
 
 async def get_grader(request: Request, session: SessionDep, settings: SettingsDep) -> Model:
@@ -50,6 +59,10 @@ GraderDep = Annotated[Model, Depends(get_grader)]
 
 class AnswerIn(BaseModel):
     answer: str = Field(max_length=MAX_ANSWER_CHARS)
+    # How long the answer took, in seconds
+    seconds: float | None = Field(None, ge=0, le=MAX_SECONDS)
+    # The limit it was answered under in interview mode, in seconds
+    time_limit: int | None = Field(None, gt=0, le=MAX_TIME_LIMIT)
 
     @field_validator("answer")
     @classmethod
@@ -100,14 +113,27 @@ class GradeOut(BaseModel):
     created_at: datetime
 
 
+class ReviewOut(BaseModel):
+    rating: Literal["again", "hard", "good", "easy"]
+    # The practice day the answer counted for, and the one the question is due again
+    day: date
+    due: date
+    # Days from the one to the other
+    interval: int
+
+
 class AttemptOut(BaseModel):
     id: int
     question_id: int
     question: str
     answer: str
+    seconds: float | None
+    time_limit: int | None
     created_at: datetime
     # Oldest first; the last one is the latest
     grades: list[GradeOut]
+    # What the answer did to the schedule; null until it is graded
+    review: ReviewOut | None
 
 
 async def _cited(session: AsyncSession, grades: list[Grade]) -> dict[int, tuple[Document, Chunk]]:
@@ -178,6 +204,17 @@ def _grade_out(
     )
 
 
+def _review_out(review: Review | None) -> ReviewOut | None:
+    if review is None:
+        return None
+    return ReviewOut(
+        rating=rating_name(review.rating),
+        day=review.day,
+        due=review.due,
+        interval=(review.due - review.day).days,
+    )
+
+
 async def _attempts_out(session: AsyncSession, attempts: list[Attempt]) -> list[AttemptOut]:
     cited = await _cited(session, [grade for attempt in attempts for grade in attempt.grades])
     return [
@@ -186,17 +223,28 @@ async def _attempts_out(session: AsyncSession, attempts: list[Attempt]) -> list[
             question_id=attempt.question_id,
             question=attempt.question.text,
             answer=attempt.answer,
+            seconds=attempt.seconds,
+            time_limit=attempt.time_limit,
             created_at=attempt.created_at,
             grades=[_grade_out(grade, attempt.question, cited) for grade in attempt.grades],
+            review=_review_out(attempt.review),
         )
         for attempt in attempts
     ]
 
 
+# Everything an attempt is shown with
+ATTEMPT_PARTS = (
+    selectinload(Attempt.grades),
+    selectinload(Attempt.question),
+    selectinload(Attempt.review),
+)
+
+
 async def _attempt(session: AsyncSession, attempt_id: int) -> Attempt:
     attempt = await session.scalar(
         select(Attempt)
-        .options(selectinload(Attempt.grades), selectinload(Attempt.question))
+        .options(*ATTEMPT_PARTS)
         .where(Attempt.id == attempt_id)
         .execution_options(populate_existing=True)
     )
@@ -207,28 +255,41 @@ async def _attempt(session: AsyncSession, attempt_id: int) -> Attempt:
 
 @router.post("/questions/{question_id}/attempts", status_code=status.HTTP_201_CREATED)
 async def answer_question(
-    question_id: int, body: AnswerIn, session: SessionDep, grader: GraderDep
+    question_id: int,
+    body: AnswerIn,
+    session: SessionDep,
+    grader: GraderDep,
+    settings: SettingsDep,
 ) -> AttemptOut:
-    """Answer a question and have the answer graded. Only questions in the library can be
-    answered: one that was rejected or retired is not there to practise."""
+    """Answer a question, have the answer graded, and reschedule the question. Only questions
+    in the library can be answered: one that was rejected or retired is not there to practise."""
     question = await session.get(Question, question_id)
     if question is None or question.status != "accepted":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "question not found")
-    attempt = Attempt(question_id=question_id, answer=body.answer)
+    attempt = Attempt(
+        question_id=question_id,
+        answer=body.answer,
+        seconds=body.seconds,
+        time_limit=body.time_limit,
+    )
     session.add(attempt)
     # The answer is kept whatever becomes of its grading.
     await session.commit()
-    await grade_attempt(session, grader, attempt)
+    grade = await grade_attempt(session, grader, attempt)
+    await record_review(session, grade, settings.practice_zone)
     await session.commit()
     return (await _attempts_out(session, [await _attempt(session, attempt.id)]))[0]
 
 
 @router.post("/attempts/{attempt_id}/grades", status_code=status.HTTP_201_CREATED)
-async def grade_again(attempt_id: int, session: SessionDep, grader: GraderDep) -> AttemptOut:
+async def grade_again(
+    attempt_id: int, session: SessionDep, grader: GraderDep, settings: SettingsDep
+) -> AttemptOut:
     """Grade an attempt again, after a failed grade or with a changed grader. Every earlier
-    grade is kept."""
+    grade is kept. The first successful grade reschedules the question; later ones don't."""
     attempt = await _attempt(session, attempt_id)
-    await grade_attempt(session, grader, attempt)
+    grade = await grade_attempt(session, grader, attempt)
+    await record_review(session, grade, settings.practice_zone)
     await session.commit()
     return (await _attempts_out(session, [await _attempt(session, attempt_id)]))[0]
 
@@ -251,7 +312,7 @@ async def list_attempts(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "question not found")
     attempts = await session.scalars(
         select(Attempt)
-        .options(selectinload(Attempt.grades), selectinload(Attempt.question))
+        .options(*ATTEMPT_PARTS)
         .where(Attempt.question_id == question_id)
         .order_by(Attempt.created_at.desc(), Attempt.id.desc())
         .limit(limit)
