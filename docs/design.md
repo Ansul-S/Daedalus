@@ -215,6 +215,7 @@ Retrieval and grading are implemented directly rather than through a RAG framewo
 - **Failure modes are asked only of a passage about a failure.** Asked of any passage, the style asked what goes wrong when something is left out, which the passages mostly never say: of the four milestone questions written from passages the rule below does not match, three were turned away as unanswerable. Whether a passage is about a failure is read from the tagger's summary of what it explains and from its tags, not from its text. Seven chunks of the library match and every one is about something going wrong, while the same words in the text also match a notebook that uses "What are the limitations mentioned?" as sample input. When the source whose turn it is has no such passage left, the question falls back to a plain one, as a comparison without a second passage does.
 - **Every source gets a fair share of a batch.** Taking the biggest topic first follows the shape of the library rather than the shape of the revision: the three biggest topics are all notebook retrieval, so twenty questions took twelve passages from the notebook and one from the shortest source. A batch now takes its next passage from the source asked about least so far, and the topic ring decides which passage of that source comes next.
 - **The answerability check reads for recall or explanation first.** Asking a model outright whether a question is trivia caught none of it in the trial; asking it to classify the question as "recall" or "explain", with examples, caught all four trivia questions with no false alarms.
+- **Duplicates are judged on the question's text.** Comparing key points or reference answers instead was measured on the 19 duplicate rejections of the three milestone runs, each read as a repeat of its nearest accepted question or not, and it separated them worse. Two questions about the same design decision cite different facts, while different questions about one topic share background points. The highest-scoring question that was not a repeat scored above the lowest-scoring repeat by 0.07 on question text, by 0.17 on key points and by 0.21 on reference answers.
 - **No second model call for a quote-support check.** `answer_agreement` records the cosine between the reference answer and the answer the checker wrote from the passages alone. It is recorded and judges nothing, and the milestone run says it should stay that way: over twenty questions the accepted ones scored 0.74 to 0.92 and the rejected ones 0.56 to 0.96, and the highest score of the run belonged to a question that was turned down.
 - **Gemini is pinned to `gemini-3.5-flash`.** The `-latest` alias moved to 3.8 Flash, which returned 503 on 11 of 13 attempts, and Pydantic AI's profile for the alias drops thinking settings.
 
@@ -355,19 +356,25 @@ worth asking a question about (notebook 48 of 84, lecture notes 9 of 9, 1706.037
   one topic; at 0.85 "embedding model" splits from "text embeddings". **0.80** keeps topics
   that span documents, such as `text embeddings` over three of them.
 - **Writing a question** on Groq `gpt-oss-120b`: 1.8 s for one passage, 5.0 s for two.
-- **Cost, over two runs of 20:** **3.9K and 3.8K tokens per question** (77.4K over 34
-  requests, then 76.2K over 32). The estimate before building was 3–4.5K. A repair round
-  costs about 3.5K against 2.3K for a question that comes out right first time, and **14 of
-  the first 20 needed one, 12 of the second 20**.
+- **Cost, over three runs of 20:** **3.9K, 3.8K and 3.4K tokens per question** (77.4K over
+  34 requests, 76.2K over 32, then 67.3K over 30). The estimate before building was 3–4.5K. A
+  repair round costs about 3.5K against 2.3K for a question that comes out right first time,
+  and **14 of the first 20 needed one, 12 of the second and 10 of the third**.
   - A batch of 20 takes **12 minutes**, paced by Groq's 8,000 tokens a minute rather than by
-    the models themselves, and uses about 38% of the 200,000 free tokens in a day. Neither
-    run fell through to Gemini or to the local model.
+    the models themselves, and uses 34-39% of the 200,000 free tokens in a day. The first two
+    runs never fell through to Gemini or to the local model.
+  - The third took **18 minutes**. Two of its tasks took 171 s and 375 s, and one question
+    was written by Gemini. The pacer logs its waits and retries at a level `make generate`
+    does not show, so what held them up was not recorded.
 - **Quote grounding:** 59 of 63 quotes cleared the threshold of 95 in the first run, mean
   score 96.4; 56 of 64 in the second, mean 90.7. The failures are stitched quotes rather than
   invented ones: one ran two paragraphs together across a heading and a rule, scoring 93.5.
   Three more, all in the second run, were exact copies that stopped at a colon, which a rule
   since removed refused on sight. A quote refused before it was scored is recorded at 0, which
   is what pulls the second mean down: five of that run's quotes were never scored.
+  - In the third run, with trailing punctuation judged by the score, **57 of 63** cleared,
+    mean 97.0. The six that did not, in three questions, reworded their passage: their
+    closest matches were 59-92%.
 - **The answerability checker** on the twenty questions of a real run: **20 of 20 identical
   verdicts** when the same questions were checked again, so temperature 0 with a fixed seed
   holds. **Median 14.0 s** (8.1–27.6), against 9.0 s on the short labelled controls of the
@@ -508,7 +515,7 @@ Daedalus/
 |---|---|
 | 0 | `make check LIVE=1` passes: database, Ollama and all four models, Groq and Gemini each answer a test prompt. The home page lists every check as ok. |
 | 1 | One PDF, one arXiv paper and one notebook ingested; chunk counts look right and math and code survive; `/search` returns relevant chunks with page or cell citations. **Passed**; see below. |
-| 2 | 20 generated questions; at least 90% pass validation; 10 reviewed by hand. **Not met on the pass rate**: 35% of the first 20 and 45% of the second; see below. |
+| 2 | 20 generated questions; at least 90% pass validation; 10 reviewed by hand. **Not met on the pass rate**: 35%, 45% and 45% over three runs of 20; see below. |
 | 3 | Grader agreement with hand grades reaches Spearman ρ ≥ 0.7 before scores are trusted. |
 | 4 | A Playwright test covers upload → generate → practice → cited feedback → dashboard update. |
 | 5 | Retrieval report produced; DeepEval suite runs in CI (LLM-dependent tests on demand, to save free quota). |
@@ -553,38 +560,47 @@ Results, as hit@1 / hit@5 / MRR@5:
 - **Caveat:** 20 questions is a small set, and the same set guided the chunking and ranking choices, so these scores are optimistic. The Phase 5 evaluation, built from the generated questions, is the check that counts.
 
 ## Phase 2 milestone result
-Two batches of 20 questions were written from the four sources, the second after changing
-what the first one showed. **The pass rate target of 90% was not met: 7 of 20 passed in the
-first run (35%) and 9 of 20 in the second (45%).** Ten questions were exported for review by
-hand.
+Three batches of 20 questions were written from the four sources, each after changing what
+the one before it showed. **The pass rate target of 90% was not met: 7 of 20 passed in the
+first run (35%), 9 of 20 in the second (45%) and 9 of 20 in the third (45%).** Ten questions
+were exported for review by hand.
 
 Every rejection in the first run was read individually, and all thirteen were correct calls:
 the checks were not the problem. What they caught was the generator writing questions that
 could not stand up -- built on a figure a paper reports, on what a code cell does, or on a
 link between two passages that neither of them draws.
 
-**What each check turned down**, over the two runs. A question can fail more than one.
+**What each check turned down**, over the three runs. A question can fail more than one.
 
-| Check | Run 1 | Run 2 | |
-|---|---|---|---|
-| trivia (read as recall, not explanation) | 6 | **1** | the prompt now forbids questions built on what a source reports |
-| answerable (the checker cannot answer it) | 5 | **1** | the same change, plus a connection style that asks about the shared idea |
-| duplicate | 5 | 5 | the threshold moved from 0.7 to 0.75, but the library it compares against had grown |
-| quotes | 4 | **7** | the remaining failure, and now the largest |
+| Check | Run 1 | Run 2 | Run 3 | |
+|---|---|---|---|---|
+| trivia (read as recall, not explanation) | 6 | **1** | 2 | the prompt now forbids questions built on what a source reports |
+| answerable (the checker cannot answer it) | 5 | **1** | 2 | the same change, plus a connection style that asks about the shared idea |
+| duplicate | 5 | 5 | **9** | the largest cause by the third run; no threshold separates the repeats (below) |
+| quotes | 4 | **7** | 3 | from the third run on, trailing punctuation is judged by the score; the three left reworded their passage |
 
-**By source** (each run planned five questions per source, and got them): the second run
-accepted 2, 3, 2 and 2 from the notebook, the lecture notes, 1706.03762 and 2510.10824. The
-first accepted 2, 3, 1 and 1. Spreading a batch over the sources costs pass rate -- the
-notebook alone holds more than half the passages worth asking about, and it is the richest --
-but a milestone measured on one source would say nothing about the other three.
+**14 of the third run's 20 passed every check but the duplicate one** (9 and 11 in the first
+two, as they were judged at the time), and five of its questions were turned away for being
+duplicates and nothing else.
+
+**By source:** the first two runs planned five questions per source and got them. The second
+accepted 2, 3, 2 and 2 from the notebook, the lecture notes, 1706.03762 and 2510.10824; the
+first 2, 3, 1 and 1. The third found three passages of the lecture notes left to ask about and
+planned 6, 3, 6 and 5, of which it accepted 1, 2, 4 and 2: five of the notebook's six were
+near-duplicates of one broad notebook question already accepted. Spreading a batch over the
+sources costs pass rate -- the notebook alone holds more than half the passages worth asking
+about, and it is the richest -- but a milestone measured on one source would say nothing about
+the other three.
 
 **By style, second run:** trade-offs 3 of 3, why and how 2 of 3, comparison 1 of 3,
 connection 1 of 3, intuition 1 of 3, paper 1 of 2, failure modes 0 of 3. The model relabels a
 style it was asked for when it disagrees: every connection question and both paper questions
-came back under another name. Difficulty never left 2 and 3 in either run, although the
-prompt describes 1 to 5.
+came back under another name. **Third run**, with every question filed under the style it was
+asked in: paper 2 of 2, connection 1 of 1, why and how 3 of 7, intuition, comparison and
+trade-offs 1 of 3 each, failure modes 0 of 1. Difficulty never left 2 and 3 in any of the
+three runs, although the prompt describes 1 to 5.
 
-**What the run settled:**
+**What the first two runs settled:**
 - **`duplicate_similarity` was 0.7, and it was too tight.** Two questions in the first run
   were turned away as duplicates that were not: "What limitation of recurrent
   sequence-to-sequence models does the Transformer overcome?" scored 0.707 against "When
@@ -602,19 +618,36 @@ prompt describes 1 to 5.
   9.0 s on the short controls of the trial, because a real question carries one or two whole
   passages. A 9B would be slower on 16 GB with no accuracy argument behind it.
 
-**What is left to close the gap:**
-- **Quotes are now the main cause.** Of the seven in the second run, three stopped at a colon
+**What the second run left to close the gap:**
+- **Quotes were the main cause.** Of the seven in the second run, three stopped at a colon
   and one kept the ellipsis that the source itself writes in `(x_1, ..., x_n)`. All four were
   copied character for character: the check refused the colon and the ellipsis on sight, so a
   repair round that named them could not help. Both are now judged by the match score.
   Re-judged that way, with every check replayed in order, the second run's own questions pass
-  11 of 20 instead of 9.
+  11 of 20 instead of 9. The third run had no such failures.
 - **Failure modes and intuition** were the weakest styles. Failure modes is now asked only of
-  a passage about a failure, which leaves it three of the passages still to be asked about.
-  Every intuition question turned down in the two runs was a duplicate; none was unanswerable
-  or trivia.
+  a passage about a failure, which leaves it three of the passages still to be asked about;
+  the one such question in the third run was turned down as trivia. Every intuition question
+  turned down in the three runs was a duplicate; none was unanswerable or trivia.
 - **The duplicate check compares a new question against everything accepted**, so the rate
-  falls as the library grows. Twenty questions from 83 passages is already dense.
+  falls as the library grows. The library is not used up, though: the 25 accepted questions
+  were written from 30 of the 83 passages worth asking about.
+
+**What the third run settled:**
+- **Duplicates are the main cause, and no threshold fixes them.** Read pair by pair, 7 of the
+  19 duplicate rejections of the three runs ask what an accepted question already asks, and
+  12 ask something else. Their similarities overlap: the repeats scored 0.783 to 0.907 and the
+  others 0.707 to 0.853, so the third run turned away a different question at 0.853 while a
+  repeat scored 0.787. `duplicate_similarity` stays at 0.75, and comparing key points or
+  reference answers instead separates the two worse (see the
+  [generation decisions](#question-generation-decisions)).
+- **Most repeats share one half of a compound question.** 16 of the 25 accepted questions
+  join two questions ("…, and how does it decide which answer spans are better?"), which the
+  prompt asks the model not to do and no check enforces, and 5 of the 7 repeats repeat one
+  half of one. A compound question also stands in the way of more than one question: the five
+  notebook questions of the third run that were turned away all ran into the same one.
+- **Phase 2 stops here, at 45%.** Holding the generator to one question per question is the
+  change to try first when question generation is taken up again.
 
 ## References
 - Groq limits: https://console.groq.com/docs/rate-limits · models: https://console.groq.com/docs/models
