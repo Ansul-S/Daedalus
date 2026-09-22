@@ -2,9 +2,9 @@
 
 AI/ML interview practice built on your own study material. Daedalus generates conceptual interview questions from your PDFs, Jupyter notebooks and arXiv papers, then grades your answers against those same sources, with citations.
 
-Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work.
+Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work and fast grading.
 
-**Status:** Phase 1 (ingestion and retrieval) and Phase 2 (question generation) are built. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages, checked against them and served through the API. Next is Phase 3, grading answers against the same sources. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**Status:** Phases 1–3 are built: ingestion and retrieval, question generation, and grading. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages and checked against them. Answers are graded against the same passages, every key point labelled and every claim checked against a cited source, and on 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.96). Next is Phase 4, the practice app. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
 
 ## Prerequisites (macOS)
 
@@ -13,7 +13,7 @@ Everything runs on free resources: open-source models on your Mac (Ollama), plus
 
 ## Setup
 
-1. **Configuration.** `cp env.example .env`, then add free API keys (optional, but recommended for question generation):
+1. **Configuration.** `cp env.example .env`, then add free API keys (optional, but recommended: question generation and grading use them first):
    - Groq: https://console.groq.com/keys
    - Google AI Studio: https://aistudio.google.com/apikey (free-tier prompts are used to improve Google's products)
 
@@ -68,8 +68,10 @@ Downloads and uploads are kept under `data/` (gitignored; `DATA_DIR` moves it):
 ```
 data/
 ├── uploads/<sha256>.pdf, .ipynb   each file stored once, named by its content hash
-└── arxiv/<id>/                    metadata.json, and v<N>.html (ar5iv.html from the fallback
-                                   site) or v<N>.pdf; v<N>.no-html records a version without HTML
+├── arxiv/<id>/                    metadata.json, and v<N>.html (ar5iv.html from the fallback
+│                                  site) or v<N>.pdf; v<N>.no-html records a version without HTML
+└── calibration/                   answers.toml, your hand-graded answers, and grades.jsonl,
+                                   the grader's grades of them (see make calibrate)
 ```
 
 ## Generating questions
@@ -147,6 +149,62 @@ says why.
 | trivia | that model reads it as recalling a fact rather than explaining something |
 | duplicate | it is within `DUPLICATE_SIMILARITY` of a question already accepted |
 
+## Grading answers
+
+Answer a question from the library, and the answer is graded against the passages the
+question was written from:
+
+```sh
+curl -X POST localhost:8000/questions/31/attempts -H 'Content-Type: application/json' \
+  -d '{"answer": "An RNN carries a hidden state from one step to the next, so each word is read in the light of the ones before it."}'
+```
+
+The grader labels what it sees, and the score is worked out from the labels:
+
+| Part of a grade | What it says |
+|---|---|
+| key points | each one covered, partial or missing, with the words of the answer that show it |
+| claims | each claim supported or contradicted by a passage, which is cited and linked the way search results are, or unverified when no passage addresses it |
+| score | the key points' weighted coverage (covered 1, partial 0.5), less 0.15 for each contradicted claim, never below 0 |
+| clarity | 1 to 5 for how clearly the answer is written, apart from what it says |
+| feedback | strengths, gaps, errors, a model answer drawn from the passages, and a follow-up question |
+
+- **An unverified claim costs nothing.** The passages don't cover it, which doesn't make it
+  wrong.
+- **Qwen 3.8 on Groq grades,** in about 2 s. The free tier holds it to 1,000 written tokens a
+  minute, so a second answer within the same minute waits its turn. Without Groq the local
+  `qwen3.5:9b` grades (over a minute an answer), then Gemini; gpt-oss, which writes the
+  questions, never grades the answers to them. Answers are sent to Groq.
+- **An answer is kept whatever happens to its grading.** When no model can grade it, it gets
+  a failed grade that says why, and `POST /attempts/{id}/grades` grades it again. Every grade
+  is kept.
+- **The answer is untrusted text.** Instructions inside it, such as a request for full
+  marks, are ignored.
+
+### Checking the grader against your own grades
+
+`make calibrate` measures how far the grader agrees with grades given by hand. It needs
+`GROQ_API_KEY`.
+
+```sh
+make calibrate ARGS=template   # write data/calibration/answers.toml, listing every accepted question
+make calibrate                 # grade the answers not graded yet, then report
+make calibrate ARGS=report     # report on the grades already made, without grading
+```
+
+- **In the file,** add each answer under its question, with one label per key point, how many
+  of its claims contradict the sources and, optionally, your own score out of 10. The file's
+  header shows the format.
+- **The report** gives Spearman's ρ between the grader's scores and the scores your labels
+  give (trusted from 0.7), the same against your own scores, Cohen's κ on the key-point
+  labels, where the two disagree, and the largest differences.
+- **Grading uses Groq's Qwen alone,** about one answer a minute: a grade from a fallback model
+  would measure that model instead. When Groq says the day's allowance is spent, grading
+  stops and the next run carries on.
+- **Grades are kept** in `data/calibration/grades.jsonl`, per answer and prompt version, so a
+  second run grades only what is new. Both files are personal practice data and stay out of
+  the repository.
+
 ## API
 
 | Endpoint | Purpose |
@@ -161,6 +219,10 @@ says why.
 | `GET /questions` | The library, newest first. Filters: `status`, `topic_id`, `style`, `difficulty`, `document_id`, `source_updated`; `limit` and `offset`, with the total of the whole match |
 | `GET /questions/{id}` | One question with its sources, key points and quotes, misconceptions, validation report and token usage |
 | `GET /topics` | The topic map with the passages and questions behind each topic |
+| `POST /questions/{id}/attempts` | Answer an accepted question: `{"answer": "…"}`, at most 8,000 characters. Returns **201** with the attempt and its grade |
+| `POST /attempts/{id}/grades` | Grade an attempt again, e.g. after a failed grade. Earlier grades are kept |
+| `GET /attempts/{id}` | An attempt with every grade it was given, oldest first |
+| `GET /questions/{id}/attempts` | The answers given to a question, newest first, with their grades; `limit` (at most 100) and `offset` |
 
 - **Adding material.** Both `POST` endpoints return **202** while the document's job is queued or running, and **200** when there is nothing to wait for because the document is already ingested.
   - A file over `MAX_UPLOAD_MB` gets 413; any other file type gets 415.
@@ -169,6 +231,7 @@ says why.
 - **Without Ollama,** hybrid search falls back to keyword search and says so in `warning`, and `mode=vector` returns 503.
 - **Starting a batch** needs the worker to be running, and returns the batch already in flight rather than planning a second one: two plans made at the same time would pick the same passages and pay for them twice. It returns **200** with no job when nothing is left to ask about, and 403 with `ENVIRONMENT=production`, since checking a question needs the local models.
 - **A question is served with everything behind it:** the passages it was written from, cited as search results are, what an answer has to cover with the quote that proves each point, and the report from every check it went through, whether it passed or failed.
+- **A grade is served with what it refers to:** each key point's text and weight next to its label, and each claim with the passage behind its verdict, cited and linked. A question that was rejected or retired can't be answered (404). Grading runs on the cloud models first, so unlike writing questions it also works with `ENVIRONMENT=production`.
 
 ```sh
 curl -X POST localhost:8000/documents/arxiv -H 'Content-Type: application/json' -d '{"arxiv_id": "1706.03762"}'
@@ -176,6 +239,7 @@ curl -F file=@notes.pdf 'localhost:8000/documents/upload?formulas=false'
 curl 'localhost:8000/search?q=why+scale+dot-product+attention&limit=5'
 curl -X POST localhost:8000/questions/generate -H 'Content-Type: application/json' -d '{"count": 20}'
 curl 'localhost:8000/questions?status=accepted&difficulty=3&limit=5'
+curl 'localhost:8000/questions/31/attempts?limit=5'
 ```
 
 ## Commands
@@ -190,6 +254,7 @@ curl 'localhost:8000/questions?status=accepted&difficulty=3&limit=5'
 | `make topics` | Tags every chunk with the local model and clusters the tags into topics |
 | `make generate N=20` | Writes questions from the topic map (see [Generating questions](#generating-questions)) |
 | `make worker` | Processes jobs queued through the API, both ingestion and question batches |
+| `make calibrate` | Grades hand-graded answers and measures how far the grader agrees (see [Checking the grader](#checking-the-grader-against-your-own-grades)) |
 | `make check` | Checks the database and its migrations, Ollama and its models, and API keys. `make check LIVE=1` also sends a one-word prompt to each model. |
 | `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`). |
 | `make test-slow` | The end-to-end PDF test, which loads Docling's models |
@@ -208,8 +273,8 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Local model server |
 | `GRADER_MODEL`, `HELPER_MODEL`, `SECOND_OPINION_MODEL`, `EMBEDDING_MODEL` | `qwen3.5:9b`, `qwen3.5:4b`, `gemma4:12b`, `qwen3-embedding:0.6b` | Local models |
 | `EMBEDDING_NUM_CTX` | `2048` | Context size of embedding requests. It keeps the embedding model at about 2 GB (2.9 GB at 16K) and still fits an 800-token chunk with its title and label. |
-| `GROQ_API_KEY`, `GEMINI_API_KEY` | empty | Free cloud models (`GROQ_MODEL`, `GEMINI_MODEL` choose which) |
-| `DATA_DIR` | `data/` in the repository | Uploaded files and arXiv downloads |
+| `GROQ_API_KEY`, `GEMINI_API_KEY` | empty | Free cloud models. `GROQ_MODEL` (`openai/gpt-oss-120b`) writes questions, `GROQ_GRADING_MODEL` (`qwen/qwen3.8-27b`) grades answers, and `GEMINI_MODEL` (`gemini-3.5-flash`) stands in for either |
+| `DATA_DIR` | `data/` in the repository | Uploaded files, arXiv downloads and calibration files |
 | `MAX_UPLOAD_MB` | `50` | Largest accepted file |
 | `CHUNK_MIN_TOKENS`, `CHUNK_MAX_TOKENS` | `300`, `800` | Chunk size range. Documents keep their chunks until they are ingested again with `--force`. |
 | `TOKENIZER_MODEL` | `Qwen/Qwen3-Embedding-0.6B` | Tokenizer that measures chunk sizes: the embedding model's own |
@@ -220,19 +285,21 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 
 ```
 backend/          FastAPI app (uv)
-  app/api/        HTTP routes: health, documents and jobs, search, questions and topics
+  app/api/        HTTP routes: health, documents and jobs, search, questions and topics,
+                  attempts and grades
   app/core/       settings, setup checks
   app/db/         tables (SQLAlchemy) and Alembic migrations
+  app/grading/    grading an answer against its question's sources, and scoring it
   app/ingest/     parsers (PDF, arXiv, notebooks), chunking, file storage, job queue, pipeline
   app/llm/        model routing, per-provider pacing, embeddings
   app/questions/  concept tags, topics, generation, quote grounding, validation, batch runs
   app/retrieval/  hybrid search and rank fusion
-  scripts/        setup check, ingest, worker, topics and generate commands
+  scripts/        setup check, ingest, worker, topics, generate and calibrate commands
   tests/
 frontend/         Next.js (App Router, TypeScript, Tailwind)
 db/init/          SQL that runs when the database is first created (enables pgvector)
 docs/             Design, decisions, measurements and roadmap
-data/             Your material, uploads and downloads (not committed)
+data/             Your material, uploads, downloads and calibration answers (not committed)
 ```
 
 ## Model routing
@@ -240,11 +307,11 @@ data/             Your material, uploads and downloads (not committed)
 `backend/app/llm/models.py` decides which model does what. Pydantic AI's `FallbackModel` moves to the next model if one fails:
 
 - **Question generation:** Groq → Gemini → local `qwen3.5:9b`
-- **Grading:** local `qwen3.5:9b` → Groq → Gemini
+- **Grading:** Groq `qwen/qwen3.8-27b` → local `qwen3.5:9b` → Gemini. gpt-oss, which writes the questions, never grades the answers to them.
 - **Tagging chunks and checking questions:** local `qwen3.5:4b` only, with no fallback. Both run over the whole library, so they stay off the cloud quotas, and both run with thinking off, temperature 0 and a fixed seed, which makes them repeatable.
 - With `ENVIRONMENT=production` (free cloud hosting), Ollama is skipped and only cloud models are used.
 
-In a batch, each cloud model also keeps its own pace: a sliding window of requests and tokens, a running daily total, and a wait when the provider says `retry-after`. A provider that is briefly full is waited out rather than abandoned, so a 429 doesn't spend the next provider's quota.
+In a batch and when grading, each cloud model also keeps its own pace: a sliding window of requests and tokens (and, for Qwen on Groq, of the tokens it writes), a running daily total, and a wait when the provider says `retry-after`. A provider that is briefly full is waited out rather than abandoned, so a 429 doesn't spend the next provider's quota; one that says the day's allowance is spent is skipped, and the next model takes over.
 
 ## Dependency safety
 
