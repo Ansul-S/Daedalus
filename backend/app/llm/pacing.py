@@ -13,6 +13,12 @@ on the free tier, its 429 names the tokens it wanted (the prompt plus 400 to 900
 max_tokens not reserved), and twice the retry-after it sent was too short to succeed on.
 Some models are also held to a ceiling on the tokens they write a minute: Groq caps Qwen 3.8
 at 1,000, and names that limit only in its 429s.
+
+The day's allowance comes back the same way, only slower. Refused at 199,758 of its 200,000
+tokens a day for a request of 2,059, Groq named a wait of 13 min 5 s: the 1,817 tokens
+missing, at a day's allowance spread over 24 hours. A pacer's day refills at that rate too,
+so one that lives for days -- the API keeps one for as long as it runs -- neither counts
+yesterday against today nor gives up on a provider for good after one refusal.
 """
 
 import asyncio
@@ -31,6 +37,8 @@ from pydantic_ai.settings import ModelSettings
 log = logging.getLogger(__name__)
 
 WINDOW = 60.0
+# The time a day's allowance takes to come back in full
+DAY = 24 * 60 * 60.0
 # What a provider charges for the answer on top of the prompt, read off the trial's 429 bodies
 RESPONSE_ALLOWANCE = 900
 # Added to whatever delay the provider asks for: twice in the trial its own figure was short
@@ -92,10 +100,12 @@ def asked_delay(exc: ModelHTTPError) -> float | None:
 
 
 class Pacer:
-    """One provider's budget: a minute window for its rates and a running total for its day.
+    """One provider's budget: a minute window for its rates, and a day's allowance that comes
+    back at a day's worth every 24 hours.
 
     The day starts from what was already spent in it: a pacer is built for every batch, and
-    without that a second batch in a day would think it had the whole day to itself.
+    without that a second batch in a day would think it had the whole day to itself. That
+    spend is taken as if it had all just happened, which errs towards stopping early.
     """
 
     def __init__(
@@ -115,22 +125,34 @@ class Pacer:
         self._margin = margin
         # [when it started, tokens it cost, tokens it wrote] per request in the last minute
         self._window: list[list[float]] = []
-        self._requests_today, self._tokens_today = spent
+        self._requests_spent, self._tokens_spent = spent
+        # How much of the day's allowance is taken as of `_as_of`; it shrinks as the provider
+        # gives the allowance back.
+        self._day_requests, self._day_tokens = float(spent[0]), float(spent[1])
+        self._as_of = clock()
         self._blocked_until = 0.0
 
     @property
     def spent(self) -> tuple[int, int]:
-        """Requests and tokens spent today."""
-        return self._requests_today, self._tokens_today
+        """Requests and tokens spent, counting what the day had spent before this pacer."""
+        return self._requests_spent, self._tokens_spent
+
+    def _refill(self, now: float) -> None:
+        """Give back what the provider has refilled since the day was last looked at."""
+        share = max(0.0, now - self._as_of) / DAY
+        self._as_of = now
+        self._day_requests = max(0.0, self._day_requests - self.limits.requests_per_day * share)
+        self._day_tokens = max(0.0, self._day_tokens - self.limits.tokens_per_day * share)
 
     async def acquire(self, estimate: int) -> list[float]:
         """Wait until the provider has room, then book the request in. Returns its entry."""
         while True:
             now = self._clock()
             self._window = [entry for entry in self._window if entry[0] > now - WINDOW]
-            if self._requests_today >= self.limits.requests_per_day:
+            self._refill(now)
+            if self._day_requests + 1 > self.limits.requests_per_day:
                 raise QuotaExhausted(self.name, f"{self.name} is out of requests for today")
-            if self._tokens_today + estimate > self.limits.tokens_per_day:
+            if self._day_tokens + estimate > self.limits.tokens_per_day:
                 raise QuotaExhausted(self.name, f"{self.name} is out of tokens for today")
 
             waits = [self._blocked_until - now]
@@ -152,18 +174,25 @@ class Pacer:
             # The answer is booked at the allowance until its real length is known.
             entry = [now, float(estimate), float(RESPONSE_ALLOWANCE)]
             self._window.append(entry)
-            self._requests_today += 1
-            self._tokens_today += estimate
+            self._requests_spent += 1
+            self._tokens_spent += estimate
+            self._day_requests += 1
+            self._day_tokens += estimate
             return entry
 
     def exhaust(self) -> None:
-        """The provider says the day is spent, whatever this pacer counted: nothing more
-        goes to it today."""
-        self._requests_today = max(self._requests_today, self.limits.requests_per_day)
+        """The provider says the day is spent, whatever this pacer counted: nothing more goes
+        to it until a request's worth of the day has come back."""
+        self._refill(self._clock())
+        self._day_requests = max(self._day_requests, float(self.limits.requests_per_day))
+        self._day_tokens = max(self._day_tokens, float(self.limits.tokens_per_day))
 
     def record(self, entry: list[float], tokens: int, output: int = 0) -> None:
         """Correct the estimates booked by `acquire` once the real cost is known."""
-        self._tokens_today += tokens - int(entry[1])
+        self._refill(self._clock())
+        correction = tokens - int(entry[1])
+        self._tokens_spent += correction
+        self._day_tokens = max(0.0, self._day_tokens + correction)
         entry[1] = float(tokens)
         entry[2] = float(output)
 
@@ -205,7 +234,8 @@ class PacedModel(WrapperModel):
             except ModelHTTPError as exc:
                 self.pacer.record(entry, 0)
                 if refused_for_the_day(exc):
-                    # Waiting out the delay it names would only be refused again.
+                    # The delay it names is the day coming back a request at a time: minutes
+                    # for this one, and a batch's worth only hours later.
                     self.pacer.exhaust()
                     raise QuotaExhausted(
                         self.pacer.name, f"{self.pacer.name} says it is out of quota for today"

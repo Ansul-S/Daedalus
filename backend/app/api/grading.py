@@ -7,7 +7,8 @@ behind its verdict, cited and linked the way search results are.
 
 Grading runs on cloud models first, so unlike writing questions it also works in production.
 The grading model is built once per process: its pacer has to remember the minute's requests
-across answers, and it starts from what the day has already spent.
+across answers. It starts from what the day has already spent, and the day's allowance
+refills while the process runs, however long that is.
 """
 
 from datetime import datetime

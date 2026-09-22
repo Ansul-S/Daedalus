@@ -152,6 +152,20 @@ def test_the_day_starts_from_what_earlier_batches_spent() -> None:
     assert pacer.spent == (3, 3_900)
 
 
+def test_a_pacer_that_lives_for_days_does_not_count_yesterday_against_today() -> None:
+    """The API keeps one grading pacer for as long as it runs, which can be days."""
+    time = FakeTime()
+    pacer = Pacer("groq", LIMITS, spent=(5, 4_000), clock=time.clock, sleep=time.sleep)
+
+    with pytest.raises(QuotaExhausted):
+        asyncio.run(pacer.acquire(10))
+    time.now += 24 * 60 * 60
+    asyncio.run(pacer.acquire(10))
+
+    # What was spent stays spent; the allowance is what came back.
+    assert pacer.spent == (6, 4_010)
+
+
 def test_a_refusal_is_waited_out_with_a_margin_on_top() -> None:
     pacer, time = a_pacer()
 
@@ -264,7 +278,7 @@ def test_a_refusal_for_the_day_is_told_from_one_for_the_minute(exc, daily) -> No
 
 
 def test_a_provider_out_for_the_day_is_not_waited_out() -> None:
-    """Waiting out the minutes it names would only be refused again, answer after answer."""
+    """The minutes it names buy one more request, not the rest of a batch."""
     pacer, time = a_pacer(Limits(30, 8_000, 1_000, 200_000))
     calls: list[int] = []
 
@@ -280,3 +294,30 @@ def test_a_provider_out_for_the_day_is_not_waited_out() -> None:
 
     # One request found out; the second never went.
     assert (len(calls), time.slept) == (1, [])
+
+
+def test_a_provider_out_for_the_day_is_tried_again_once_a_request_has_come_back() -> None:
+    """Groq's day refills gradually, a request's worth in minutes: a pacer that gave up on it
+    for good would send every later answer to the slow local grader."""
+    pacer, time = a_pacer(Limits(30, 8_000, 1_000, 200_000))
+    calls: list[int] = []
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        calls.append(1)
+        if len(calls) == 1:
+            raise refusal(retry_after="342", body=GROQ_DAY)
+        return ModelResponse(parts=[TextPart("ok")])
+
+    agent = Agent(PacedModel(FunctionModel(respond), pacer))
+
+    with pytest.raises(QuotaExhausted):
+        asyncio.run(agent.run("grade this"))
+    # The request is estimated at 902 tokens, which take 390 s of a 200,000-token day to
+    # come back.
+    time.now += 300
+    with pytest.raises(QuotaExhausted):
+        asyncio.run(agent.run("grade this"))
+    time.now += 200
+
+    assert asyncio.run(agent.run("grade this")).output == "ok"
+    assert (len(calls), time.slept) == (2, [])
