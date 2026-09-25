@@ -6,8 +6,9 @@ happened by then, so later practice never changes what an earlier answer earned.
 
 - **XP.** An answer earns ten times its score and five for answering. That is half as much
   again when the question was due for review, late or not, since clearing a backlog should
-  still pay. Five more come in interview mode inside the limit, and the streak's length that
-  day is added, up to ten.
+  still pay. Five more come in interview mode inside the limit. The day's first answer adds
+  the streak's length that day, up to ten: the streak pays for coming back each day, not for
+  answering more.
 - **Levels** start at 50·(n−1)·n XP: Apprentice at 0, Journeyman at 100, Craftsman at 300, up
   to Daedalus at 2,100, about a hundred answers.
 - **The streak** is the run of practice days with a graded answer. It holds through a day
@@ -118,14 +119,14 @@ def whole(value: float) -> int:
     return math.floor(round(value, 6) + 0.5)
 
 
-def xp_for(answer: Answer, was_due: bool, streak: int) -> Xp:
+def xp_for(answer: Answer, was_due: bool, streak: int, first_of_day: bool) -> Xp:
     score = whole(SCORE_XP * answer.score)
     return Xp(
         score=score,
         answered=ANSWERED_XP,
         due=whole(DUE_BONUS * (score + ANSWERED_XP)) if was_due else 0,
         interview=INTERVIEW_XP if answer.inside_limit else 0,
-        streak=min(streak, STREAK_CAP),
+        streak=min(streak, STREAK_CAP) if first_of_day else 0,
     )
 
 
@@ -281,9 +282,10 @@ class Ledger:
     def add(self, answer: Answer) -> Step:
         earlier = self.answered.get(answer.question_id, [])
         was_due = bool(earlier) and earlier[-1].due <= answer.day
+        first_of_day = answer.day not in self.days
         self.days.add(answer.day)
         streak = run_to(self.days, answer.day)
-        xp = xp_for(answer, was_due, streak)
+        xp = xp_for(answer, was_due, streak, first_of_day)
         self.total += xp.total
         self.answered[answer.question_id] = [*earlier, answer]
         self.cards[answer.question_id] = review(

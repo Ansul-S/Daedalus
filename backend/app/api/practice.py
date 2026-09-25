@@ -148,8 +148,8 @@ class ProgressOut(BaseModel):
 
 class XpOut(BaseModel):
     """The XP an answer earned, part by part: ten times its score, five for answering, half
-    as much again for a question that was due, five inside an interview limit, and the
-    streak's length that day, up to ten."""
+    as much again for a question that was due, five inside an interview limit, and, on the
+    day's first answer, the streak's length that day, up to ten."""
 
     score: int
     answered: int

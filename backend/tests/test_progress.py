@@ -121,14 +121,15 @@ def test_interview_mode_earns_five_inside_the_limit(
     assert step.xp.interview == earned
 
 
-def test_the_streak_adds_its_length_that_day_up_to_ten() -> None:
+def test_the_days_first_answer_adds_the_streaks_length_up_to_ten() -> None:
     answers = [answer(1, DAY + timedelta(days=offset)) for offset in range(12)]
-    # A second answer the same day adds the same again; after a day off it starts over
+    # A second answer the same day adds nothing for the streak; after a day off it starts over
     answers += [answer(2, DAY + timedelta(days=11)), answer(2, DAY + timedelta(days=13))]
 
     steps = walk(answers, [question(1), question(2)]).steps
 
-    assert [step.xp.streak for step in steps] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 1]
+    assert [step.xp.streak for step in steps] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 0, 1]
+    assert [step.streak for step in steps][-2:] == [12, 1]
 
 
 def test_levels_start_at_fifty_times_n_times_n_minus_one() -> None:
@@ -154,10 +155,10 @@ def test_levels_start_at_fifty_times_n_times_n_minus_one() -> None:
 
 
 def test_the_answer_that_crosses_a_threshold_is_a_level_up() -> None:
-    # 16 XP each: 10 for a perfect score, 5 for answering, 1 for the streak's first day
+    # 10 for a perfect score and 5 for answering each; the first also gets 1 for the streak
     steps = walk([answer(1, DAY, 1.0) for _ in range(7)], [question(1)]).steps
 
-    assert [step.total for step in steps] == [16, 32, 48, 64, 80, 96, 112]
+    assert [step.total for step in steps] == [16, 31, 46, 61, 76, 91, 106]
     assert [step.level_up for step in steps] == [False] * 6 + [True]
     assert steps[-1].level.name == "Journeyman"
 
