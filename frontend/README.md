@@ -30,11 +30,13 @@ Set them in the environment or in `frontend/.env.local`.
 |---|---|
 | `/` | Redirects to `/practice` |
 | `/practice` | One question at a time: the question due next and why it was picked, your answer, the grader's verdict, then the next question (see below) |
+| `/questions` | The question bank: every question, accepted, retired or rejected, filtered by topic, style, difficulty, source and your rating (see below) |
+| `/questions/[id]` | One question with everything behind it: its passages, key points and quotes, the checks it went through and every correction since. It can be corrected, retired or put back, and rated |
 | `/dashboard` | What practice has built: the labyrinth of topics, the level and its wing, the days practised, the latest scores and the coins (see below) |
 | `/setup` | The status of the database, the local models and the API keys, checked each time the page loads |
 | `/pattern-book` | The design system, live: pigments, type, controls, marks (with the coins and the wing), hatching, glyph pictures and Markdown with LaTeX |
 
-Questions and Library are in the navigation, without links, until they are built. The header shows the streak and the XP.
+Library is in the navigation, without a link, until it is built. The header shows the streak and the XP.
 
 ### Practising
 
@@ -44,16 +46,26 @@ Questions and Library are in the navigation, without links, until they are built
 - **Drafts.** An answer being written is kept in the browser's local storage, with its time, so a reload or a closed tab loses nothing. It is cleared once the answer is graded, and never leaves the browser before it is submitted.
 - **The verdict.** The score and the rating it earns, and when the question comes back; how the score was reached; each key point covered, partly covered or missing, with the words of your answer that earned it, underlined in the answer too; each claim supported, contradicted or unverified, with the passage it was checked against; clarity, strengths, gaps, errors, a follow-up question and a model answer.
 - **What it earned.** Under the score, the XP the answer earned and what made it up, a new level when one is reached (with a burst of Greek letters, unless the system asks for reduced motion), and the coins it minted, each also announced in a corner. The title block below the sheet then shows the new streak, level and XP, and the counts of questions due and new.
+- **Your ratings.** At the foot of the verdict, rate the question (Good question, Poor question) and the grade (Fair grade, Unfair grade). A poor question or an unfair grade then asks for a short note on why. Ratings are kept as evaluation data: the questions worth fixing, and where the grader goes wrong.
+- **The question's page.** The question number (Q.050) opens it in the question bank. A half-written answer and its time are kept for when you come back.
 - **When grading fails,** the answer is already saved: the verdict says why, and Grade again tries the models again.
 - **Next.** The Next question button, or `N` when the cursor isn't in a text field.
 
 ### The dashboard
 
 - **The labyrinth.** A room for each topic with questions, hatched from empty to solid as its mastery grows, with a knot for the reviews due in it. The Minotaur waits in the weakest room, and today's thread runs from the entrance through the rooms answered in. The map comes from the API (`GET /practice/map`), so the same topics always give the same maze. Under 720 px it keeps its size and scrolls sideways in its card.
-- **A room** opens a list of its questions, each with its latest score and when it comes back. The map is one stop in the tab order: the arrow keys move between rooms, `Enter` opens one and `Escape` closes it.
+- **A room** opens a list of its questions, each with its latest score and when it comes back, and each opening its page in the question bank. The map is one stop in the tab order: the arrow keys move between rooms, `Enter` opens one and `Escape` closes it.
 - **The wing** grows a feather for every fourteenth of the way to the next level; the one being grown is hatched.
 - **The thread** shows the last 14 practice days, and **Scores** the last 12 answers. Point at a day or an answer, or focus the chart and use the arrow keys, to read it.
 - **The treasury** holds the ten coins: struck in ochre when minted, with the day, and otherwise what is still needed.
+
+### The question bank
+
+- **The list.** Tabs split it into accepted questions (the library practice draws from), retired ones and the ones the checks rejected, each with its count; the filters narrow it by topic, style, difficulty, source and your latest rating. The filters live in the address, so a filtered list can be linked to and the back button undoes a change. 25 questions a page.
+- **A question's page** shows its passages (linked to the source and readable in place), what an answer has to cover with the quote that proves each key point, the misconceptions it expects, the four checks it went through when it was written (quotes, answerable, not trivia, not a duplicate), every correction since with what it replaced and why, and the model that wrote it.
+- **Correcting** a question replaces its text, reference answer or key points (two to four, as a whole). Each quote has to be in the passage it names, word for word: the API checks every one before anything changes, and a quote it can't find is marked beside its key point. `⌘↵` saves.
+- **Retiring** takes a question out of practice and out of the duplicate check, with an optional reason; Put back returns it where its schedule left off. A rejected question stays as the record of why the checks turned it down: it can be rated, but not corrected.
+- **Rating** a question works as on the verdict. Every rating is kept and the latest one stands.
 
 ## Structure
 
@@ -62,12 +74,13 @@ src/app/             pages, the root layout (fonts, theme, header, footer), erro
 src/app/globals.css  tokens, themes, type roles, hatching and Markdown styles
 src/components/      the design system's pieces: labyrinth mark, Ariadne's thread, hatching,
                      dimension-line timer, drafting sheet and title block, glyph mosaic, Markdown,
-                     coins and the wing
+                     coins and the wing, the rating control, form fields
 src/components/ui/   shadcn/ui components (Radix, "lyra" style), restyled to the tokens
 src/client/          typed API client (generated)
 src/lib/             API address and error type, theme, reading a grade, drafts, the stopwatch,
-                     interview mode, what practice earned in words, the level-up burst, the glyph
-                     pictures' engine and grids
+                     interview mode, what practice earned in words, the level-up burst, naming a
+                     question and reading its validation report, the glyph pictures' engine and
+                     grids
 openapi.json         the API schema the client is generated from (generated)
 ```
 

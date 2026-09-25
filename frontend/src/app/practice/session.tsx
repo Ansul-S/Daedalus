@@ -186,6 +186,7 @@ function Round({
       )}
       {phase === "graded" && grade && (
         <VerdictStep
+          question={question}
           grade={grade}
           review={attempt?.review ?? null}
           earned={attempt?.earned ?? null}

@@ -5,8 +5,10 @@ import type {
   EarnedOut,
   GradeOut,
   KeyPointGradeOut,
+  QuestionOut,
   ReviewOut,
 } from "@/client/types.gen";
+import { Disclosure } from "@/components/disclosure";
 import {
   KeyPointMark,
   Pips,
@@ -15,6 +17,7 @@ import {
   VerdictMark,
 } from "@/components/hatching";
 import { Markdown } from "@/components/markdown";
+import { Rate } from "@/components/rating";
 import { StepLabel, ThreadStep } from "@/components/thread";
 import { Button } from "@/components/ui/button";
 import { API_URL } from "@/lib/api";
@@ -34,7 +37,7 @@ import { Earned } from "./earned";
 
 // The verdict on an answer, as drawn on the pattern book's practice sheet: the score and what
 // it earns, how the score was reached, the XP it brought, each key point, each claim against
-// its passage, and the grader's notes.
+// its passage, and the grader's notes; then your own rating of the question and of the grade.
 
 type FocusRef = React.Ref<HTMLDivElement>;
 
@@ -253,26 +256,33 @@ function Notes({ grade }: { grade: GradeOut }) {
 
 function ModelAnswer({ text }: { text: string }) {
   return (
-    <details className="group mt-7 max-w-[48rem] border border-line-2">
-      <summary className="type-label flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 hover:bg-surface [&::-webkit-details-marker]:hidden">
-        Model answer, drawn from the passages
-        <span aria-hidden className="text-sm leading-none transition-transform group-open:rotate-45">
-          +
-        </span>
-      </summary>
-      <div className="border-t border-line-2 px-4 py-3.5">
-        <Markdown>{text}</Markdown>
+    <Disclosure summary="Model answer, drawn from the passages" className="mt-7">
+      <Markdown>{text}</Markdown>
+    </Disclosure>
+  );
+}
+
+/** Was the question worth asking, and was the grade fair? Kept as evaluation data. */
+function Ratings({ question, grade }: { question: QuestionOut; grade: GradeOut }) {
+  return (
+    <>
+      <h3 className={SUB}>Your ratings</h3>
+      <div className="flex max-w-[60rem] flex-wrap items-start gap-x-10 gap-y-4">
+        <Rate rated="question" id={question.id} initial={question.rating} />
+        <Rate key={grade.id} rated="grade" id={grade.id} initial={grade.rating} />
       </div>
-    </details>
+    </>
   );
 }
 
 export function VerdictStep({
+  question,
   grade,
   review,
   earned,
   focusRef,
 }: {
+  question: QuestionOut;
   grade: GradeOut;
   review: ReviewOut | null;
   earned: EarnedOut | null;
@@ -293,6 +303,7 @@ export function VerdictStep({
       <Notes grade={grade} />
       {grade.improved_answer && <ModelAnswer text={grade.improved_answer} />}
       {by && <p className={cn(MONO, "mt-6 text-fg-2")}>{by}</p>}
+      <Ratings question={question} grade={grade} />
     </ThreadStep>
   );
 }

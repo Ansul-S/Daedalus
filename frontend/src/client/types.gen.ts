@@ -408,6 +408,7 @@ export type GradeOut = {
      * Created At
      */
     created_at: string;
+    rating: RatingOut | null;
 };
 
 /**
@@ -738,6 +739,7 @@ export type QuestionDetailOut = {
      * Created At
      */
     created_at: string;
+    rating: RatingOut | null;
     /**
      * Reference Answer
      */
@@ -852,6 +854,7 @@ export type QuestionOut = {
      * Created At
      */
     created_at: string;
+    rating: RatingOut | null;
 };
 
 /**
@@ -874,6 +877,68 @@ export type QuestionsOut = {
      * Results
      */
     results: Array<QuestionOut>;
+};
+
+/**
+ * RatingIn
+ *
+ * A rating of one question or of one grade.
+ */
+export type RatingIn = {
+    /**
+     * Question Id
+     *
+     * The question rated; or give grade_id
+     */
+    question_id?: number | null;
+    /**
+     * Grade Id
+     *
+     * The grade rated; or give question_id
+     */
+    grade_id?: number | null;
+    /**
+     * Value
+     *
+     * 1 for a good question or a fair grade, -1 for a poor question or an unfair grade
+     */
+    value: 1 | -1;
+    /**
+     * Note
+     *
+     * Why, in a sentence
+     */
+    note?: string | null;
+};
+
+/**
+ * RatingOut
+ */
+export type RatingOut = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Question Id
+     */
+    question_id: number | null;
+    /**
+     * Grade Id
+     */
+    grade_id: number | null;
+    /**
+     * Value
+     */
+    value: 1 | -1;
+    /**
+     * Note
+     */
+    note: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
 };
 
 /**
@@ -1495,6 +1560,12 @@ export type ListQuestionsData = {
          */
         source_updated?: boolean | null;
         /**
+         * Rating
+         *
+         * Only questions whose latest rating is good or poor, or never rated
+         */
+        rating?: 'good' | 'poor' | 'unrated' | null;
+        /**
          * Limit
          */
         limit?: number;
@@ -1814,3 +1885,28 @@ export type PracticeStatsResponses = {
 };
 
 export type PracticeStatsResponse = PracticeStatsResponses[keyof PracticeStatsResponses];
+
+export type AddRatingData = {
+    body: RatingIn;
+    path?: never;
+    query?: never;
+    url: '/ratings';
+};
+
+export type AddRatingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AddRatingError = AddRatingErrors[keyof AddRatingErrors];
+
+export type AddRatingResponses = {
+    /**
+     * Successful Response
+     */
+    201: RatingOut;
+};
+
+export type AddRatingResponse = AddRatingResponses[keyof AddRatingResponses];

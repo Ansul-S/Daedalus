@@ -1,18 +1,19 @@
 "use client";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 
 import { listAttemptsOptions, listQuestionsOptions } from "@/client/@tanstack/react-query.gen";
 import type { AttemptOut, RoomOut } from "@/client/types.gen";
 import { Pips } from "@/components/hatching";
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
-import { questionNumber, styleLabel } from "@/lib/questions";
+import { questionNumber, questionPath, styleLabel } from "@/lib/questions";
 import { dayLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 // A room opened on the map: its questions, with the latest score of each and when it comes
-// back. The question bank will link each one to its page.
+// back. Each one opens its page in the question bank.
 
 const MONO = "font-mono text-[11px] leading-[1.35] tracking-[0.04em]";
 
@@ -99,7 +100,7 @@ export function RoomPanel({
           {found.map((question, i) => (
             <li
               key={question.id}
-              className="grid grid-cols-1 gap-x-6 gap-y-1 border-line-2 px-4 py-3 not-first:border-t not-first:border-dotted sm:grid-cols-[minmax(0,1fr)_auto]"
+              className="relative grid grid-cols-1 gap-x-6 gap-y-1 border-line-2 px-4 py-3 not-first:border-t not-first:border-dotted hover:bg-surface/50 sm:grid-cols-[minmax(0,1fr)_auto]"
             >
               <p className={cn(MONO, "text-fg-2 uppercase")}>
                 {questionNumber(question.id)} · {styleLabel(question.style)} · difficulty{" "}
@@ -108,9 +109,15 @@ export function RoomPanel({
               <p className={cn(MONO, "text-fg-2 sm:row-start-1 sm:col-start-2 sm:text-right")}>
                 <Standing attempts={attempts[i] ?? { isError: false }} today={today} />
               </p>
-              <Markdown inline className="text-small sm:col-span-2">
-                {question.text}
-              </Markdown>
+              {/* The whole row opens the question */}
+              <Link
+                href={questionPath(question.id)}
+                className="text-small decoration-thread decoration-[1.5px] underline-offset-[3px] after:absolute after:inset-0 hover:underline sm:col-span-2"
+              >
+                <Markdown inline links={false}>
+                  {question.text}
+                </Markdown>
+              </Link>
             </li>
           ))}
         </ul>

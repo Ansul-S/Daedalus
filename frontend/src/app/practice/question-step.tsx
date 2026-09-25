@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import type { PracticeOut } from "@/client/types.gen";
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { API_URL } from "@/lib/api";
 import { ApiError } from "@/lib/api-errors";
-import { questionNumber, styleLabel } from "@/lib/questions";
+import { questionNumber, questionPath, styleLabel } from "@/lib/questions";
 
 function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -36,7 +37,10 @@ export function QuestionStep({ pick, focus = false }: { pick: PracticeOut; focus
           as="h2"
           meta={
             <>
-              {questionNumber(question.id)} · {question.topic ?? "no topic"} ·{" "}
+              <Link href={questionPath(question.id)} className="thread-link">
+                {questionNumber(question.id)}
+              </Link>{" "}
+              · {question.topic ?? "no topic"} ·{" "}
               {styleLabel(question.style)} · difficulty{" "}
               <Pips value={question.difficulty} label="difficulty" />
             </>

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 // Pages still to be built stay in the nav, unlinked, so the shape of the app is visible.
 const NAV = [
   { href: "/practice", label: "Practice" },
-  { href: "/questions", label: "Questions", soon: true },
+  { href: "/questions", label: "Questions" },
   { href: "/library", label: "Library", soon: true },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },

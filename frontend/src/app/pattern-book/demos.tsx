@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import type { RatingIn, RatingOut } from "@/client/types.gen";
 import { DimensionTimer } from "@/components/dimension-timer";
+import { Field, Select } from "@/components/field";
 import { GlyphMosaic } from "@/components/glyph-mosaic";
 import { LABYRINTH_LENGTH, LabyrinthMark } from "@/components/labyrinth-mark";
 import { Markdown } from "@/components/markdown";
+import { Rate } from "@/components/rating";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -171,6 +174,78 @@ export function MosaicLab() {
           Replay denoising
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Kept on this page only: nothing is sent to the API
+async function keepHere(body: RatingIn): Promise<RatingOut> {
+  return {
+    id: Date.now(),
+    question_id: body.question_id ?? null,
+    grade_id: body.grade_id ?? null,
+    value: body.value,
+    note: body.note ?? null,
+    created_at: new Date().toISOString(),
+  };
+}
+
+const POOR_QUESTION: RatingOut = {
+  id: 1,
+  question_id: 43,
+  grade_id: null,
+  value: -1,
+  note: "The second key point says the first one again.",
+  created_at: "2026-09-25T10:00:00Z",
+};
+
+const FAIR_GRADE: RatingOut = {
+  id: 2,
+  question_id: null,
+  grade_id: 3,
+  value: 1,
+  note: null,
+  created_at: "2026-09-25T10:00:00Z",
+};
+
+/** A question rated poor with its note, and a fair grade. Press the other words, or press
+ * Poor question again to change the note. */
+export function RatingDemo() {
+  return (
+    <div className="flex flex-wrap items-start gap-x-10 gap-y-5">
+      <Rate rated="question" id={43} initial={POOR_QUESTION} save={keepHere} />
+      <Rate rated="grade" id={3} initial={FAIR_GRADE} save={keepHere} />
+    </div>
+  );
+}
+
+/** A filter, and a field the API refused, as the question bank draws them. */
+export function FieldsDemo() {
+  const [topic, setTopic] = useState("");
+  return (
+    <div className="grid max-w-3xl grid-cols-1 items-start gap-x-6 gap-y-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
+      <Field label="Topic">
+        {(control) => (
+          <Select {...control} value={topic} onChange={(event) => setTopic(event.target.value)}>
+            <option value="">All topics</option>
+            <option value="attention">attention (6)</option>
+            <option value="vanishing gradient">vanishing gradient (2)</option>
+          </Select>
+        )}
+      </Field>
+      <Field
+        label="Its quote, word for word"
+        hint="Six or more words copied from the passage, showing the point is there."
+        error="the quote is not in chunk 153 (closest match 94%)"
+      >
+        {(control) => (
+          <Textarea
+            {...control}
+            defaultValue="The retriever finds relevant chunks, and the reader pulls the answer out of them."
+            className="min-h-14 py-2.5 text-small"
+          />
+        )}
+      </Field>
     </div>
   );
 }

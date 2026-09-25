@@ -101,7 +101,8 @@ export function AnswerStep({
   const { seconds, read } = useStopwatch(draft?.seconds ?? 0, !locked, interview);
   const keys = useSubmitKeys();
 
-  // The time is kept as well when the reader leaves, so a reload carries on from there.
+  // The time is kept as well when the reader leaves, so a reload carries on from there; so is
+  // leaving for another page of the app, which unmounts the answer without a pagehide.
   useEffect(() => {
     if (locked) return;
     const keep = () => saveDraft(questionId, { answer: latest.current, seconds: read() });
@@ -113,6 +114,7 @@ export function AnswerStep({
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", keep);
+      keep();
     };
   }, [questionId, locked, read]);
 

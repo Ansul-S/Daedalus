@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { addArxivPaper, answerQuestion, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listQuestions, listTopics, type Options, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument } from '../sdk.gen';
-import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse } from '../types.gen';
+import { addArxivPaper, addRating, answerQuestion, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listQuestions, listTopics, type Options, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument } from '../sdk.gen';
+import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -585,3 +585,27 @@ export const practiceStatsOptions = (options?: Options<PracticeStatsData>) => qu
     },
     queryKey: practiceStatsQueryKey(options)
 });
+
+/**
+ * Add Rating
+ *
+ * Rate a question good or poor, or a grade fair or unfair, with an optional note on why.
+ *
+ * A rating never replaces an earlier one; the latest is the one that stands. Any question
+ * can be rated, whatever its status: a rejected question rated good is a check that turned
+ * down too much. A grade can be rated once it has graded the answer: a failed grade has no
+ * verdict to judge.
+ */
+export const addRatingMutation = (options?: Partial<Options<AddRatingData>>): UseMutationOptions<AddRatingResponse, AddRatingError, Options<AddRatingData>> => {
+    const mutationOptions: UseMutationOptions<AddRatingResponse, AddRatingError, Options<AddRatingData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await addRating({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};

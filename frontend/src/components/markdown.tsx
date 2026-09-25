@@ -15,6 +15,12 @@ const COMPONENTS: Components = {
   ),
 };
 
+// Inside a link of its own (a question in a list, opening its page), a link in the text
+// would nest one link in another: it is kept as words.
+const PLAIN_LINKS: Components = {
+  a: ({ children }) => <span>{children}</span>,
+};
+
 // Run into a line of text (a claim, a key point), Markdown keeps its maths, code and emphasis
 // but not its blocks.
 const BLOCKS = [
@@ -27,10 +33,13 @@ const BLOCKS = [
 export function Markdown({
   children,
   inline = false,
+  links = true,
   className,
 }: {
   children: string;
   inline?: boolean;
+  /** Whether links in the text are links; false inside a link */
+  links?: boolean;
   className?: string;
 }) {
   const Wrapper = inline ? "span" : "div";
@@ -39,7 +48,7 @@ export function Markdown({
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
-        components={COMPONENTS}
+        components={links ? COMPONENTS : PLAIN_LINKS}
         disallowedElements={inline ? BLOCKS : undefined}
         unwrapDisallowed={inline}
       >

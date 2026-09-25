@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses } from './types.gen';
+import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -208,3 +208,22 @@ export const practiceMap = <ThrowOnError extends boolean = false>(options?: Opti
  * The dashboard's charts: the latest scores, the days practised, and what comes due.
  */
 export const practiceStats = <ThrowOnError extends boolean = false>(options?: Options<PracticeStatsData, ThrowOnError>): RequestResult<PracticeStatsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeStatsResponses, unknown, ThrowOnError>({ url: '/practice/stats', ...options });
+
+/**
+ * Add Rating
+ *
+ * Rate a question good or poor, or a grade fair or unfair, with an optional note on why.
+ *
+ * A rating never replaces an earlier one; the latest is the one that stands. Any question
+ * can be rated, whatever its status: a rejected question rated good is a check that turned
+ * down too much. A grade can be rated once it has graded the answer: a failed grade has no
+ * verdict to judge.
+ */
+export const addRating = <ThrowOnError extends boolean = false>(options: Options<AddRatingData, ThrowOnError>): RequestResult<AddRatingResponses, AddRatingErrors, ThrowOnError> => (options.client ?? client).post<AddRatingResponses, AddRatingErrors, ThrowOnError>({
+    url: '/ratings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});

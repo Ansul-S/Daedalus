@@ -9,13 +9,11 @@ import {
   practiceStatsOptions,
 } from "@/client/@tanstack/react-query.gen";
 import type { MapOut, ProgressOut, StatsOut } from "@/client/types.gen";
+import { ApiProblem } from "@/components/api-problem";
 import { Coin } from "@/components/coin";
 import { Commands, FILL_THE_LABYRINTH } from "@/components/commands";
 import { SheetSection, TitleBlock } from "@/components/sheet";
-import { Button } from "@/components/ui/button";
 import { Wing } from "@/components/wing";
-import { API_URL } from "@/lib/api";
-import { ApiError } from "@/lib/api-errors";
 import { coinCaption, days, levelShare, number, toNextLevel } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 
@@ -166,28 +164,6 @@ function Treasury({ coins }: { coins: ProgressOut["coins"] }) {
   );
 }
 
-function Problem({ error, retry }: { error: Error; retry: () => void }) {
-  const status = error instanceof ApiError ? error.status : null;
-  return (
-    <div className="max-w-[62ch]">
-      <p className={SUB}>{status === null ? "API not reachable" : `API error ${status}`}</p>
-      <p className="mt-3 mb-4">
-        {status === null ? (
-          <>
-            Can&apos;t reach the API at <code className="font-mono">{API_URL}</code>. Start it
-            with <code className="font-mono">make api</code>, then try again.
-          </>
-        ) : (
-          error.message
-        )}
-      </p>
-      <Button variant="outline" size="sm" onClick={retry}>
-        Try again
-      </Button>
-    </div>
-  );
-}
-
 export function Dashboard({ children }: { children: React.ReactNode }) {
   const progress = useQuery(practiceProgressOptions());
   const map = useQuery(practiceMapOptions());
@@ -213,7 +189,7 @@ export function Dashboard({ children }: { children: React.ReactNode }) {
             <Treasury coins={progress.data.coins} />
           </div>
         ) : failed ? (
-          <Problem error={failed} retry={retry} />
+          <ApiProblem error={failed} retry={retry} />
         ) : (
           <p className="text-fg-2">Drawing the labyrinth…</p>
         )}

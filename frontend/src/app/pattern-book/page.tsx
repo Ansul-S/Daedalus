@@ -19,7 +19,15 @@ import { Badge } from "@/components/ui/badge";
 import { RAMP } from "@/lib/glyph/grids";
 import { cn } from "@/lib/utils";
 
-import { ControlsDemo, MosaicLab, TimerDemo, TracedMark, WingDemo } from "./demos";
+import {
+  ControlsDemo,
+  FieldsDemo,
+  MosaicLab,
+  RatingDemo,
+  TimerDemo,
+  TracedMark,
+  WingDemo,
+} from "./demos";
 
 export const metadata: Metadata = {
   title: "Pattern book",
@@ -256,10 +264,19 @@ export default function PatternBookPage() {
 
       <SheetSection aria-labelledby="controls">
         <SheetHead as="h2" id="controls" number="Sheet 03" title="Controls" sigil="κ">
-          Buttons are lettering on a drawing; chips and tabs are mono labels in hairline boxes;
-          the answer box is raised paper. Square corners throughout.
+          Buttons are lettering on a drawing, and a rating is said in words, the chosen one inked
+          in. Chips, tabs and filters are mono labels in hairline boxes; the answer box is raised
+          paper. Square corners throughout.
         </SheetHead>
-        <ControlsDemo />
+        <Part title="Rating · a question good or poor, a grade fair or unfair">
+          <RatingDemo />
+        </Part>
+        <Part title="Buttons, tabs and the answer box">
+          <ControlsDemo />
+        </Part>
+        <Part title="Filters and fields">
+          <FieldsDemo />
+        </Part>
         <Part title="Chips">
           <div className="flex flex-wrap items-center gap-3">
             <Badge>Why this</Badge>

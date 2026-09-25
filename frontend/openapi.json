@@ -530,6 +530,29 @@
             "description": "Only questions whose sources a later ingestion replaced"
           },
           {
+            "name": "rating",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "good",
+                    "poor",
+                    "unrated"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only questions whose latest rating is good or poor, or never rated",
+              "title": "Rating"
+            },
+            "description": "Only questions whose latest rating is good or poor, or never rated"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -1020,6 +1043,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StatsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ratings": {
+      "post": {
+        "tags": [
+          "ratings"
+        ],
+        "summary": "Add Rating",
+        "description": "Rate a question good or poor, or a grade fair or unfair, with an optional note on why.\n\nA rating never replaces an earlier one; the latest is the one that stands. Any question\ncan be rated, whatever its status: a rejected question rated good is a check that turned\ndown too much. A grade can be rated once it has graded the answer: a failed grade has no\nverdict to judge.",
+        "operationId": "add_rating",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RatingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RatingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1779,6 +1844,16 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RatingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -1801,7 +1876,8 @@
           "follow_up",
           "usage",
           "seconds",
-          "created_at"
+          "created_at",
+          "rating"
         ],
         "title": "GradeOut"
       },
@@ -2365,6 +2441,16 @@
             "format": "date-time",
             "title": "Created At"
           },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RatingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "reference_answer": {
             "type": "string",
             "title": "Reference Answer"
@@ -2422,6 +2508,7 @@
           "citations",
           "document_ids",
           "created_at",
+          "rating",
           "reference_answer",
           "key_points",
           "misconceptions",
@@ -2576,6 +2663,16 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RatingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2590,7 +2687,8 @@
           "source_updated",
           "citations",
           "document_ids",
-          "created_at"
+          "created_at",
+          "rating"
         ],
         "title": "QuestionOut"
       },
@@ -2624,6 +2722,127 @@
           "results"
         ],
         "title": "QuestionsOut"
+      },
+      "RatingIn": {
+        "properties": {
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id",
+            "description": "The question rated; or give grade_id"
+          },
+          "grade_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Id",
+            "description": "The grade rated; or give question_id"
+          },
+          "value": {
+            "type": "integer",
+            "enum": [
+              1,
+              -1
+            ],
+            "title": "Value",
+            "description": "1 for a good question or a fair grade, -1 for a poor question or an unfair grade"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Why, in a sentence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "RatingIn",
+        "description": "A rating of one question or of one grade."
+      },
+      "RatingOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          },
+          "grade_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade Id"
+          },
+          "value": {
+            "type": "integer",
+            "enum": [
+              1,
+              -1
+            ],
+            "title": "Value"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question_id",
+          "grade_id",
+          "value",
+          "note",
+          "created_at"
+        ],
+        "title": "RatingOut"
       },
       "ReviewOut": {
         "properties": {
