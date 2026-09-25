@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeNextData, PracticeNextResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses } from './types.gen';
+import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -185,3 +185,26 @@ export const getAttempt = <ThrowOnError extends boolean = false>(options: Option
  * The question to practise next, without its answer, and why it was picked.
  */
 export const practiceNext = <ThrowOnError extends boolean = false>(options?: Options<PracticeNextData, ThrowOnError>): RequestResult<PracticeNextResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeNextResponses, unknown, ThrowOnError>({ url: '/practice/next', ...options });
+
+/**
+ * Practice Progress
+ *
+ * XP, level, streak and coins, worked out from every graded answer.
+ */
+export const practiceProgress = <ThrowOnError extends boolean = false>(options?: Options<PracticeProgressData, ThrowOnError>): RequestResult<PracticeProgressResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeProgressResponses, unknown, ThrowOnError>({ url: '/practice/progress', ...options });
+
+/**
+ * Practice Map
+ *
+ * The labyrinth on the dashboard: a room for each topic with questions in the library,
+ * how well it is known and what is due in it, the passages between the rooms, today's
+ * thread through them, and the Minotaur's room, the weakest.
+ */
+export const practiceMap = <ThrowOnError extends boolean = false>(options?: Options<PracticeMapData, ThrowOnError>): RequestResult<PracticeMapResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeMapResponses, unknown, ThrowOnError>({ url: '/practice/map', ...options });
+
+/**
+ * Practice Stats
+ *
+ * The dashboard's charts: the latest scores, the days practised, and what comes due.
+ */
+export const practiceStats = <ThrowOnError extends boolean = false>(options?: Options<PracticeStatsData, ThrowOnError>): RequestResult<PracticeStatsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeStatsResponses, unknown, ThrowOnError>({ url: '/practice/stats', ...options });

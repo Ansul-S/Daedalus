@@ -30,19 +30,30 @@ Set them in the environment or in `frontend/.env.local`.
 |---|---|
 | `/` | Redirects to `/practice` |
 | `/practice` | One question at a time: the question due next and why it was picked, your answer, the grader's verdict, then the next question (see below) |
+| `/dashboard` | What practice has built: the labyrinth of topics, the level and its wing, the days practised, the latest scores and the coins (see below) |
 | `/setup` | The status of the database, the local models and the API keys, checked each time the page loads |
-| `/pattern-book` | The design system, live: pigments, type, controls, marks, hatching, glyph pictures and Markdown with LaTeX |
+| `/pattern-book` | The design system, live: pigments, type, controls, marks (with the coins and the wing), hatching, glyph pictures and Markdown with LaTeX |
 
-Questions, Library and Dashboard are in the navigation, without links, until they are built.
+Questions and Library are in the navigation, without links, until they are built. The header shows the streak and the XP.
 
 ### Practising
 
 - **Answering.** Write the answer in Markdown, with `$maths$` for LaTeX, and check it under Preview. `⌘↵` (`Ctrl+↵` elsewhere) submits it; the API takes up to 8,000 characters.
 - **Time.** A stopwatch counts while the question is on screen and the page is in view, and the time goes with the answer.
+- **Interview mode.** The Interview switch beside the answer gives three minutes an answer, as in an interview: the stopwatch becomes a dimension line counting down, then into overtime, and it keeps counting in another tab. The limit goes with the answer, and an answer inside it earns 5 XP more. The browser remembers the switch.
 - **Drafts.** An answer being written is kept in the browser's local storage, with its time, so a reload or a closed tab loses nothing. It is cleared once the answer is graded, and never leaves the browser before it is submitted.
 - **The verdict.** The score and the rating it earns, and when the question comes back; how the score was reached; each key point covered, partly covered or missing, with the words of your answer that earned it, underlined in the answer too; each claim supported, contradicted or unverified, with the passage it was checked against; clarity, strengths, gaps, errors, a follow-up question and a model answer.
+- **What it earned.** Under the score, the XP the answer earned and what made it up, a new level when one is reached (with a burst of Greek letters, unless the system asks for reduced motion), and the coins it minted, each also announced in a corner. The title block below the sheet then shows the new streak, level and XP, and the counts of questions due and new.
 - **When grading fails,** the answer is already saved: the verdict says why, and Grade again tries the models again.
 - **Next.** The Next question button, or `N` when the cursor isn't in a text field.
+
+### The dashboard
+
+- **The labyrinth.** A room for each topic with questions, hatched from empty to solid as its mastery grows, with a knot for the reviews due in it. The Minotaur waits in the weakest room, and today's thread runs from the entrance through the rooms answered in. The map comes from the API (`GET /practice/map`), so the same topics always give the same maze. Under 720 px it keeps its size and scrolls sideways in its card.
+- **A room** opens a list of its questions, each with its latest score and when it comes back. The map is one stop in the tab order: the arrow keys move between rooms, `Enter` opens one and `Escape` closes it.
+- **The wing** grows a feather for every fourteenth of the way to the next level; the one being grown is hatched.
+- **The thread** shows the last 14 practice days, and **Scores** the last 12 answers. Point at a day or an answer, or focus the chart and use the arrow keys, to read it.
+- **The treasury** holds the ten coins: struck in ochre when minted, with the day, and otherwise what is still needed.
 
 ## Structure
 
@@ -50,11 +61,13 @@ Questions, Library and Dashboard are in the navigation, without links, until the
 src/app/             pages, the root layout (fonts, theme, header, footer), error and 404 pages
 src/app/globals.css  tokens, themes, type roles, hatching and Markdown styles
 src/components/      the design system's pieces: labyrinth mark, Ariadne's thread, hatching,
-                     dimension-line timer, drafting sheet and title block, glyph mosaic, Markdown
+                     dimension-line timer, drafting sheet and title block, glyph mosaic, Markdown,
+                     coins and the wing
 src/components/ui/   shadcn/ui components (Radix, "lyra" style), restyled to the tokens
 src/client/          typed API client (generated)
 src/lib/             API address and error type, theme, reading a grade, drafts, the stopwatch,
-                     the glyph pictures' engine and grids
+                     interview mode, what practice earned in words, the level-up burst, the glyph
+                     pictures' engine and grids
 openapi.json         the API schema the client is generated from (generated)
 ```
 
@@ -63,8 +76,8 @@ openapi.json         the API schema the client is generated from (generated)
 - **Four pigments:** bone (the paper), ink, ochre (only for what is earned) and sinopia, the accent (Ariadne's thread, focus). Components use role tokens such as `ground`, `surface`, `fg`, `line` and `thread`, which the dark theme redefines. Tailwind's default colours are switched off, so only these exist.
 - **Three typefaces,** self-hosted through `next/font`: Big Shoulders for titles and numbers, Source Serif 4 for reading text and questions, JetBrains Mono for labels, measurements and the glyph pictures.
 - **Themes.** Light and dark follow the system; the switch in the header picks Light, Dark or Auto, and the browser remembers it.
-- **Status never depends on colour alone.** Hatching marks key points (covered, partial, missing) and ratings (Again, Hard, Good, Easy).
-- **Motion.** A glyph picture settles out of noise when it comes into view. With reduced motion it is drawn settled.
+- **Status never depends on colour alone.** Hatching marks key points (covered, partial, missing), ratings (Again, Hard, Good, Easy) and a topic's mastery on the dashboard.
+- **Motion.** A glyph picture settles out of noise when it comes into view, a room with reviews due sends out a ring, and a new level throws up Greek letters (`canvas-confetti`, loaded only then). With reduced motion the picture is drawn settled and nothing else moves.
 
 `/pattern-book` is the reference: every piece, live, in both themes. A component added with the shadcn/ui CLI (`components.json`) arrives in the CLI's own style: restyle it to the tokens, and check `package.json` for packages the CLI added.
 

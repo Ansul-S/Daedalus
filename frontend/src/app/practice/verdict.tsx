@@ -1,6 +1,12 @@
 "use client";
 
-import type { ClaimOut, GradeOut, KeyPointGradeOut, ReviewOut } from "@/client/types.gen";
+import type {
+  ClaimOut,
+  EarnedOut,
+  GradeOut,
+  KeyPointGradeOut,
+  ReviewOut,
+} from "@/client/types.gen";
 import {
   KeyPointMark,
   Pips,
@@ -24,9 +30,11 @@ import {
 import { useElapsed } from "@/lib/stopwatch";
 import { cn } from "@/lib/utils";
 
+import { Earned } from "./earned";
+
 // The verdict on an answer, as drawn on the pattern book's practice sheet: the score and what
-// it earns, how the score was reached, each key point, each claim against its passage, and
-// the grader's notes.
+// it earns, how the score was reached, the XP it brought, each key point, each claim against
+// its passage, and the grader's notes.
 
 type FocusRef = React.Ref<HTMLDivElement>;
 
@@ -262,10 +270,12 @@ function ModelAnswer({ text }: { text: string }) {
 export function VerdictStep({
   grade,
   review,
+  earned,
   focusRef,
 }: {
   grade: GradeOut;
   review: ReviewOut | null;
+  earned: EarnedOut | null;
   focusRef: FocusRef;
 }) {
   const formula = scoreFormula(grade);
@@ -276,6 +286,7 @@ export function VerdictStep({
         <StepLabel as="h2">Verdict</StepLabel>
         {grade.score !== null && <ScoreRow score={grade.score} review={review} />}
         {formula && <p className="mt-3 font-mono text-xs leading-normal text-fg-2">{formula}</p>}
+        {earned && <Earned earned={earned} />}
       </div>
       <KeyPoints points={grade.key_points} />
       {grade.claims.length > 0 && <Claims claims={grade.claims} />}

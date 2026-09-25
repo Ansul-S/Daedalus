@@ -960,6 +960,72 @@
           }
         }
       }
+    },
+    "/practice/progress": {
+      "get": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Practice Progress",
+        "description": "XP, level, streak and coins, worked out from every graded answer.",
+        "operationId": "practice_progress",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/practice/map": {
+      "get": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Practice Map",
+        "description": "The labyrinth on the dashboard: a room for each topic with questions in the library,\nhow well it is known and what is due in it, the passages between the rooms, today's\nthread through them, and the Minotaur's room, the weakest.",
+        "operationId": "practice_map",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/practice/stats": {
+      "get": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Practice Stats",
+        "description": "The dashboard's charts: the latest scores, the days practised, and what comes due.",
+        "operationId": "practice_stats",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsOut"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1100,6 +1166,16 @@
                 "type": "null"
               }
             ]
+          },
+          "earned": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EarnedOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -1112,7 +1188,8 @@
           "time_limit",
           "created_at",
           "grades",
-          "review"
+          "review",
+          "earned"
         ],
         "title": "AttemptOut"
       },
@@ -1216,6 +1293,90 @@
           "link"
         ],
         "title": "ClaimOut"
+      },
+      "CoinOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "glyph": {
+            "type": "string",
+            "title": "Glyph"
+          },
+          "condition": {
+            "type": "string",
+            "title": "Condition"
+          },
+          "minted_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minted On"
+          },
+          "have": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Have"
+          },
+          "need": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "glyph",
+          "condition",
+          "minted_on",
+          "have",
+          "need"
+        ],
+        "title": "CoinOut"
+      },
+      "DayCountOut": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "count"
+        ],
+        "title": "DayCountOut"
       },
       "DocumentOut": {
         "properties": {
@@ -1361,6 +1522,50 @@
           "updated_at"
         ],
         "title": "DocumentOut"
+      },
+      "EarnedOut": {
+        "properties": {
+          "xp": {
+            "type": "integer",
+            "title": "Xp"
+          },
+          "parts": {
+            "$ref": "#/components/schemas/XpOut"
+          },
+          "total_xp": {
+            "type": "integer",
+            "title": "Total Xp"
+          },
+          "level": {
+            "$ref": "#/components/schemas/LevelOut"
+          },
+          "level_up": {
+            "type": "boolean",
+            "title": "Level Up"
+          },
+          "streak": {
+            "type": "integer",
+            "title": "Streak"
+          },
+          "coins": {
+            "items": {
+              "$ref": "#/components/schemas/CoinOut"
+            },
+            "type": "array",
+            "title": "Coins"
+          }
+        },
+        "type": "object",
+        "required": [
+          "xp",
+          "parts",
+          "total_xp",
+          "level",
+          "level_up",
+          "streak",
+          "coins"
+        ],
+        "title": "EarnedOut"
       },
       "GenerateIn": {
         "properties": {
@@ -1863,6 +2068,142 @@
         ],
         "title": "KeyPointOut"
       },
+      "LevelOut": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "of": {
+            "type": "integer",
+            "title": "Of"
+          },
+          "start": {
+            "type": "integer",
+            "title": "Start"
+          },
+          "next_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Start"
+          },
+          "next_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "name",
+          "of",
+          "start",
+          "next_start",
+          "next_name"
+        ],
+        "title": "LevelOut"
+      },
+      "MapOut": {
+        "properties": {
+          "columns": {
+            "type": "integer",
+            "title": "Columns"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          },
+          "rooms": {
+            "items": {
+              "$ref": "#/components/schemas/RoomOut"
+            },
+            "type": "array",
+            "title": "Rooms"
+          },
+          "passages": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Passages"
+          },
+          "entrance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entrance"
+          },
+          "lair": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lair"
+          },
+          "visits": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Visits"
+          },
+          "thread": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Thread"
+          }
+        },
+        "type": "object",
+        "required": [
+          "columns",
+          "rows",
+          "rooms",
+          "passages",
+          "entrance",
+          "lair",
+          "visits",
+          "thread"
+        ],
+        "title": "MapOut"
+      },
       "PracticeOut": {
         "properties": {
           "question": {
@@ -1922,6 +2263,40 @@
           "new_count"
         ],
         "title": "PracticeOut"
+      },
+      "ProgressOut": {
+        "properties": {
+          "xp": {
+            "type": "integer",
+            "title": "Xp"
+          },
+          "level": {
+            "$ref": "#/components/schemas/LevelOut"
+          },
+          "streak": {
+            "$ref": "#/components/schemas/StreakOut"
+          },
+          "answers": {
+            "type": "integer",
+            "title": "Answers"
+          },
+          "coins": {
+            "items": {
+              "$ref": "#/components/schemas/CoinOut"
+            },
+            "type": "array",
+            "title": "Coins"
+          }
+        },
+        "type": "object",
+        "required": [
+          "xp",
+          "level",
+          "streak",
+          "answers",
+          "coins"
+        ],
+        "title": "ProgressOut"
       },
       "QuestionDetailOut": {
         "properties": {
@@ -2286,6 +2661,78 @@
         ],
         "title": "ReviewOut"
       },
+      "RoomOut": {
+        "properties": {
+          "topic_id": {
+            "type": "integer",
+            "title": "Topic Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "cell": {
+            "type": "integer",
+            "title": "Cell"
+          },
+          "questions": {
+            "type": "integer",
+            "title": "Questions"
+          },
+          "practised": {
+            "type": "integer",
+            "title": "Practised"
+          },
+          "due": {
+            "type": "integer",
+            "title": "Due"
+          },
+          "mastery": {
+            "type": "number",
+            "title": "Mastery"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic_id",
+          "name",
+          "cell",
+          "questions",
+          "practised",
+          "due",
+          "mastery"
+        ],
+        "title": "RoomOut"
+      },
+      "ScoreOut": {
+        "properties": {
+          "attempt_id": {
+            "type": "integer",
+            "title": "Attempt Id"
+          },
+          "question_id": {
+            "type": "integer",
+            "title": "Question Id"
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_id",
+          "question_id",
+          "day",
+          "score"
+        ],
+        "title": "ScoreOut"
+      },
       "SearchHitOut": {
         "properties": {
           "chunk_id": {
@@ -2538,6 +2985,67 @@
         ],
         "title": "SourceOut"
       },
+      "StatsOut": {
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "scores": {
+            "items": {
+              "$ref": "#/components/schemas/ScoreOut"
+            },
+            "type": "array",
+            "title": "Scores"
+          },
+          "answered": {
+            "items": {
+              "$ref": "#/components/schemas/DayCountOut"
+            },
+            "type": "array",
+            "title": "Answered"
+          },
+          "due": {
+            "items": {
+              "$ref": "#/components/schemas/DayCountOut"
+            },
+            "type": "array",
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "required": [
+          "today",
+          "scores",
+          "answered",
+          "due"
+        ],
+        "title": "StatsOut"
+      },
+      "StreakOut": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "today": {
+            "type": "boolean",
+            "title": "Today"
+          },
+          "best": {
+            "type": "integer",
+            "title": "Best"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "today",
+          "best"
+        ],
+        "title": "StreakOut"
+      },
       "TopicOut": {
         "properties": {
           "id": {
@@ -2618,6 +3126,40 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "XpOut": {
+        "properties": {
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "answered": {
+            "type": "integer",
+            "title": "Answered"
+          },
+          "due": {
+            "type": "integer",
+            "title": "Due"
+          },
+          "interview": {
+            "type": "integer",
+            "title": "Interview"
+          },
+          "streak": {
+            "type": "integer",
+            "title": "Streak"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "answered",
+          "due",
+          "interview",
+          "streak"
+        ],
+        "title": "XpOut",
+        "description": "The XP an answer earned, part by part: ten times its score, five for answering, half\nas much again for a question that was due, five inside an interview limit, and, on the\nday's first answer, the streak's length that day, up to ten."
       }
     }
   }

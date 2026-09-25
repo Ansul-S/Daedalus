@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { addArxivPaper, answerQuestion, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listQuestions, listTopics, type Options, practiceNext, searchChunks, uploadDocument } from '../sdk.gen';
-import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeNextData, PracticeNextResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse } from '../types.gen';
+import { addArxivPaper, answerQuestion, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listQuestions, listTopics, type Options, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument } from '../sdk.gen';
+import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -522,4 +522,66 @@ export const practiceNextOptions = (options?: Options<PracticeNextData>) => quer
         return data;
     },
     queryKey: practiceNextQueryKey(options)
+});
+
+export const practiceProgressQueryKey = (options?: Options<PracticeProgressData>) => createQueryKey('practiceProgress', options);
+
+/**
+ * Practice Progress
+ *
+ * XP, level, streak and coins, worked out from every graded answer.
+ */
+export const practiceProgressOptions = (options?: Options<PracticeProgressData>) => queryOptions<PracticeProgressResponse, DefaultError, PracticeProgressResponse, ReturnType<typeof practiceProgressQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await practiceProgress({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: practiceProgressQueryKey(options)
+});
+
+export const practiceMapQueryKey = (options?: Options<PracticeMapData>) => createQueryKey('practiceMap', options);
+
+/**
+ * Practice Map
+ *
+ * The labyrinth on the dashboard: a room for each topic with questions in the library,
+ * how well it is known and what is due in it, the passages between the rooms, today's
+ * thread through them, and the Minotaur's room, the weakest.
+ */
+export const practiceMapOptions = (options?: Options<PracticeMapData>) => queryOptions<PracticeMapResponse, DefaultError, PracticeMapResponse, ReturnType<typeof practiceMapQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await practiceMap({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: practiceMapQueryKey(options)
+});
+
+export const practiceStatsQueryKey = (options?: Options<PracticeStatsData>) => createQueryKey('practiceStats', options);
+
+/**
+ * Practice Stats
+ *
+ * The dashboard's charts: the latest scores, the days practised, and what comes due.
+ */
+export const practiceStatsOptions = (options?: Options<PracticeStatsData>) => queryOptions<PracticeStatsResponse, DefaultError, PracticeStatsResponse, ReturnType<typeof practiceStatsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await practiceStats({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: practiceStatsQueryKey(options)
 });

@@ -2,7 +2,7 @@ import { clock } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 /** The line in miniature for a step label, |— 1:42 —|, with the limit beside it if there is
- * one. The practice page's stopwatch. */
+ * one; past the limit the time turns to the accent. The practice page's stopwatch. */
 export function DimensionMini({
   seconds,
   limit,
@@ -13,17 +13,20 @@ export function DimensionMini({
   className?: string;
 }) {
   const end = "relative h-2.5 w-5 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-current";
+  const over = limit !== undefined && seconds > limit;
+  const against =
+    limit === undefined ? "" : over ? `, over the ${clock(limit)} limit` : ` of ${clock(limit)}`;
   return (
     <span
       role="timer"
-      aria-label={`time taken ${clock(seconds)}`}
+      aria-label={`time taken ${clock(seconds)}${against}`}
       className={cn(
         "inline-flex items-center gap-1.5 font-mono text-xs leading-none font-semibold tracking-normal normal-case tabular-nums",
         className,
       )}
     >
       <span aria-hidden className={cn(end, "border-l border-current")} />
-      {clock(seconds)}
+      <span className={cn(over && "text-thread")}>{clock(seconds)}</span>
       <span aria-hidden className={cn(end, "border-r border-current")} />
       {limit !== undefined && <span className="text-fg-2">{clock(limit)}</span>}
     </span>

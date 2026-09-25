@@ -10,6 +10,7 @@ import {
   type Verdict,
   VerdictMark,
 } from "@/components/hatching";
+import { Coin } from "@/components/coin";
 import { LabyrinthMark } from "@/components/labyrinth-mark";
 import { Markdown } from "@/components/markdown";
 import { Sheet, SheetHead, SheetSection, TitleBlock } from "@/components/sheet";
@@ -18,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { RAMP } from "@/lib/glyph/grids";
 import { cn } from "@/lib/utils";
 
-import { ControlsDemo, MosaicLab, TimerDemo, TracedMark } from "./demos";
+import { ControlsDemo, MosaicLab, TimerDemo, TracedMark, WingDemo } from "./demos";
 
 export const metadata: Metadata = {
   title: "Pattern book",
@@ -276,7 +277,8 @@ export default function PatternBookPage() {
         <SheetHead as="h2" id="marks" number="Sheet 04" title="Marks" sigil="λ">
           The mark is the Cretan labyrinth, drawn square as on the coins of Knossos. Ariadne&apos;s
           thread is the one line in the accent colour, and timers are dimension lines borrowed
-          from a technical drawing.
+          from a technical drawing. What practice earns is struck in ochre, and the wing grows
+          a feather with each step towards the next level.
         </SheetHead>
         <div className="grid grid-cols-1 items-start gap-[clamp(24px,4vw,56px)] md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           <TracedMark />
@@ -312,6 +314,27 @@ export default function PatternBookPage() {
             </Part>
             <Part title="Dimension line · interview mode">
               <TimerDemo />
+            </Part>
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-1 items-start gap-x-[clamp(24px,4vw,56px)] gap-y-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <div>
+            <Part title="Coins · minted, and still to earn">
+              <div className="flex flex-wrap gap-6">
+                <figure className="m-0 grid justify-items-center gap-1.5 font-mono text-[10px] text-fg-2">
+                  <Coin name="First thread" glyph="α" minted />
+                  minted
+                </figure>
+                <figure className="m-0 grid justify-items-center gap-1.5 font-mono text-[10px] text-fg-2">
+                  <Coin name="Theseus" glyph="Θ" minted={false} />
+                  not yet
+                </figure>
+              </div>
+            </Part>
+          </div>
+          <div>
+            <Part title="The wing · XP through a level">
+              <WingDemo />
             </Part>
           </div>
         </div>

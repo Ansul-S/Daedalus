@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Wing } from "@/components/wing";
 import { GRIDS } from "@/lib/glyph/grids";
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -84,6 +85,36 @@ export function TimerDemo() {
       <Button variant="outline" size="sm" className="justify-self-start" onClick={run}>
         Run 3:00 in 9 seconds
       </Button>
+    </div>
+  );
+}
+
+// The third level, Craftsman, runs from 300 XP to Inventor at 600
+const CRAFTSMAN = 300;
+const INVENTOR = 600;
+
+/** The wing through one level, drawn at whatever XP the slider gives. */
+export function WingDemo() {
+  const [xp, setXp] = useState(460);
+  const share = (xp - CRAFTSMAN) / (INVENTOR - CRAFTSMAN);
+  return (
+    <div className="grid max-w-[30rem] gap-3">
+      <Wing share={share} />
+      <p className="font-mono text-[11px] leading-snug tracking-[0.06em] text-fg-2 uppercase">
+        {xp} XP · {INVENTOR - xp} to Inventor · {Math.floor(share * 100)}% of this level
+      </p>
+      <label className="flex items-center gap-3 font-mono text-[10.5px] tracking-[0.06em] text-fg-2 uppercase">
+        XP (example)
+        <input
+          type="range"
+          min={CRAFTSMAN}
+          max={INVENTOR}
+          step={5}
+          value={xp}
+          onChange={(event) => setXp(Number(event.target.value))}
+          className="min-w-0 flex-1 accent-thread"
+        />
+      </label>
     </div>
   );
 }

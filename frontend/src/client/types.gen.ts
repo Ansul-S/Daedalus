@@ -87,6 +87,7 @@ export type AttemptOut = {
      */
     grades: Array<GradeOut>;
     review: ReviewOut | null;
+    earned: EarnedOut | null;
 };
 
 /**
@@ -145,6 +146,54 @@ export type ClaimOut = {
      * Link
      */
     link: string | null;
+};
+
+/**
+ * CoinOut
+ */
+export type CoinOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Glyph
+     */
+    glyph: string;
+    /**
+     * Condition
+     */
+    condition: string;
+    /**
+     * Minted On
+     */
+    minted_on: string | null;
+    /**
+     * Have
+     */
+    have: number | null;
+    /**
+     * Need
+     */
+    need: number | null;
+};
+
+/**
+ * DayCountOut
+ */
+export type DayCountOut = {
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Count
+     */
+    count: number;
 };
 
 /**
@@ -214,6 +263,34 @@ export type DocumentOut = {
      */
     chunk_count?: number;
     latest_job?: JobOut | null;
+};
+
+/**
+ * EarnedOut
+ */
+export type EarnedOut = {
+    /**
+     * Xp
+     */
+    xp: number;
+    parts: XpOut;
+    /**
+     * Total Xp
+     */
+    total_xp: number;
+    level: LevelOut;
+    /**
+     * Level Up
+     */
+    level_up: boolean;
+    /**
+     * Streak
+     */
+    streak: number;
+    /**
+     * Coins
+     */
+    coins: Array<CoinOut>;
 };
 
 /**
@@ -488,6 +565,77 @@ export type KeyPointOut = {
 };
 
 /**
+ * LevelOut
+ */
+export type LevelOut = {
+    /**
+     * Number
+     */
+    number: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Of
+     */
+    of: number;
+    /**
+     * Start
+     */
+    start: number;
+    /**
+     * Next Start
+     */
+    next_start: number | null;
+    /**
+     * Next Name
+     */
+    next_name: string | null;
+};
+
+/**
+ * MapOut
+ */
+export type MapOut = {
+    /**
+     * Columns
+     */
+    columns: number;
+    /**
+     * Rows
+     */
+    rows: number;
+    /**
+     * Rooms
+     */
+    rooms: Array<RoomOut>;
+    /**
+     * Passages
+     */
+    passages: Array<[
+        number,
+        number
+    ]>;
+    /**
+     * Entrance
+     */
+    entrance: number | null;
+    /**
+     * Lair
+     */
+    lair: number | null;
+    /**
+     * Visits
+     */
+    visits: Array<number>;
+    /**
+     * Thread
+     */
+    thread: Array<number>;
+};
+
+/**
  * PracticeOut
  */
 export type PracticeOut = {
@@ -520,6 +668,26 @@ export type PracticeOut = {
      * New Count
      */
     new_count: number;
+};
+
+/**
+ * ProgressOut
+ */
+export type ProgressOut = {
+    /**
+     * Xp
+     */
+    xp: number;
+    level: LevelOut;
+    streak: StreakOut;
+    /**
+     * Answers
+     */
+    answers: number;
+    /**
+     * Coins
+     */
+    coins: Array<CoinOut>;
 };
 
 /**
@@ -731,6 +899,62 @@ export type ReviewOut = {
 };
 
 /**
+ * RoomOut
+ */
+export type RoomOut = {
+    /**
+     * Topic Id
+     */
+    topic_id: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Cell
+     */
+    cell: number;
+    /**
+     * Questions
+     */
+    questions: number;
+    /**
+     * Practised
+     */
+    practised: number;
+    /**
+     * Due
+     */
+    due: number;
+    /**
+     * Mastery
+     */
+    mastery: number;
+};
+
+/**
+ * ScoreOut
+ */
+export type ScoreOut = {
+    /**
+     * Attempt Id
+     */
+    attempt_id: number;
+    /**
+     * Question Id
+     */
+    question_id: number;
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Score
+     */
+    score: number;
+};
+
+/**
  * SearchHitOut
  */
 export type SearchHitOut = {
@@ -861,6 +1085,46 @@ export type SourceOut = {
 };
 
 /**
+ * StatsOut
+ */
+export type StatsOut = {
+    /**
+     * Today
+     */
+    today: string;
+    /**
+     * Scores
+     */
+    scores: Array<ScoreOut>;
+    /**
+     * Answered
+     */
+    answered: Array<DayCountOut>;
+    /**
+     * Due
+     */
+    due: Array<DayCountOut>;
+};
+
+/**
+ * StreakOut
+ */
+export type StreakOut = {
+    /**
+     * Days
+     */
+    days: number;
+    /**
+     * Today
+     */
+    today: boolean;
+    /**
+     * Best
+     */
+    best: number;
+};
+
+/**
  * TopicOut
  */
 export type TopicOut = {
@@ -916,6 +1180,36 @@ export type ValidationError = {
     ctx?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * XpOut
+ *
+ * The XP an answer earned, part by part: ten times its score, five for answering, half
+ * as much again for a question that was due, five inside an interview limit, and, on the
+ * day's first answer, the streak's length that day, up to ten.
+ */
+export type XpOut = {
+    /**
+     * Score
+     */
+    score: number;
+    /**
+     * Answered
+     */
+    answered: number;
+    /**
+     * Due
+     */
+    due: number;
+    /**
+     * Interview
+     */
+    interview: number;
+    /**
+     * Streak
+     */
+    streak: number;
 };
 
 export type HealthData = {
@@ -1472,3 +1766,51 @@ export type PracticeNextResponses = {
 };
 
 export type PracticeNextResponse = PracticeNextResponses[keyof PracticeNextResponses];
+
+export type PracticeProgressData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/practice/progress';
+};
+
+export type PracticeProgressResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProgressOut;
+};
+
+export type PracticeProgressResponse = PracticeProgressResponses[keyof PracticeProgressResponses];
+
+export type PracticeMapData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/practice/map';
+};
+
+export type PracticeMapResponses = {
+    /**
+     * Successful Response
+     */
+    200: MapOut;
+};
+
+export type PracticeMapResponse = PracticeMapResponses[keyof PracticeMapResponses];
+
+export type PracticeStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/practice/stats';
+};
+
+export type PracticeStatsResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatsOut;
+};
+
+export type PracticeStatsResponse = PracticeStatsResponses[keyof PracticeStatsResponses];

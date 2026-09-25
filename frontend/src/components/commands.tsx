@@ -2,6 +2,13 @@ import { cn } from "@/lib/utils";
 
 type Line = { command: string; comment?: string };
 
+/** From nothing to a library to practise: study material, the topic map, questions. */
+export const FILL_THE_LABYRINTH: Line[] = [
+  { command: 'make ingest SRC="notes.pdf 1706.03762"' },
+  { command: "make topics" },
+  { command: "make generate N=20" },
+];
+
 /** Shell commands on an ink panel, in both themes. */
 export function Commands({
   title,

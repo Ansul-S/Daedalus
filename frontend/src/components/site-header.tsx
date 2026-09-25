@@ -1,10 +1,13 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { practiceProgressOptions } from "@/client/@tanstack/react-query.gen";
 import { LabyrinthMark } from "@/components/labyrinth-mark";
 import { ThemeSwitch } from "@/components/theme-switch";
+import { number } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 
 // Pages still to be built stay in the nav, unlinked, so the shape of the app is visible.
@@ -12,9 +15,22 @@ const NAV = [
   { href: "/practice", label: "Practice" },
   { href: "/questions", label: "Questions", soon: true },
   { href: "/library", label: "Library", soon: true },
-  { href: "/dashboard", label: "Dashboard", soon: true },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },
 ] as const;
+
+/** The streak and the XP, as practice left them; nothing while the API can't be reached. */
+function Standing() {
+  const { data } = useQuery(practiceProgressOptions());
+  if (!data) return null;
+  const { days } = data.streak;
+  return (
+    <p className="hidden font-mono text-[10.5px] leading-none tracking-[0.1em] whitespace-nowrap text-fg-2 uppercase sm:block">
+      {days > 0 && `${days}-day thread · `}
+      {number(data.xp)} XP
+    </p>
+  );
+}
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -61,7 +77,10 @@ export function SiteHeader() {
             })}
           </ul>
         </nav>
-        <ThemeSwitch className="ml-auto" />
+        <div className="ml-auto flex items-center gap-x-6">
+          <Standing />
+          <ThemeSwitch />
+        </div>
       </div>
     </header>
   );

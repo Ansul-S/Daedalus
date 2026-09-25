@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Time spent on an answer: counts while `running` and the page is in view, carrying on from
- * `initial` (a saved draft's time). `seconds` ticks for display; `read()` is exact. */
-export function useStopwatch(initial: number, running: boolean) {
+ * `initial` (a saved draft's time). `seconds` ticks for display; `read()` is exact. With
+ * `whileHidden` (interview mode) it counts on in another tab too, as an interviewer's clock
+ * would. */
+export function useStopwatch(initial: number, running: boolean, whileHidden = false) {
   const [seconds, setSeconds] = useState(Math.floor(initial));
   const counted = useRef(initial); // seconds before the current stretch
   const since = useRef<number | null>(null); // when the current stretch began
@@ -15,14 +17,16 @@ export function useStopwatch(initial: number, running: boolean) {
   useEffect(() => {
     if (!running) return;
     const start = () => {
-      if (since.current === null && !document.hidden) since.current = performance.now();
+      if (since.current === null && (whileHidden || !document.hidden)) {
+        since.current = performance.now();
+      }
     };
     const stop = () => {
       if (since.current === null) return;
       counted.current = read();
       since.current = null;
     };
-    const onVisibility = () => (document.hidden ? stop() : start());
+    const onVisibility = () => (document.hidden && !whileHidden ? stop() : start());
 
     start();
     const tick = setInterval(() => setSeconds(Math.floor(read())), 250);
@@ -32,7 +36,7 @@ export function useStopwatch(initial: number, running: boolean) {
       document.removeEventListener("visibilitychange", onVisibility);
       stop();
     };
-  }, [running, read]);
+  }, [running, whileHidden, read]);
 
   return { seconds, read };
 }

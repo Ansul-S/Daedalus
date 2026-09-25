@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { PracticeOut } from "@/client/types.gen";
-import { Commands } from "@/components/commands";
+import { Commands, FILL_THE_LABYRINTH } from "@/components/commands";
 import { Pips } from "@/components/hatching";
 import { Markdown } from "@/components/markdown";
 import { StepLabel, ThreadStep } from "@/components/thread";
@@ -87,14 +87,7 @@ export function QuestionProblem({ error, retry }: { error: Error; retry: () => v
           There is nothing to practise yet. Add study material, build the topic map and write
           questions from it:
         </p>
-        <Commands
-          title="Filling the labyrinth"
-          lines={[
-            { command: 'make ingest SRC="notes.pdf 1706.03762"' },
-            { command: "make topics" },
-            { command: "make generate N=20" },
-          ]}
-        />
+        <Commands title="Filling the labyrinth" lines={FILL_THE_LABYRINTH} />
       </ThreadStep>
     );
   }
