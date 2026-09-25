@@ -6,16 +6,14 @@ import { cn } from "@/lib/utils";
 export function Thread({ className, ...props }: React.ComponentProps<"ol">) {
   return (
     <ol
-      className={cn(
-        "relative list-none py-7 pr-[clamp(16px,3vw,28px)] pl-[60px] before:absolute before:top-[38px] before:bottom-[52px] before:left-[30px] before:w-0.5 before:bg-thread",
-        className,
-      )}
+      className={cn("relative list-none py-7 pr-[clamp(16px,3vw,28px)] pl-[60px]", className)}
       {...props}
     />
   );
 }
 
-/** A knot on the thread; the last one, `end`, is left open. */
+/** A knot on the thread, with the thread running on to the next knot however tall the step
+ * is; the last one, `end`, is left open and the thread stops there. */
 export function ThreadStep({
   end = false,
   className,
@@ -24,10 +22,10 @@ export function ThreadStep({
   return (
     <li
       className={cn(
-        "relative pb-[34px] last:pb-0 before:absolute before:-left-[37px] before:size-3.5 before:rounded-full before:shadow-[0_0_0_4px_var(--ground)]",
+        "relative pb-[34px] last:pb-0 before:absolute before:z-[1] before:-left-[37px] before:size-3.5 before:rounded-full before:shadow-[0_0_0_4px_var(--ground)]",
         end
           ? "before:top-3 before:border-2 before:border-thread before:bg-ground"
-          : "before:top-px before:bg-thread",
+          : "before:top-px before:bg-thread after:absolute after:top-2 after:-bottom-5 after:-left-[30px] after:w-0.5 after:bg-thread last:after:hidden",
         className,
       )}
       {...props}
@@ -35,21 +33,23 @@ export function ThreadStep({
   );
 }
 
-/** The step's name, then what it measures. */
+/** The step's name, then what it measures; a heading when the step is a part of the page. */
 export function StepLabel({
   meta,
+  as: Label = "div",
   children,
   className,
 }: {
   meta?: React.ReactNode;
+  as?: "div" | "h2";
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("type-label flex flex-wrap items-center gap-x-3.5 gap-y-2", className)}>
+    <Label className={cn("type-label flex flex-wrap items-center gap-x-3.5 gap-y-2", className)}>
       <span>{children}</span>
       {meta && <span className="text-fg-2">{meta}</span>}
-    </div>
+    </Label>
   );
 }
 

@@ -29,11 +29,20 @@ Set them in the environment or in `frontend/.env.local`.
 | Page | What it shows |
 |---|---|
 | `/` | Redirects to `/practice` |
-| `/practice` | The question to practise next: its topic, style and difficulty, why it was picked, the passages it was written from, and how many questions are due or new |
+| `/practice` | One question at a time: the question due next and why it was picked, your answer, the grader's verdict, then the next question (see below) |
 | `/setup` | The status of the database, the local models and the API keys, checked each time the page loads |
 | `/pattern-book` | The design system, live: pigments, type, controls, marks, hatching, glyph pictures and Markdown with LaTeX |
 
 Questions, Library and Dashboard are in the navigation, without links, until they are built.
+
+### Practising
+
+- **Answering.** Write the answer in Markdown, with `$maths$` for LaTeX, and check it under Preview. `⌘↵` (`Ctrl+↵` elsewhere) submits it; the API takes up to 8,000 characters.
+- **Time.** A stopwatch counts while the question is on screen and the page is in view, and the time goes with the answer.
+- **Drafts.** An answer being written is kept in the browser's local storage, with its time, so a reload or a closed tab loses nothing. It is cleared once the answer is graded, and never leaves the browser before it is submitted.
+- **The verdict.** The score and the rating it earns, and when the question comes back; how the score was reached; each key point covered, partly covered or missing, with the words of your answer that earned it, underlined in the answer too; each claim supported, contradicted or unverified, with the passage it was checked against; clarity, strengths, gaps, errors, a follow-up question and a model answer.
+- **When grading fails,** the answer is already saved: the verdict says why, and Grade again tries the models again.
+- **Next.** The Next question button, or `N` when the cursor isn't in a text field.
 
 ## Structure
 
@@ -44,7 +53,8 @@ src/components/      the design system's pieces: labyrinth mark, Ariadne's threa
                      dimension-line timer, drafting sheet and title block, glyph mosaic, Markdown
 src/components/ui/   shadcn/ui components (Radix, "lyra" style), restyled to the tokens
 src/client/          typed API client (generated)
-src/lib/             API address and error type, theme, the glyph pictures' engine and grids
+src/lib/             API address and error type, theme, reading a grade, drafts, the stopwatch,
+                     the glyph pictures' engine and grids
 openapi.json         the API schema the client is generated from (generated)
 ```
 

@@ -15,18 +15,36 @@ const COMPONENTS: Components = {
   ),
 };
 
+// Run into a line of text (a claim, a key point), Markdown keeps its maths, code and emphasis
+// but not its blocks.
+const BLOCKS = [
+  "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "pre", "hr",
+  "table", "thead", "tbody", "tr", "th", "td",
+];
+
 /** Questions, answers and feedback: Markdown with $maths$ and $$display maths$$. Raw HTML is
  * never rendered, since the text comes from models and from the reader. */
-export function Markdown({ children, className }: { children: string; className?: string }) {
+export function Markdown({
+  children,
+  inline = false,
+  className,
+}: {
+  children: string;
+  inline?: boolean;
+  className?: string;
+}) {
+  const Wrapper = inline ? "span" : "div";
   return (
-    <div className={cn("markdown", className)}>
+    <Wrapper className={cn("markdown", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
         components={COMPONENTS}
+        disallowedElements={inline ? BLOCKS : undefined}
+        unwrapDisallowed={inline}
       >
         {children}
       </ReactMarkdown>
-    </div>
+    </Wrapper>
   );
 }

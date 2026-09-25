@@ -1,8 +1,33 @@
+import { clock } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
-function clock(seconds: number): string {
-  const whole = Math.round(Math.abs(seconds));
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+/** The line in miniature for a step label, |— 1:42 —|, with the limit beside it if there is
+ * one. The practice page's stopwatch. */
+export function DimensionMini({
+  seconds,
+  limit,
+  className,
+}: {
+  seconds: number;
+  limit?: number;
+  className?: string;
+}) {
+  const end = "relative h-2.5 w-5 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-current";
+  return (
+    <span
+      role="timer"
+      aria-label={`time taken ${clock(seconds)}`}
+      className={cn(
+        "inline-flex items-center gap-1.5 font-mono text-xs leading-none font-semibold tracking-normal normal-case tabular-nums",
+        className,
+      )}
+    >
+      <span aria-hidden className={cn(end, "border-l border-current")} />
+      {clock(seconds)}
+      <span aria-hidden className={cn(end, "border-r border-current")} />
+      {limit !== undefined && <span className="text-fg-2">{clock(limit)}</span>}
+    </span>
+  );
 }
 
 /** Interview mode's soft limit, drawn as a dimension line from a technical drawing: the bar
