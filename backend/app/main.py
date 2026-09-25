@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 
 from app.api import documents, grading, health, practice, questions, search
 from app.core.config import get_settings
@@ -22,7 +23,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
 
 
-app = FastAPI(title="Daedalus API", version="0.1.0", lifespan=lifespan)
+def operation_id(route: APIRoute) -> str:
+    """Name each operation after its handler: the typed frontend client generated from the
+    schema then calls `practiceNext()` rather than `practiceNextPracticeNextGet()`."""
+    return route.name
+
+
+app = FastAPI(
+    title="Daedalus API",
+    version="0.1.0",
+    lifespan=lifespan,
+    generate_unique_id_function=operation_id,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,

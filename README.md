@@ -305,7 +305,8 @@ backend/          FastAPI app (uv)
   app/questions/  concept tags, topics, generation, quote grounding, validation, batch runs
   app/retrieval/  hybrid search and rank fusion
   app/scheduling/ review schedule (FSRS), the next-question picker, mastery
-  scripts/        setup check, ingest, worker, topics, generate and calibrate commands
+  scripts/        setup check, ingest, worker, topics, generate and calibrate commands, and
+                  the API schema the frontend client is generated from
   tests/
 frontend/         Next.js (App Router, TypeScript, Tailwind)
 db/init/          SQL that runs when the database is first created (enables pgvector)
