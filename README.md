@@ -4,7 +4,7 @@ AI/ML interview practice built on your own study material. Daedalus generates co
 
 Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work and fast grading.
 
-**Status:** Phases 1–3 are built: ingestion and retrieval, question generation, and grading. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages and checked against them. Answers are graded against the same passages, every key point labelled and every claim checked against a cited source, and on 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.96). Next is Phase 4, the practice app. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**Status:** Phases 1–3 are built: ingestion and retrieval, question generation, and grading. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages and checked against them. Answers are graded against the same passages, every key point labelled and every claim checked against a cited source, and on 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.96). Phase 4, the practice app, is in progress: questions come back on a review schedule (FSRS) and can be corrected or retired, and the web app shows the question to practise next, with its sources; answering and grading in the browser come next. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
 
 ## Prerequisites (macOS)
 
@@ -28,7 +28,10 @@ Everything runs on free resources: open-source models on your Mac (Ollama), plus
    - Frontend: `cd frontend && pnpm install --frozen-lockfile`.
 
    **Always sync the backend with `uv sync --group ingest`.** A plain `uv sync` removes the ingestion libraries again, because uv removes every package that the requested dependency groups don't include. `make ingest`, `make worker` and `make test-slow` reinstall them before they run.
-5. **Run.** `make api` and `make web` (each in its own terminal), then open http://localhost:3000. The page shows the status of every dependency. The API's interactive documentation is at http://localhost:8000/docs.
+5. **Run.** `make api` and `make web` (each in its own terminal), then open http://localhost:3000.
+   - `make web` runs the frontend's development server, which reloads as files change. To run the production build instead: `cd frontend && pnpm build && pnpm start`.
+   - The app opens on the practice page. The Setup page, http://localhost:3000/setup, shows the status of every dependency.
+   - The API's interactive documentation is at http://localhost:8000/docs.
 
 ## Adding study material
 
@@ -258,7 +261,9 @@ curl 'localhost:8000/questions/31/attempts?limit=5'
 | `make db-up`, `make db-down` | Starts / stops Postgres (data is kept in a Docker volume) |
 | `make migrate` | Applies database migrations |
 | `make ollama` | Runs Ollama with settings sized for a 16 GB Mac |
-| `make api`, `make web` | Runs the API on port 8000 / the frontend on port 3000 |
+| `make api`, `make web` | Runs the API on port 8000 / the frontend's development server on port 3000 |
+| `make client` | Regenerates the frontend's typed API client from the backend's routes. Run it after changing the API |
+| `make glyphs IMAGE=…` | Redraws the frontend's glyph pictures from a copy of Charles Holroyd's etching *Daedalus* (see [frontend/README.md](frontend/README.md#generated-code)) |
 | `make ingest SRC="…"` | Ingests files, folders and arXiv papers (see [Adding study material](#adding-study-material)) |
 | `make topics` | Tags every chunk with the local model and clusters the tags into topics |
 | `make generate N=20` | Writes questions from the topic map (see [Generating questions](#generating-questions)) |
@@ -291,6 +296,13 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `DUPLICATE_SIMILARITY` | `0.75` | Above this, two questions are the same question in other words. Short texts sit much closer together than passages do, so the line is far below the 0.9 it looks like it should be. |
 | `PRACTICE_TIMEZONE` | `UTC` | The time zone practice days are counted in, e.g. `Asia/Kolkata`. A day starts at 04:00 there, so a session past midnight still counts as one day. |
 
+The frontend has two settings of its own, which it doesn't take from the repository's `.env`: set them in the environment it is built and run in, or in `frontend/.env.local`.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | The API's address as the browser sees it; the browser calls the API directly. It is written into the build, so a change needs `pnpm build` again. The API's `CORS_ORIGINS` has to include the frontend's address. |
+| `API_URL` | `NEXT_PUBLIC_API_URL` | The API's address as the frontend's server sees it, for when the two differ (e.g. in a container). The Setup page checks the API from the server. |
+
 ## Layout
 
 ```
@@ -305,10 +317,14 @@ backend/          FastAPI app (uv)
   app/questions/  concept tags, topics, generation, quote grounding, validation, batch runs
   app/retrieval/  hybrid search and rank fusion
   app/scheduling/ review schedule (FSRS), the next-question picker, mastery
-  scripts/        setup check, ingest, worker, topics, generate and calibrate commands, and
-                  the API schema the frontend client is generated from
+  scripts/        setup check, ingest, worker, topics, generate and calibrate commands, the
+                  API schema the frontend client is generated from, and the glyph pictures
   tests/
 frontend/         Next.js (App Router, TypeScript, Tailwind)
+  src/app/        pages: practice, setup, and the pattern book, which shows the design system
+  src/components/ the design system's pieces; ui/ holds shadcn/ui components restyled to it
+  src/client/     typed API client, generated by make client
+  src/lib/        API address and errors, theme, the glyph pictures' engine and grids
 db/init/          SQL that runs when the database is first created (enables pgvector)
 docs/             Design, decisions, measurements and roadmap
 data/             Your material, uploads, downloads and calibration answers (not committed)

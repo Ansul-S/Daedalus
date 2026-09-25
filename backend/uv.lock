@@ -492,6 +492,11 @@ eval = [
     { name = "scikit-learn" },
     { name = "scipy" },
 ]
+glyphs = [
+    { name = "numpy" },
+    { name = "opencv-python" },
+    { name = "pillow" },
+]
 ingest = [
     { name = "beautifulsoup4" },
     { name = "docling" },
@@ -526,6 +531,11 @@ dev = [
 eval = [
     { name = "scikit-learn", specifier = ">=1.9.0" },
     { name = "scipy", specifier = ">=1.18.1" },
+]
+glyphs = [
+    { name = "numpy", specifier = ">=2.5.3" },
+    { name = "opencv-python", specifier = ">=5.0.0.93" },
+    { name = "pillow", specifier = ">=12.3.0" },
 ]
 ingest = [
     { name = "beautifulsoup4", specifier = ">=4.15.0" },

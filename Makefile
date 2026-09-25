@@ -1,4 +1,4 @@
-.PHONY: help ollama db-up db-down migrate api web worker ingest topics generate calibrate check test test-slow lint
+.PHONY: help ollama db-up db-down migrate api web client glyphs worker ingest topics generate calibrate check test test-slow lint
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
@@ -21,6 +21,13 @@ api: ## Run the FastAPI backend on http://localhost:8000
 
 web: ## Run the Next.js frontend on http://localhost:3000
 	cd frontend && pnpm dev
+
+client: ## Regenerate the frontend's typed API client from the backend's routes
+	cd backend && uv run python -m scripts.openapi ../frontend/openapi.json
+	cd frontend && pnpm exec openapi-ts
+
+glyphs: ## Redraw Holroyd's Daedalus in Greek letters for the frontend: make glyphs IMAGE=path/to/etching.jpeg
+	cd backend && uv run --group glyphs python -m scripts.glyphs $(IMAGE)
 
 worker: ## Process ingestion jobs queued through the API (Ctrl+C to stop)
 	cd backend && uv run --group ingest python -m scripts.worker

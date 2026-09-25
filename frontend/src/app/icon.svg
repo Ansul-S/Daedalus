@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-92 -86 184 184">
+  <rect x="-92" y="-86" width="184" height="184" fill="#F5F0E4"/>
+  <path d="M0 86 L0 55 L-55 55 L-55 -55 L55 -55 L55 55 L20 55 L20 65 L65 65 L65 -65 L-65 -65 L-65 65 L-20 65 L-20 75 L-75 75 L-75 -75 L75 -75 L75 75 L10 75 L10 45 L45 45 L45 -45 L-45 -45 L-45 45 L-10 45 L-10 15 L-15 15 L-15 -15 L15 -15 L15 15 L15 25 L25 25 L25 -25 L-25 -25 L-25 25 L-20 25 L-20 35 L-35 35 L-35 -35 L35 -35 L35 35 L5 35 L5 0 L0 0" fill="none" stroke="#1C1411" stroke-width="7" stroke-linejoin="miter" stroke-linecap="square"/>
+  <rect x="-4.5" y="-4.5" width="9" height="9" fill="#8F2121"/>
+</svg>

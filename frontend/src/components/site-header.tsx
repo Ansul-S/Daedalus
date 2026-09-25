@@ -1,0 +1,68 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+import { LabyrinthMark } from "@/components/labyrinth-mark";
+import { ThemeSwitch } from "@/components/theme-switch";
+import { cn } from "@/lib/utils";
+
+// Pages still to be built stay in the nav, unlinked, so the shape of the app is visible.
+const NAV = [
+  { href: "/practice", label: "Practice" },
+  { href: "/questions", label: "Questions", soon: true },
+  { href: "/library", label: "Library", soon: true },
+  { href: "/dashboard", label: "Dashboard", soon: true },
+  { href: "/setup", label: "Setup" },
+] as const;
+
+export function SiteHeader() {
+  const pathname = usePathname();
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-line bg-ground/93 backdrop-blur-[6px]">
+      <div className="mx-auto flex max-w-[calc(1240px+2*var(--gutter))] flex-wrap items-center gap-x-6 gap-y-2 px-(--gutter) py-2.5">
+        <Link
+          href="/practice"
+          className="inline-flex items-center gap-2 font-display text-[1.05rem] leading-none font-extrabold tracking-[0.08em] uppercase"
+        >
+          <LabyrinthMark className="h-6 w-[22px]" />
+          Daedalus
+        </Link>
+        <nav
+          aria-label="Main"
+          className="order-last -mx-(--gutter) w-[calc(100%+2*var(--gutter))] overflow-x-auto px-(--gutter) md:order-none md:mx-0 md:w-auto md:px-0"
+        >
+          <ul className="flex gap-[18px] py-1.5 font-mono text-[10.5px] leading-none tracking-[0.1em] whitespace-nowrap uppercase">
+            {NAV.map((item) => {
+              const current = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              if ("soon" in item) {
+                return (
+                  <li key={item.href} className="text-fg-3" title="Not built yet">
+                    {item.label}
+                    <span className="sr-only"> (not built yet)</span>
+                  </li>
+                );
+              }
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    aria-current={current ? "page" : undefined}
+                    className={cn(
+                      "inline-block pb-[5px] hover:text-fg-2",
+                      current && "bg-[linear-gradient(var(--thread),var(--thread))] bg-[length:100%_2px] bg-bottom bg-no-repeat",
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+        <ThemeSwitch className="ml-auto" />
+      </div>
+    </header>
+  );
+}

@@ -49,6 +49,11 @@ eval = [
     "scikit-learn>=1.9.0",
     "scipy>=1.18.1",
 ]
+glyphs = [
+    "numpy>=2.5.3",
+    "opencv-python>=5.0.0.93",
+    "pillow>=12.3.0",
+]
 ingest = [
     "beautifulsoup4>=4.15.0",
     "docling>=2.126.0",
