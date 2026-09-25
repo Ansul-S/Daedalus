@@ -3,7 +3,8 @@
 The API and the CLI only record documents and queue jobs. A worker claims queued jobs one at
 a time (`FOR UPDATE SKIP LOCKED`), so parsing never runs inside the API process. An advisory
 lock lets only one process ingest at a time: two Docling instances next to the local models
-would not fit in 16 GB.
+would not fit in 16 GB. Since a worker holds that lock for as long as it runs, the lock also
+tells the API whether anything will take the queued jobs.
 
 This module imports nothing heavy, so the API can use it.
 """
@@ -127,6 +128,27 @@ async def requeue_interrupted(session: AsyncSession, kind: str | None = None) ->
     )
     await session.commit()
     return result.rowcount
+
+
+async def worker_running(session: AsyncSession) -> bool:
+    """Whether a process holds the ingest lock on this database: a worker, or `make ingest`
+    or `make generate` while they run. A lock dies with its connection, so a worker that was
+    stopped, however it stopped, no longer counts."""
+    held = await session.scalar(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_locks
+                WHERE locktype = 'advisory' AND granted
+                  AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+                  AND classid = CAST(:high AS oid) AND objid = CAST(:low AS oid) AND objsubid = 1
+            )
+            """
+        ),
+        # pg_locks shows a bigint key as its high and low 32 bits
+        {"high": INGEST_LOCK_KEY >> 32, "low": INGEST_LOCK_KEY & 0xFFFF_FFFF},
+    )
+    return bool(held)
 
 
 @asynccontextmanager

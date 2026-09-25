@@ -7,24 +7,31 @@ at once, so the same idea in a paper and in a notebook lands in one topic.
 Only chunks worth asking about shape the topics: passages that are scaffolding or plain code
 keep their tags but would otherwise add topics like "imports" to the list. A topic keeps its
 id across runs as long as its name survives, so questions filed under it stay filed there.
+
+The whole map is built in two halves, tagging the chunks that have no tags yet and then
+clustering, by `make topics` and by the worker's topics jobs alike.
 """
 
 import logging
 import math
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import delete, func, select
+from pydantic_ai.models import Model
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import Chunk, ChunkTags, ChunkTopic, Question, Topic
+from app.db.models import Chunk, ChunkTags, ChunkTopic, Job, Question, Topic
 from app.llm.embeddings import Embedder
+from app.questions.tagging import TaggedChunk, tag_chunks
 
 log = logging.getLogger(__name__)
 
 Reporter = Callable[[str], None]
+# Told what the build is doing before each step, e.g. "tagging passage 3 of 40"
+StepReporter = Callable[[str], Awaitable[None]]
 
 
 @dataclass
@@ -158,6 +165,106 @@ async def build_topics(
         await save(session, drafts, tagged)
     say(f"{len(drafts)} topics")
     return drafts
+
+
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" + ("" if count == 1 else "s")
+
+
+@dataclass
+class TopicMap:
+    # The chunks this build tagged; the ones tagged before are not read again
+    tagged: list[TaggedChunk]
+    topics: list[TopicDraft]
+
+    @property
+    def summary(self) -> str:
+        return f"{plural(len(self.tagged), 'passage')} tagged, {plural(len(self.topics), 'topic')}"
+
+
+async def build_topic_map(
+    sessions: async_sessionmaker[AsyncSession],
+    model: Model,
+    embedder: Embedder,
+    *,
+    similarity: float,
+    document_id: int | None = None,
+    limit: int | None = None,
+    retag: bool = False,
+    step: StepReporter | None = None,
+    report: Reporter | None = None,
+) -> TopicMap:
+    """Tag the chunks that have no tags yet, then cluster every tag in the library into topics.
+
+    Tagging takes the local model a few seconds a chunk, so only new chunks are read unless
+    `retag` asks for all of them; clustering always covers the whole library.
+    """
+    say = report or log.info
+
+    async def tagging(number: int, total: int) -> None:
+        if step is not None:
+            await step(f"tagging passage {number} of {total}")
+
+    tagged = await tag_chunks(
+        sessions,
+        model,
+        document_id=document_id,
+        limit=limit,
+        retag=retag,
+        progress=tagging,
+        report=say,
+    )
+    say("grouping the tags into topics")
+    if step is not None:
+        await step("grouping the tags into topics")
+    topics = await build_topics(sessions, embedder, similarity=similarity, report=say)
+    return TopicMap(tagged=tagged, topics=topics)
+
+
+async def run_topics_job(
+    sessions: async_sessionmaker[AsyncSession],
+    job_id: int,
+    *,
+    model: Model,
+    embedder: Embedder,
+    similarity: float,
+    report: Reporter | None = None,
+) -> TopicMap | None:
+    """Build the topic map for a claimed job, keeping its progress line current.
+
+    Returns the map, or None when the build failed; the failure is recorded on the job. Every
+    chunk tagged before it stays tagged, so building again carries on where this one stopped.
+    """
+    say = report or log.info
+
+    async def step(message: str) -> None:
+        async with sessions() as session, session.begin():
+            await session.execute(update(Job).where(Job.id == job_id).values(progress=message))
+
+    try:
+        built = await build_topic_map(
+            sessions, model, embedder, similarity=similarity, step=step, report=say
+        )
+    except Exception as exc:
+        message = f"{type(exc).__name__}: {exc}"[:2000]
+        log.exception("topics job %s failed", job_id)
+        say(f"failed: {message}")
+        # The progress line is left at the step that failed.
+        async with sessions() as session, session.begin():
+            await session.execute(
+                update(Job)
+                .where(Job.id == job_id)
+                .values(status="failed", error=message, finished_at=func.now())
+            )
+        return None
+
+    async with sessions() as session, session.begin():
+        await session.execute(
+            update(Job)
+            .where(Job.id == job_id)
+            .values(status="done", progress=built.summary, error=None, finished_at=func.now())
+        )
+    return built
 
 
 async def topic_for(session: AsyncSession, chunk_ids: list[int]) -> int | None:

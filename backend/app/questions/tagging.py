@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import Chunk, ChunkTags, Document
 from app.ingest.chunking import SECTION_LIST_SEPARATOR
+from app.llm.embeddings import Progress
 from app.llm.models import helper_settings
 
 log = logging.getLogger(__name__)
@@ -193,12 +194,14 @@ async def tag_chunks(
     document_id: int | None = None,
     limit: int | None = None,
     retag: bool = False,
+    progress: Progress | None = None,
     report: Reporter | None = None,
 ) -> list[TaggedChunk]:
     """Tag every current chunk that has no tags yet, one call at a time.
 
     Each chunk is committed on its own: the local model takes seconds per chunk, and an
-    interrupted run should not have to start over.
+    interrupted run should not have to start over. `progress` hears the number of the chunk
+    about to be read, and how many there are.
     """
     say = report or log.info
     agent = tagger(model)
@@ -210,6 +213,8 @@ async def tag_chunks(
 
     tagged: list[TaggedChunk] = []
     for number, (title, chunk) in enumerate(pending, start=1):
+        if progress is not None:
+            await progress(number, len(pending))
         reading = await read_chunk(agent, title, chunk)
         async with sessions() as session, session.begin():
             await store(session, reading, model.model_name)

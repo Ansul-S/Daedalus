@@ -1,5 +1,5 @@
 """The question endpoints: starting a batch, reading the library, correcting and retiring a
-question, browsing the topic map."""
+question, browsing the topic map and having it built."""
 
 import asyncio
 
@@ -684,3 +684,66 @@ def test_the_topic_map_pages(client, library) -> None:
 
     assert [topic["name"] for topic in first] == ["attention", "retrieval"]
     assert [topic["name"] for topic in rest] == ["vanishing gradient", "beam search"]
+
+
+def test_the_topic_map_is_queued_once(client, sessions, corpus) -> None:
+    async def tag_one() -> None:
+        async with sessions() as session, session.begin():
+            session.add(
+                ChunkTags(
+                    chunk_id=corpus.scaling,
+                    explains="how attention scores are scaled",
+                    tags=["attention"],
+                    worth_asking=True,
+                    model_worth_asking=True,
+                    model="ollama:qwen3.5:4b",
+                    prompt_version="tags-v2",
+                )
+            )
+
+    async def jobs() -> int:
+        async with sessions() as session:
+            return await session.scalar(select(func.count()).select_from(Job))
+
+    asyncio.run(tag_one())
+    first = client.post("/topics/build")
+    again = client.post("/topics/build")
+
+    assert first.status_code == 202
+    body = first.json()
+    # Four of the five passages are still to be tagged
+    assert (body["message"], body["untagged"]) == ("queued", 4)
+    job = body["job"]
+    assert (job["kind"], job["status"], job["document_id"], job["options"]) == (
+        "topics",
+        "queued",
+        None,
+        {},
+    )
+    # The queued build tags whatever is untagged when it runs, so a second one adds nothing.
+    assert again.status_code == 202
+    assert (again.json()["message"], again.json()["job"]["id"]) == ("already queued", job["id"])
+    assert asyncio.run(jobs()) == 1
+
+
+def test_there_is_no_topic_map_to_build_without_passages(client, sessions) -> None:
+    response = client.post("/topics/build")
+
+    async def jobs() -> int:
+        async with sessions() as session:
+            return await session.scalar(select(func.count()).select_from(Job))
+
+    assert response.status_code == 200
+    assert (response.json()["job"], response.json()["untagged"]) == (None, 0)
+    assert "add material first" in response.json()["message"]
+    assert asyncio.run(jobs()) == 0
+
+
+def test_the_topic_map_is_built_on_a_local_machine_only(client, settings, corpus) -> None:
+    settings.environment = "production"
+
+    response = client.post("/topics/build")
+
+    assert response.status_code == 403
+    assert "built locally" in response.json()["detail"]
+    assert client.get("/topics").status_code == 200

@@ -1,9 +1,10 @@
 """Question endpoints: start a batch, read what came out of it, correct or retire a question,
-and browse the topic map.
+and browse the topic map or have it built.
 
 Starting a batch only writes down the plan; `make worker` (or `make generate`) does the
 writing. Checking a question and testing it for duplicates both run on the local models, so
-starting a batch is a local-only endpoint, like adding material.
+starting a batch is a local-only endpoint, like adding material. So is building the topic
+map, which the worker does with the small local model.
 
 A question is shown with everything that stands behind it: the chunks it was written from,
 cited the same way search results are, the key points an answer has to cover with the quote
@@ -39,6 +40,7 @@ from app.core.config import Settings, get_settings
 from app.db.models import (
     QUESTION_STATUSES,
     Chunk,
+    ChunkTags,
     ChunkTopic,
     Document,
     Job,
@@ -82,6 +84,14 @@ def local_only(settings: SettingsDep) -> None:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Writing questions runs locally; start a batch from your own machine",
+        )
+
+
+def local_map_only(settings: SettingsDep) -> None:
+    if settings.environment != "local":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "The topic map is built locally; build it from your own machine",
         )
 
 
@@ -196,6 +206,14 @@ class TopicOut(BaseModel):
     chunk_count: int
     question_count: int
     accepted_count: int
+
+
+class TopicMapOut(BaseModel):
+    message: str
+    # Current chunks the local model has not tagged yet: the job tags them before it groups
+    # every tag in the library into topics
+    untagged: int
+    job: JobOut | None
 
 
 def _filters(
@@ -580,3 +598,49 @@ async def list_topics(
         )
         for topic, chunk_total, question_total, accepted in rows.tuples()
     ]
+
+
+@router.post(
+    "/topics/build",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(local_map_only)],
+)
+async def build_topic_map(session: SessionDep, response: Response) -> TopicMapOut:
+    """Queue a build of the topic map: the chunks without tags are tagged, then every tag is
+    grouped into topics. Returns 202 with the job the worker will run.
+
+    One build at a time: while a job is still queued or running it is returned unchanged,
+    since it will tag whatever is untagged when it gets there.
+    """
+    chunks, tagged = (
+        await session.execute(
+            select(func.count(), func.count(ChunkTags.chunk_id))
+            .select_from(Chunk)
+            .outerjoin(ChunkTags, ChunkTags.chunk_id == Chunk.id)
+            .where(Chunk.superseded_at.is_(None))
+        )
+    ).one()
+    active = await session.scalar(
+        select(Job)
+        .where(Job.kind == "topics", Job.status.in_(queue.ACTIVE_STATUSES))
+        .order_by(Job.id.desc())
+        .limit(1)
+    )
+    if active is not None:
+        return TopicMapOut(
+            message=f"already {active.status}",
+            untagged=chunks - tagged,
+            job=JobOut.model_validate(active),
+        )
+    if not chunks:
+        # Nothing to tag or group, so nothing is written down
+        response.status_code = status.HTTP_200_OK
+        return TopicMapOut(
+            message="nothing to build it from; add material first", untagged=0, job=None
+        )
+
+    job = Job(kind="topics")
+    session.add(job)
+    await session.commit()
+    await session.refresh(job)
+    return TopicMapOut(message="queued", untagged=chunks - tagged, job=JobOut.model_validate(job))

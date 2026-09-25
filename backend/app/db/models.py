@@ -31,7 +31,7 @@ EMBEDDING_DIMENSIONS = 1024
 SOURCE_TYPES = ("pdf", "notebook", "arxiv")
 DOCUMENT_STATUSES = ("pending", "ready", "failed")
 JOB_STATUSES = ("queued", "running", "done", "failed")
-JOB_KINDS = ("ingest", "generate")
+JOB_KINDS = ("ingest", "generate", "topics")
 TASK_STATUSES = ("queued", "running", "done", "failed")
 CONTENT_TYPES = ("text", "code", "formula", "table")
 QUESTION_STATUSES = ("accepted", "rejected", "retired")
@@ -168,8 +168,9 @@ class Chunk(Base):
 
 
 class Job(Base):
-    """One run of a long job. Postgres doubles as the queue, for ingesting a document and for
-    generating a batch of questions alike; a generating job belongs to no document."""
+    """One run of a long job. Postgres doubles as the queue, for ingesting a document, building
+    the topic map and generating a batch of questions alike; only ingesting belongs to one
+    document."""
 
     __tablename__ = "jobs"
 

@@ -105,7 +105,10 @@ Options go in `ARGS`, for example `make topics ARGS="--rules-only"`:
 | `--similarity X` | How close two tags have to be to share a topic (default `TOPIC_SIMILARITY`, 0.8) |
 
 - It takes about 12 s per chunk, so roughly 25 minutes for a library of 124 chunks. Ollama
-  must be running, and only one process may use the local models at a time.
+  must be running, and only one process may use the local models at a time: `make topics`
+  doesn't start while a worker, `make ingest` or `make generate` is running. A running worker
+  builds the map when asked through `POST /topics/build`, tagging only the chunks that have no
+  tags yet.
 - A chunk is context-only, and never asked about, when the model says it explains nothing or
   when a rule says so: chunks that are only code, and scaffolding such as roadmaps, learning
   objectives, setup and imports, acknowledgments and front matter. Context-only chunks keep
@@ -215,14 +218,16 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 | `GET /health`, `GET /health/deps` | The API is up; status of the database, the models and the API keys |
 | `POST /documents/upload` | Upload a `.pdf` or `.ipynb` as the multipart field `file`. Options as query parameters: `ocr`, `formulas`, `force` |
 | `POST /documents/arxiv` | Add a paper: `{"arxiv_id": "1706.03762"}`, optionally with `ocr`, `formulas` and `force` |
-| `GET /documents`, `GET /documents/{id}` | Documents with their status, details, chunk count and latest job |
-| `GET /jobs/{id}` | A job's status, progress and error |
+| `GET /documents`, `GET /documents/{id}` | Documents with their status, details, chunk count, how many of those chunks the topic map has tagged, and latest job |
+| `GET /jobs`, `GET /jobs/{id}` | The newest jobs first (`kind` is `ingest`, `topics` or `generate`; `limit` at most 100), or one job: its status, progress and error |
+| `GET /worker` | Whether a worker is running to take the queued jobs |
 | `GET /search?q=…&limit=10&mode=hybrid` | Search all chunks. `mode` is `hybrid`, `vector` or `keyword`; `limit` is at most 50 |
 | `POST /questions/generate` | Plan and queue a batch: `{"count": 20}`, optionally `document_id`. Returns **202** with the job the worker will run |
 | `GET /questions` | The library, newest first. Filters: `status`, `topic_id`, `style`, `difficulty`, `document_id`, `source_updated`, `rating` (`good`, `poor` or `unrated`, by the latest rating); `limit` and `offset`, with the total of the whole match |
 | `GET /questions/{id}` | One question with its sources, key points and quotes, misconceptions, validation report and token usage |
 | `PATCH /questions/{id}` | Correct or retire a question: any of `text`, `reference_answer`, `key_points` (two to four, replaced as a whole) and `status` (`accepted` or `retired`), with an optional `reason`. Returns the question as `GET` does |
 | `GET /topics` | The topic map with the passages and questions behind each topic |
+| `POST /topics/build` | Queue a build of the topic map: the chunks without tags are tagged, then every tag is grouped into topics. Returns **202** with the job the worker will run |
 | `POST /questions/{id}/attempts` | Answer an accepted question: `{"answer": "…"}`, at most 8,000 characters, optionally with `seconds` taken and an interview `time_limit`. Returns **201** with the attempt, its grade and, once graded, when the question comes back and what the answer earned |
 | `POST /attempts/{id}/grades` | Grade an attempt again, e.g. after a failed grade. Earlier grades are kept |
 | `GET /attempts/{id}` | An attempt with every grade it was given, oldest first |
@@ -239,6 +244,8 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 - **Search results.** Each result has the chunk text, its section label, its page or cell range, and its rank in each retriever. It also has a citation, such as `RNN Intuition, pp. 7–8` or `Attention Is All You Need, § 3.2.1 Scaled Dot-Product Attention · 3.2.2 Multi-Head Attention`. For arXiv papers, a link points to the section or PDF page.
 - **Without Ollama,** hybrid search falls back to keyword search and says so in `warning`, and `mode=vector` returns 503.
 - **Starting a batch** needs the worker to be running, and returns the batch already in flight rather than planning a second one: two plans made at the same time would pick the same passages and pay for them twice. It returns **200** with no job when nothing is left to ask about, and 403 with `ENVIRONMENT=production`, since checking a question needs the local models.
+- **Building the topic map** also needs the worker, and also returns the build already queued or running rather than a second one, which would find nothing new: a build tags whatever is untagged when it runs. The response says how many chunks are `untagged`. It returns **200** with no job when there is nothing to build from, and 403 with `ENVIRONMENT=production`. A build that fails keeps the tags it wrote, so the next one carries on.
+- **The worker** holds a Postgres advisory lock for as long as it runs, and `GET /worker` reports whether that lock is held (`make ingest` and `make generate` hold it too). A job still marked `running` while no worker is running was stopped part way; the next worker to start queues it again.
 - **A question is served with everything behind it:** the passages it was written from, cited as search results are, what an answer has to cover with the quote that proves each point, and the report from every check it went through, whether it passed or failed.
 - **Correcting a question** holds it to the rule generation works to: each key point's quote has to be in the passage it names, one of the question's sources. Otherwise the edit is refused with 422, each problem pointing at its field, and nothing changes.
   - A new question text is embedded again for the duplicate check. Without Ollama the question is left without an embedding, and the check passes over it.
@@ -258,6 +265,8 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 curl -X POST localhost:8000/documents/arxiv -H 'Content-Type: application/json' -d '{"arxiv_id": "1706.03762"}'
 curl -F file=@notes.pdf 'localhost:8000/documents/upload?formulas=false'
 curl 'localhost:8000/search?q=why+scale+dot-product+attention&limit=5'
+curl -X POST localhost:8000/topics/build
+curl 'localhost:8000/jobs?kind=topics&limit=1'
 curl -X POST localhost:8000/questions/generate -H 'Content-Type: application/json' -d '{"count": 20}'
 curl 'localhost:8000/questions?status=accepted&difficulty=3&limit=5'
 curl -X PATCH localhost:8000/questions/31 -H 'Content-Type: application/json' -d '{"status": "retired", "reason": "asks for a reported number"}'
@@ -278,7 +287,7 @@ curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"qu
 | `make ingest SRC="…"` | Ingests files, folders and arXiv papers (see [Adding study material](#adding-study-material)) |
 | `make topics` | Tags every chunk with the local model and clusters the tags into topics |
 | `make generate N=20` | Writes questions from the topic map (see [Generating questions](#generating-questions)) |
-| `make worker` | Processes jobs queued through the API, both ingestion and question batches |
+| `make worker` | Processes jobs queued through the API: ingestion first, then the topic map, then question batches |
 | `make calibrate` | Grades hand-graded answers and measures how far the grader agrees (see [Checking the grader](#checking-the-grader-against-your-own-grades)) |
 | `make check` | Checks the database and its migrations, Ollama and its models, and API keys. `make check LIVE=1` also sends a one-word prompt to each model. |
 | `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`). |
@@ -318,8 +327,8 @@ The frontend has two settings of its own, which it doesn't take from the reposit
 
 ```
 backend/          FastAPI app (uv)
-  app/api/        HTTP routes: health, documents and jobs, search, questions and topics,
-                  attempts and grades, practice, ratings
+  app/api/        HTTP routes: health, documents, jobs and the worker, search, questions and
+                  topics, attempts and grades, practice, ratings
   app/core/       settings, setup checks
   app/db/         tables (SQLAlchemy) and Alembic migrations
   app/grading/    grading an answer against its question's sources, and scoring it

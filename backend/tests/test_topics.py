@@ -9,9 +9,10 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.profiles import ModelProfile
 from sqlalchemy import func, select, update
 
-from app.db.models import Chunk, ChunkTags, ChunkTopic, Document, Question, Topic
+from app.db.models import Chunk, ChunkTags, ChunkTopic, Document, Job, Question, Topic
+from app.ingest import queue
 from app.questions.tagging import apply_rules, clean_tags, context_only, tag_chunks
-from app.questions.topics import build_topics
+from app.questions.topics import build_topics, run_topics_job
 
 READING = {"explains": "why the scores are scaled", "tags": ["Attention"], "worth_asking": True}
 
@@ -145,6 +146,19 @@ def test_tagging_only_visits_current_chunks_that_have_none(sessions, lesson) -> 
     assert tagged == [lesson[0], lesson[2]]
 
 
+def test_tagging_says_which_chunk_it_is_on(sessions, lesson) -> None:
+    calls: list[str] = []
+    heard: list[tuple[int, int, int]] = []
+
+    async def progress(number: int, total: int) -> None:
+        heard.append((number, total, len(calls)))
+
+    asyncio.run(tag_chunks(sessions, tagger_model(calls), progress=progress, report=lambda _: None))
+
+    # Each chunk is announced before the model reads it
+    assert heard == [(1, 3, 0), (2, 3, 1), (3, 3, 2)]
+
+
 def test_the_rules_can_be_judged_again_without_the_model(sessions, lesson) -> None:
     """Changing the rules must not cost another pass over the library with the local model."""
 
@@ -262,3 +276,112 @@ def test_rebuilding_topics_keeps_the_one_a_question_points_at(sessions, embedder
     assert after["attention"] == before["attention"]
     assert topic_id == before["softmax"]
     assert orphaned == 0
+
+
+async def claimed_topics_job(sessions) -> int:
+    """A topics job as the worker holds it: queued through the API, then claimed."""
+    async with sessions() as session, session.begin():
+        session.add(Job(kind="topics"))
+    async with sessions() as session:
+        return await queue.claim_next_job(session, "topics")
+
+
+def test_a_topics_job_tags_the_new_chunks_then_groups_the_tags(sessions, embedder, corpus) -> None:
+    lines: list[str | None] = []
+
+    async def scenario():
+        await tag(sessions, corpus.retriever, ["faiss index"])
+        job_id = await claimed_topics_job(sessions)
+
+        async def job_line() -> None:
+            async with sessions() as session:
+                lines.append(await session.scalar(select(Job.progress).where(Job.id == job_id)))
+
+        # The model and the embedder both look at the job's line when they are called.
+        async def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+            await job_line()
+            return ModelResponse(parts=[TextPart(json.dumps(READING))])
+
+        embed = embedder.embed_documents
+
+        async def embed_documents(texts, progress=None):
+            await job_line()
+            return await embed(texts, progress)
+
+        embedder.embed_documents = embed_documents
+        model = FunctionModel(respond, profile=ModelProfile(supports_json_schema_output=True))
+        built = await run_topics_job(
+            sessions, job_id, model=model, embedder=embedder, similarity=0.8, report=lambda _: None
+        )
+        async with sessions() as session:
+            job = await session.get_one(Job, job_id)
+            links = await session.scalar(select(func.count()).select_from(ChunkTopic))
+        return built, job, links
+
+    built, job, links = asyncio.run(scenario())
+
+    # The chunk tagged before is not read again, and each line is up before its step starts.
+    assert lines == [
+        "tagging passage 1 of 4",
+        "tagging passage 2 of 4",
+        "tagging passage 3 of 4",
+        "tagging passage 4 of 4",
+        "grouping the tags into topics",
+    ]
+    assert [(topic.name, topic.chunks) for topic in built.topics] == [
+        ("attention", 4),
+        ("faiss index", 1),
+    ]
+    assert (job.status, job.progress, job.error) == ("done", "4 passages tagged, 2 topics", None)
+    assert job.finished_at is not None
+    assert links == 5
+
+
+def test_a_failed_topics_job_keeps_its_tags_and_carries_on_next_time(
+    sessions, embedder, corpus
+) -> None:
+    async def scenario():
+        embedder.fail = True
+        first = await claimed_topics_job(sessions)
+        read_first: list[str] = []
+        failed = await run_topics_job(
+            sessions,
+            first,
+            model=tagger_model(read_first),
+            embedder=embedder,
+            similarity=0.8,
+            report=lambda _: None,
+        )
+        async with sessions() as session:
+            kept = await session.scalar(select(func.count()).select_from(ChunkTags))
+
+        embedder.fail = False
+        second = await claimed_topics_job(sessions)
+        read_second: list[str] = []
+        built = await run_topics_job(
+            sessions,
+            second,
+            model=tagger_model(read_second),
+            embedder=embedder,
+            similarity=0.8,
+            report=lambda _: None,
+        )
+        async with sessions() as session:
+            jobs = list(await session.scalars(select(Job).order_by(Job.id)))
+        return failed, len(read_first), kept, built, len(read_second), jobs
+
+    failed, read_first, kept, built, read_second, jobs = asyncio.run(scenario())
+
+    # The embedding model was away when the tags were to be grouped.
+    assert failed is None
+    assert (jobs[0].status, jobs[0].error) == (
+        "failed",
+        "EmbeddingError: Ollama is not reachable (ConnectError)",
+    )
+    # The line says where it stopped.
+    assert jobs[0].progress == "grouping the tags into topics"
+    assert jobs[0].finished_at is not None
+    # The tags it paid for were kept, so the next build only groups them.
+    assert (read_first, kept, read_second) == (5, 5, 0)
+    assert [(topic.name, topic.chunks) for topic in built.topics] == [("attention", 5)]
+    assert (jobs[1].status, jobs[1].progress) == ("done", "0 passages tagged, 1 topic")

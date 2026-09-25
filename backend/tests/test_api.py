@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select, update
 
 from app.api.search import get_embedder
-from app.db.models import Chunk, Document, Job
+from app.db.models import Chunk, ChunkTags, Document, Job
+from app.ingest import queue
 from app.main import app
 
 NOTEBOOK = json.dumps({"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}).encode()
@@ -153,6 +154,88 @@ def test_a_job_that_writes_questions_belongs_to_no_document(client, sessions) ->
     body = client.get(f"/jobs/{job_id}").json()
     assert (body["kind"], body["document_id"]) == ("generate", None)
     assert body["options"]["planned"] == 5
+
+
+def test_jobs_are_listed_newest_first_and_by_kind(client, sessions) -> None:
+    ingest = upload(client, "lesson.ipynb", NOTEBOOK).json()["job"]["id"]
+
+    async def add() -> list[int]:
+        async with sessions() as session, session.begin():
+            jobs = [
+                Job(kind="generate", status="done", options={"count": 3, "planned": 3}),
+                Job(kind="topics", status="failed", error="EmbeddingError: Ollama is away"),
+                Job(kind="topics"),
+            ]
+            session.add_all(jobs)
+            await session.flush()
+            return [job.id for job in jobs]
+
+    generate, failed, queued = asyncio.run(add())
+
+    listed = client.get("/jobs").json()
+    topics = client.get("/jobs", params={"kind": "topics"}).json()
+    newest = client.get("/jobs", params={"limit": 1}).json()
+
+    assert [job["id"] for job in listed] == [queued, failed, generate, ingest]
+    assert [(job["id"], job["status"]) for job in topics] == [
+        (queued, "queued"),
+        (failed, "failed"),
+    ]
+    assert topics[1]["error"] == "EmbeddingError: Ollama is away"
+    assert [job["id"] for job in newest] == [queued]
+
+
+@pytest.mark.parametrize("params", [{"kind": "grade"}, {"limit": 0}, {"limit": 101}])
+def test_invalid_job_filters_are_rejected(client, params) -> None:
+    assert client.get("/jobs", params=params).status_code == 422
+
+
+def test_the_worker_is_running_while_it_holds_the_lock(client, engine) -> None:
+    async def while_held() -> dict:
+        async with queue.ingest_lock(engine):
+            return (await asyncio.to_thread(client.get, "/worker")).json()
+
+    before = client.get("/worker").json()
+    during = asyncio.run(while_held())
+    after = client.get("/worker").json()
+
+    assert (before, during, after) == ({"running": False}, {"running": True}, {"running": False})
+
+
+def test_documents_count_their_passages_in_the_topic_map(client, sessions, corpus) -> None:
+    async def tag_two() -> int:
+        async with sessions() as session, session.begin():
+            session.add_all(
+                ChunkTags(
+                    chunk_id=chunk_id,
+                    explains="how attention scores are scaled",
+                    tags=["attention"],
+                    worth_asking=True,
+                    model_worth_asking=True,
+                    model="ollama:qwen3.5:4b",
+                    prompt_version="tags-v2",
+                )
+                for chunk_id in (corpus.scaling, corpus.positions)
+            )
+            # A later ingestion replaced one of them, and with it its tags.
+            await session.execute(
+                update(Chunk).where(Chunk.id == corpus.positions).values(superseded_at=func.now())
+            )
+            return await session.scalar(
+                select(Document.id).where(Document.arxiv_id == "1706.03762")
+            )
+
+    paper_id = asyncio.run(tag_two())
+
+    listed = {document["id"]: document for document in client.get("/documents").json()}
+
+    assert (listed[paper_id]["chunk_count"], listed[paper_id]["tagged_count"]) == (2, 1)
+    assert client.get(f"/documents/{paper_id}").json()["tagged_count"] == 1
+    others = [document for document in listed.values() if document["id"] != paper_id]
+    assert [(document["chunk_count"], document["tagged_count"]) for document in others] == [
+        (1, 0),
+        (1, 0),
+    ]
 
 
 def test_superseded_chunks_are_left_out_of_the_chunk_count(client, sessions, corpus) -> None:

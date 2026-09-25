@@ -1,20 +1,21 @@
-"""Library endpoints: add study material and follow its ingestion.
+"""Library endpoints: add study material, follow its ingestion and the other queued jobs.
 
 Adding material only records a job; `make worker` (or `make ingest`) does the parsing.
-Ingestion needs the local models, so these endpoints are disabled in production.
+Ingestion needs the local models, so these endpoints are disabled in production. The jobs of
+every kind can be listed, and whether a worker is running to take them can be asked.
 """
 
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, get_args
 
-from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.db.models import Chunk, Document, Job
+from app.db.models import JOB_KINDS, Chunk, ChunkTags, Document, Job
 from app.db.session import get_session
 from app.ingest import queue
 from app.ingest.arxiv import parse_arxiv_id
@@ -24,6 +25,9 @@ router = APIRouter(tags=["documents"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+JobKind = Literal["ingest", "generate", "topics"]
+assert set(get_args(JobKind)) == set(JOB_KINDS)
 
 
 def local_only(settings: SettingsDep) -> None:
@@ -38,7 +42,8 @@ class JobOut(BaseModel):
 
     id: int
     kind: str
-    # None for a job that writes questions: it belongs to the library, not to one document
+    # None for a job that builds the topic map or writes questions: it belongs to the library,
+    # not to one document
     document_id: int | None
     status: str
     progress: str | None
@@ -69,6 +74,9 @@ class DocumentOut(BaseModel):
     updated_at: datetime
     # Chunks of the newest ingestion; the ones it replaced are kept but no longer counted
     chunk_count: int = 0
+    # Of those, the ones the topic map has tagged. The rest are left out of the topics, and
+    # no question is written from them, until the map is built again.
+    tagged_count: int = 0
     latest_job: JobOut | None = None
 
 
@@ -76,6 +84,14 @@ class IngestOut(BaseModel):
     message: str
     document: DocumentOut
     job: JobOut | None
+
+
+class WorkerOut(BaseModel):
+    # Queued jobs only run while this is true. A job still marked running while it is false
+    # was stopped part way, and the next worker to start queues it again.
+    running: bool = Field(
+        description="Whether a worker, or `make ingest` or `make generate`, is running"
+    )
 
 
 class IngestOptions(BaseModel):
@@ -89,14 +105,19 @@ class ArxivIn(IngestOptions):
 
 
 async def _documents_out(session: AsyncSession, documents: list[Document]) -> list[DocumentOut]:
-    """Two queries for any number of documents: chunk counts and each latest job."""
+    """Two queries for any number of documents: chunk and tag counts, and each latest job."""
     ids = [document.id for document in documents]
-    counts = await session.execute(
-        select(Chunk.document_id, func.count())
+    rows = await session.execute(
+        select(Chunk.document_id, func.count(), func.count(ChunkTags.chunk_id))
+        .outerjoin(ChunkTags, ChunkTags.chunk_id == Chunk.id)
         .where(Chunk.document_id.in_(ids), Chunk.superseded_at.is_(None))
         .group_by(Chunk.document_id)
     )
-    chunk_counts = dict(counts.tuples().all())
+    # A document without chunks is left out, and keeps the counts' defaults of 0
+    counts = {
+        document_id: {"chunk_count": chunks, "tagged_count": tagged}
+        for document_id, chunks, tagged in rows.tuples()
+    }
     latest_jobs = await session.scalars(
         select(Job)
         .where(Job.document_id.in_(ids))
@@ -106,10 +127,7 @@ async def _documents_out(session: AsyncSession, documents: list[Document]) -> li
     jobs = {job.document_id: JobOut.model_validate(job) for job in latest_jobs}
     return [
         DocumentOut.model_validate(document).model_copy(
-            update={
-                "chunk_count": chunk_counts.get(document.id, 0),
-                "latest_job": jobs.get(document.id),
-            }
+            update={**counts.get(document.id, {}), "latest_job": jobs.get(document.id)}
         )
         for document in documents
     ]
@@ -196,9 +214,32 @@ async def get_document(document_id: int, session: SessionDep) -> DocumentOut:
     return out
 
 
+@router.get("/jobs")
+async def list_jobs(
+    session: SessionDep,
+    kind: JobKind | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[JobOut]:
+    """The newest jobs first: what is waiting, what is running and how the latest ones ended.
+
+    Only one topic map and one batch of questions are queued at a time, so the newest job of
+    those kinds is the one to follow.
+    """
+    query = select(Job).order_by(Job.id.desc()).limit(limit)
+    if kind is not None:
+        query = query.where(Job.kind == kind)
+    return [JobOut.model_validate(job) for job in await session.scalars(query)]
+
+
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: int, session: SessionDep) -> JobOut:
     job = await session.get(Job, job_id)
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "job not found")
     return JobOut.model_validate(job)
+
+
+@router.get("/worker")
+async def worker_status(session: SessionDep) -> WorkerOut:
+    """Whether a worker is running to take the queued jobs (`make worker`)."""
+    return WorkerOut(running=await queue.worker_running(session))

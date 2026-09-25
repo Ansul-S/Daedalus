@@ -1,6 +1,9 @@
 import asyncio
 
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.db.models import Job
 from app.ingest import queue
@@ -89,6 +92,25 @@ def test_jobs_are_claimed_oldest_first(sessions) -> None:
         assert job.started_at is not None
 
 
+def test_each_kind_of_job_is_claimed_on_its_own(sessions) -> None:
+    async def scenario():
+        async with sessions() as session, session.begin():
+            ingest = (await queue.add_arxiv(session, "1706.03762", None, OPTIONS)).job
+            topics = Job(kind="topics")
+            generate = Job(kind="generate", options={"count": 3, "planned": 3})
+            session.add_all([topics, generate])
+        async with sessions() as session:
+            claimed = [
+                await queue.claim_next_job(session, kind)
+                for kind in ("topics", "topics", "generate", "ingest")
+            ]
+        return [topics.id, None, generate.id, ingest.id], claimed
+
+    expected, claimed = asyncio.run(scenario())
+
+    assert claimed == expected
+
+
 def test_a_job_locked_by_another_worker_is_skipped(sessions) -> None:
     async def scenario():
         async with sessions() as session:
@@ -131,3 +153,26 @@ def test_only_one_process_may_ingest_at_a_time(engine) -> None:
             return [*held, after_release]
 
     assert asyncio.run(scenario()) == [True, False, True]
+
+
+def test_a_worker_is_seen_by_the_lock_it_holds(engine, sessions, database_url) -> None:
+    # A worker on another database of the same server, such as the development one
+    elsewhere = create_async_engine(
+        make_url(database_url).set(database="postgres"), poolclass=NullPool
+    )
+
+    async def running() -> bool:
+        async with sessions() as session:
+            return await queue.worker_running(session)
+
+    async def scenario() -> list[bool]:
+        seen = [await running()]
+        async with queue.ingest_lock(elsewhere) as other:
+            seen += [other, await running()]
+        async with queue.ingest_lock(engine) as ours:
+            seen += [ours, await running()]
+        seen.append(await running())
+        await elsewhere.dispose()
+        return seen
+
+    assert asyncio.run(scenario()) == [False, True, False, True, True, False]

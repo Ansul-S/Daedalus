@@ -3,10 +3,12 @@
 Run from the repo root:  make worker
 or from backend/:        uv run --group ingest python -m scripts.worker
 
-Both kinds of job are handled: ingesting a document and writing a batch of questions.
-Ingestion comes first whenever there is any, since somebody is usually waiting on it, and
-only one job runs at a time because two sets of models do not fit in 16 GB. A job interrupted
-by stopping the worker is queued again the next time it starts.
+Every kind of job is handled: ingesting a document, building the topic map and writing a
+batch of questions, in that order of priority. Ingestion comes first whenever there is any,
+since somebody is usually waiting on it; the topic map comes before questions, because a batch
+is planned from the passages the map has tagged. Only one job runs at a time because two sets
+of models do not fit in 16 GB. A job interrupted by stopping the worker is queued again the
+next time it starts.
 """
 
 import argparse
@@ -21,6 +23,7 @@ from app.ingest.pipeline import Ingestor
 from app.llm.embeddings import Embedder
 from app.llm.models import helper_model, paced_generation_model
 from app.questions.batch import run_job, spent_today
+from app.questions.topics import run_topics_job
 from scripts.ingest import configure_logging, print_progress
 
 POLL_SECONDS = 2.0
@@ -31,11 +34,27 @@ def say(message: str) -> None:
 
 
 async def take_a_job(settings: Settings, ingestor: Ingestor, embedder: Embedder) -> bool:
-    """Run the next job of either kind. Returns whether there was one."""
+    """Run the next job of any kind. Returns whether there was one."""
     async with SessionFactory() as session:
         job_id = await queue.claim_next_job(session, "ingest")
     if job_id is not None:
         await ingestor.run(job_id)
+        return True
+
+    async with SessionFactory() as session:
+        job_id = await queue.claim_next_job(session, "topics")
+    if job_id is not None:
+        print(f"Building the topic map for job {job_id}.", flush=True)
+        built = await run_topics_job(
+            SessionFactory,
+            job_id,
+            model=helper_model(settings),
+            embedder=embedder,
+            similarity=settings.topic_similarity,
+            report=say,
+        )
+        if built is not None:
+            print(f"  job {job_id}: {built.summary}", flush=True)
         return True
 
     async with SessionFactory() as session:

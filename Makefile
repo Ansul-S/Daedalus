@@ -29,7 +29,7 @@ client: ## Regenerate the frontend's typed API client from the backend's routes
 glyphs: ## Redraw Holroyd's Daedalus in Greek letters for the frontend: make glyphs IMAGE=path/to/etching.jpeg
 	cd backend && uv run --group glyphs python -m scripts.glyphs $(IMAGE)
 
-worker: ## Process ingestion jobs queued through the API (Ctrl+C to stop)
+worker: ## Process jobs queued through the API: ingestion, topic map, questions (Ctrl+C to stop)
 	cd backend && uv run --group ingest python -m scripts.worker
 
 ingest: ## Ingest files, folders or arXiv IDs: make ingest SRC="data/notes.pdf 1706.03762"
