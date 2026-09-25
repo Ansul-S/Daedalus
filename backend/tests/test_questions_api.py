@@ -390,6 +390,7 @@ def test_the_list_pages_without_losing_the_total(client, questions) -> None:
         {"style": "trivia"},
         {"difficulty": 0},
         {"difficulty": 6},
+        {"rating": "great"},
         {"limit": 0},
         {"limit": 101},
         {"offset": -1},

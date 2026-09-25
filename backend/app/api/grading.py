@@ -2,8 +2,9 @@
 
 An answer is written down before it is graded, so it is kept even when no model can grade
 it; such an attempt carries a failed grade saying why, and can be graded again later. A
-grade is shown with each key point's text next to its label, and each claim with the passage
-behind its verdict, cited and linked the way search results are.
+grade is shown with each key point's text next to its label, each claim with the passage
+behind its verdict, cited and linked the way search results are, and your latest rating of
+the grade.
 
 A graded answer also reschedules its question: the score earns a rating, and the rating
 decides the practice day the question comes back (`app.scheduling`). Only an attempt's first
@@ -27,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.practice import EarnedOut, earned_out
+from app.api.ratings import RatingOut, grade_ratings
 from app.api.search import citation, source_link
 from app.core.config import Settings, get_settings
 from app.db.models import Attempt, Chunk, Document, Grade, Question, Review
@@ -114,6 +116,8 @@ class GradeOut(BaseModel):
     usage: dict[str, Any]
     seconds: float | None
     created_at: datetime
+    # Your latest rating of the grade; null until it is rated
+    rating: RatingOut | None
 
 
 class ReviewOut(BaseModel):
@@ -161,7 +165,10 @@ async def _cited(session: AsyncSession, grades: list[Grade]) -> dict[int, tuple[
 
 
 def _grade_out(
-    grade: Grade, question: Question, cited: dict[int, tuple[Document, Chunk]]
+    grade: Grade,
+    question: Question,
+    cited: dict[int, tuple[Document, Chunk]],
+    rating: RatingOut | None,
 ) -> GradeOut:
     key_points = [
         KeyPointGradeOut(
@@ -207,6 +214,7 @@ def _grade_out(
         usage=grade.usage,
         seconds=grade.seconds,
         created_at=grade.created_at,
+        rating=rating,
     )
 
 
@@ -222,7 +230,9 @@ def _review_out(review: Review | None) -> ReviewOut | None:
 
 
 async def _attempts_out(session: AsyncSession, attempts: list[Attempt]) -> list[AttemptOut]:
-    cited = await _cited(session, [grade for attempt in attempts for grade in attempt.grades])
+    grades = [grade for attempt in attempts for grade in attempt.grades]
+    cited = await _cited(session, grades)
+    ratings = await grade_ratings(session, [grade.id for grade in grades])
     # What an answer earned depends on every answer before it: the history is walked through.
     steps = {}
     if any(attempt.review for attempt in attempts):
@@ -236,7 +246,10 @@ async def _attempts_out(session: AsyncSession, attempts: list[Attempt]) -> list[
             seconds=attempt.seconds,
             time_limit=attempt.time_limit,
             created_at=attempt.created_at,
-            grades=[_grade_out(grade, attempt.question, cited) for grade in attempt.grades],
+            grades=[
+                _grade_out(grade, attempt.question, cited, ratings.get(grade.id))
+                for grade in attempt.grades
+            ],
             review=_review_out(attempt.review),
             earned=earned_out(steps[attempt.review.id]) if attempt.review else None,
         )

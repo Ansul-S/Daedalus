@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
-from app.api import documents, grading, health, practice, questions, search
+from app.api import documents, grading, health, practice, questions, ratings, search
 from app.core.config import get_settings
 from app.llm.embeddings import Embedder
 
@@ -47,3 +47,4 @@ app.include_router(search.router)
 app.include_router(questions.router)
 app.include_router(grading.router)
 app.include_router(practice.router)
+app.include_router(ratings.router)

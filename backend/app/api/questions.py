@@ -8,7 +8,8 @@ starting a batch is a local-only endpoint, like adding material.
 A question is shown with everything that stands behind it: the chunks it was written from,
 cited the same way search results are, the key points an answer has to cover with the quote
 that proves each one, and the report from every check it went through, whether it passed or
-failed.
+failed. It also comes with your latest rating of it (`app.api.ratings`), and the list can be
+narrowed down by that rating.
 
 A question in the library can be corrected by hand, under the rule generation works to: every
 key point's quote has to be in the passage it names. It can also be retired, which takes it
@@ -26,6 +27,13 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.documents import JobOut
+from app.api.ratings import (
+    RATING_VALUES,
+    RatingFilter,
+    RatingOut,
+    latest_rating,
+    question_ratings,
+)
 from app.api.search import citation, get_embedder, source_link
 from app.core.config import Settings, get_settings
 from app.db.models import (
@@ -157,6 +165,8 @@ class QuestionOut(BaseModel):
     citations: list[str]
     document_ids: list[int]
     created_at: datetime
+    # Your latest rating of the question; null until it is rated
+    rating: RatingOut | None
 
 
 class QuestionDetailOut(QuestionOut):
@@ -195,6 +205,7 @@ def _filters(
     difficulty: int | None,
     document_id: int | None,
     updated: bool | None,
+    rating: RatingFilter | None,
 ) -> list[ColumnElement[bool]]:
     """The conditions behind a listing, shared by the page and its total."""
     conditions: list[ColumnElement[bool]] = []
@@ -216,6 +227,10 @@ def _filters(
         )
     if updated is not None:
         conditions.append(source_updated() if updated else ~source_updated())
+    if rating == "unrated":
+        conditions.append(latest_rating().is_(None))
+    elif rating is not None:
+        conditions.append(latest_rating() == RATING_VALUES[rating])
     return conditions
 
 
@@ -239,7 +254,11 @@ async def _sources(
 
 
 def _question_out(
-    question: Question, topic: str | None, updated: bool, sources: list[tuple[Document, Chunk]]
+    question: Question,
+    topic: str | None,
+    updated: bool,
+    sources: list[tuple[Document, Chunk]],
+    rating: RatingOut | None,
 ) -> QuestionOut:
     return QuestionOut(
         id=question.id,
@@ -253,6 +272,7 @@ def _question_out(
         citations=[citation(document, chunk) for document, chunk in sources],
         document_ids=list(dict.fromkeys(document.id for document, _ in sources)),
         created_at=question.created_at,
+        rating=rating,
     )
 
 
@@ -315,11 +335,15 @@ async def list_questions(
             description="Only questions whose sources a later ingestion replaced",
         ),
     ] = None,
+    rating: Annotated[
+        RatingFilter | None,
+        Query(description="Only questions whose latest rating is good or poor, or never rated"),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> QuestionsOut:
     """The questions in the library, newest first. Every filter is optional."""
-    conditions = _filters(status, topic_id, style, difficulty, document_id, updated)
+    conditions = _filters(status, topic_id, style, difficulty, document_id, updated, rating)
     total = await session.scalar(select(func.count()).select_from(Question).where(*conditions))
     rows = await session.execute(
         select(Question, Topic.name, source_updated().label("updated"))
@@ -330,13 +354,17 @@ async def list_questions(
         .offset(offset)
     )
     found = rows.all()
-    sources = await _sources(session, [question.id for question, _, _ in found])
+    question_ids = [question.id for question, _, _ in found]
+    sources = await _sources(session, question_ids)
+    ratings = await question_ratings(session, question_ids)
     return QuestionsOut(
         total=total or 0,
         limit=limit,
         offset=offset,
         results=[
-            _question_out(question, topic, updated, sources.get(question.id, []))
+            _question_out(
+                question, topic, updated, sources.get(question.id, []), ratings.get(question.id)
+            )
             for question, topic, updated in found
         ],
     )
@@ -477,8 +505,9 @@ async def _detail(session: AsyncSession, question_id: int) -> QuestionDetailOut:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "question not found")
     question, topic, updated = row
     sources = (await _sources(session, [question_id])).get(question_id, [])
+    rating = (await question_ratings(session, [question_id])).get(question_id)
     return QuestionDetailOut(
-        **_question_out(question, topic, updated, sources).model_dump(),
+        **_question_out(question, topic, updated, sources, rating).model_dump(),
         reference_answer=question.reference_answer,
         key_points=[KeyPointOut.model_validate(point) for point in question.key_points],
         misconceptions=question.misconceptions,

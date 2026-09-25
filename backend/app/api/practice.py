@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.questions import QuestionOut, _question_out, _sources
+from app.api.ratings import question_ratings
 from app.core.config import Settings, get_settings
 from app.db.models import Question, Review, Topic, source_updated
 from app.db.session import get_session
@@ -91,8 +92,9 @@ async def practice_next(session: SessionDep, settings: SettingsDep) -> PracticeO
         )
     ).one()
     sources = (await _sources(session, [question.id])).get(question.id, [])
+    rating = (await question_ratings(session, [question.id])).get(question.id)
     return PracticeOut(
-        question=_question_out(question, topic, updated, sources),
+        question=_question_out(question, topic, updated, sources, rating),
         reason=pick.reason,
         why=why(pick, topic, today),
         due=pick.due,

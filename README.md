@@ -219,7 +219,7 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 | `GET /jobs/{id}` | A job's status, progress and error |
 | `GET /search?q=…&limit=10&mode=hybrid` | Search all chunks. `mode` is `hybrid`, `vector` or `keyword`; `limit` is at most 50 |
 | `POST /questions/generate` | Plan and queue a batch: `{"count": 20}`, optionally `document_id`. Returns **202** with the job the worker will run |
-| `GET /questions` | The library, newest first. Filters: `status`, `topic_id`, `style`, `difficulty`, `document_id`, `source_updated`; `limit` and `offset`, with the total of the whole match |
+| `GET /questions` | The library, newest first. Filters: `status`, `topic_id`, `style`, `difficulty`, `document_id`, `source_updated`, `rating` (`good`, `poor` or `unrated`, by the latest rating); `limit` and `offset`, with the total of the whole match |
 | `GET /questions/{id}` | One question with its sources, key points and quotes, misconceptions, validation report and token usage |
 | `PATCH /questions/{id}` | Correct or retire a question: any of `text`, `reference_answer`, `key_points` (two to four, replaced as a whole) and `status` (`accepted` or `retired`), with an optional `reason`. Returns the question as `GET` does |
 | `GET /topics` | The topic map with the passages and questions behind each topic |
@@ -231,6 +231,7 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 | `GET /practice/progress` | XP, level and streak, and the ten coins: when each was minted, or how far along it is |
 | `GET /practice/map` | The dashboard's labyrinth: a room for each topic with questions, with its mastery and reviews due, the passages between the rooms, today's thread and the Minotaur's room |
 | `GET /practice/stats` | The latest 12 scores, graded answers on each of the last 14 days, and questions due on each of the next 7 |
+| `POST /ratings` | Rate a question good or poor, or a grade fair or unfair: `{"question_id": 31, "value": -1, "note": "…"}` (or `grade_id`), `value` 1 or -1, with an optional note of at most 500 characters. Returns **201**. The latest rating comes with the question or grade as `rating` |
 
 - **Adding material.** Both `POST` endpoints return **202** while the document's job is queued or running, and **200** when there is nothing to wait for because the document is already ingested.
   - A file over `MAX_UPLOAD_MB` gets 413; any other file type gets 415.
@@ -251,6 +252,7 @@ make calibrate ARGS=report     # report on the grades already made, without grad
   - Seven levels start at 50·(n−1)·n XP, from Apprentice at 0 to Daedalus at 2,100. The streak counts practice days in a row.
   - Each of the ten coins is minted by the first answer that meets its condition. Conditions about the library count only the questions it held at the time, so new questions never take a coin back.
   - The map's rooms fill a grid six wide, in topic order. A seeded maze joins them, so the same topics always give the same map. The Minotaur waits in the weakest room: the lowest mastery, then the one practised least.
+- **Ratings are evaluation data:** which questions the generator got wrong, and where the grader goes wrong in real use. Every rating is kept and the latest one stands, so a change of mind leaves a trace. Any question can be rated, whatever its status: a rejected question rated good is a check that turned down too much. A failed grade has no verdict to judge and can't be rated (409).
 
 ```sh
 curl -X POST localhost:8000/documents/arxiv -H 'Content-Type: application/json' -d '{"arxiv_id": "1706.03762"}'
@@ -260,6 +262,7 @@ curl -X POST localhost:8000/questions/generate -H 'Content-Type: application/jso
 curl 'localhost:8000/questions?status=accepted&difficulty=3&limit=5'
 curl -X PATCH localhost:8000/questions/31 -H 'Content-Type: application/json' -d '{"status": "retired", "reason": "asks for a reported number"}'
 curl 'localhost:8000/questions/31/attempts?limit=5'
+curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"question_id": 31, "value": -1, "note": "the second key point repeats the first"}'
 ```
 
 ## Commands
@@ -316,7 +319,7 @@ The frontend has two settings of its own, which it doesn't take from the reposit
 ```
 backend/          FastAPI app (uv)
   app/api/        HTTP routes: health, documents and jobs, search, questions and topics,
-                  attempts and grades, practice
+                  attempts and grades, practice, ratings
   app/core/       settings, setup checks
   app/db/         tables (SQLAlchemy) and Alembic migrations
   app/grading/    grading an answer against its question's sources, and scoring it

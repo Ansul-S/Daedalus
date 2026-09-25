@@ -1,6 +1,7 @@
 """Database tables: source documents, their searchable chunks and ingestion jobs, the topic
 map built over the chunks, the generated questions, the answers given to them with their
-grades, and the review schedule those grades drive."""
+grades, the review schedule those grades drive, and your own ratings of the questions and
+grades."""
 
 from datetime import date, datetime
 from typing import Any
@@ -510,4 +511,35 @@ class Review(Base):
         CheckConstraint("score BETWEEN 0 AND 1", name="score_valid"),
         # The shortest interval is a day
         CheckConstraint("due > day", name="due_valid"),
+    )
+
+
+class Rating(Base):
+    """Your own judgement of a question or of a grade: +1 for a good question or a fair grade,
+    -1 for a poor question or an unfair grade, with an optional note on why.
+
+    Ratings are kept as evaluation data, on the questions the generator wrote and on the grader
+    in real use. Changing your mind adds a rating rather than replacing one, and the latest
+    rating of a question or grade is the one that stands. It is not the FSRS rating a review
+    records, which a grade earns for the schedule.
+    """
+
+    __tablename__ = "ratings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # What is rated: a question or a grade, never both
+    question_id: Mapped[int | None] = mapped_column(
+        ForeignKey("questions.id", ondelete="CASCADE"), index=True
+    )
+    grade_id: Mapped[int | None] = mapped_column(
+        ForeignKey("grades.id", ondelete="CASCADE"), index=True
+    )
+    # +1 or -1
+    value: Mapped[int] = mapped_column(SmallInteger)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("value IN (-1, 1)", name="value_valid"),
+        CheckConstraint("(question_id IS NULL) <> (grade_id IS NULL)", name="question_or_grade"),
     )
