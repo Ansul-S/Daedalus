@@ -7,7 +7,8 @@ behind its verdict, cited and linked the way search results are.
 
 A graded answer also reschedules its question: the score earns a rating, and the rating
 decides the practice day the question comes back (`app.scheduling`). Only an attempt's first
-successful grade does this, so grading an answer again never counts it twice.
+successful grade does this, so grading an answer again never counts it twice. What that grade
+earned (XP, the level it reached and any coins) comes with the attempt from then on.
 
 Grading runs on cloud models first, so unlike writing questions it also works in production.
 The grading model is built once per process: its pacer has to remember the minute's requests
@@ -25,12 +26,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.practice import EarnedOut, earned_out
 from app.api.search import citation, source_link
 from app.core.config import Settings, get_settings
 from app.db.models import Attempt, Chunk, Document, Grade, Question, Review
 from app.db.session import get_session
 from app.grading.grader import grade_attempt, spent_today
 from app.llm.models import grading_model
+from app.scheduling.progress import load, walk
 from app.scheduling.schedule import rating_name, record_review
 
 router = APIRouter(tags=["grading"])
@@ -134,6 +137,9 @@ class AttemptOut(BaseModel):
     grades: list[GradeOut]
     # What the answer did to the schedule; null until it is graded
     review: ReviewOut | None
+    # What its first successful grade earned: XP, the level it reached and any coins; null
+    # until it is graded
+    earned: EarnedOut | None
 
 
 async def _cited(session: AsyncSession, grades: list[Grade]) -> dict[int, tuple[Document, Chunk]]:
@@ -217,6 +223,10 @@ def _review_out(review: Review | None) -> ReviewOut | None:
 
 async def _attempts_out(session: AsyncSession, attempts: list[Attempt]) -> list[AttemptOut]:
     cited = await _cited(session, [grade for attempt in attempts for grade in attempt.grades])
+    # What an answer earned depends on every answer before it: the history is walked through.
+    steps = {}
+    if any(attempt.review for attempt in attempts):
+        steps = {step.answer.review_id: step for step in walk(*await load(session)).steps}
     return [
         AttemptOut(
             id=attempt.id,
@@ -228,6 +238,7 @@ async def _attempts_out(session: AsyncSession, attempts: list[Attempt]) -> list[
             created_at=attempt.created_at,
             grades=[_grade_out(grade, attempt.question, cited) for grade in attempt.grades],
             review=_review_out(attempt.review),
+            earned=earned_out(steps[attempt.review.id]) if attempt.review else None,
         )
         for attempt in attempts
     ]

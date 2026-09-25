@@ -223,11 +223,14 @@ make calibrate ARGS=report     # report on the grades already made, without grad
 | `GET /questions/{id}` | One question with its sources, key points and quotes, misconceptions, validation report and token usage |
 | `PATCH /questions/{id}` | Correct or retire a question: any of `text`, `reference_answer`, `key_points` (two to four, replaced as a whole) and `status` (`accepted` or `retired`), with an optional `reason`. Returns the question as `GET` does |
 | `GET /topics` | The topic map with the passages and questions behind each topic |
-| `POST /questions/{id}/attempts` | Answer an accepted question: `{"answer": "…"}`, at most 8,000 characters, optionally with `seconds` taken and an interview `time_limit`. Returns **201** with the attempt, its grade and, once graded, when the question comes back |
+| `POST /questions/{id}/attempts` | Answer an accepted question: `{"answer": "…"}`, at most 8,000 characters, optionally with `seconds` taken and an interview `time_limit`. Returns **201** with the attempt, its grade and, once graded, when the question comes back and what the answer earned |
 | `POST /attempts/{id}/grades` | Grade an attempt again, e.g. after a failed grade. Earlier grades are kept |
 | `GET /attempts/{id}` | An attempt with every grade it was given, oldest first |
 | `GET /questions/{id}/attempts` | The answers given to a question, newest first, with their grades; `limit` (at most 100) and `offset` |
 | `GET /practice/next` | The question to practise next, without its reference answer or key points, and why it was picked |
+| `GET /practice/progress` | XP, level and streak, and the ten coins: when each was minted, or how far along it is |
+| `GET /practice/map` | The dashboard's labyrinth: a room for each topic with questions, with its mastery and reviews due, the passages between the rooms, today's thread and the Minotaur's room |
+| `GET /practice/stats` | The latest 12 scores, graded answers on each of the last 14 days, and questions due on each of the next 7 |
 
 - **Adding material.** Both `POST` endpoints return **202** while the document's job is queued or running, and **200** when there is nothing to wait for because the document is already ingested.
   - A file over `MAX_UPLOAD_MB` gets 413; any other file type gets 415.
@@ -243,6 +246,11 @@ make calibrate ARGS=report     # report on the grades already made, without grad
   - A rejected question can't be edited (409).
 - **A grade is served with what it refers to:** each key point's text and weight next to its label, and each claim with the passage behind its verdict, cited and linked. A question that was rejected or retired can't be answered (404). Grading runs on the cloud models first, so unlike writing questions it also works with `ENVIRONMENT=production`.
 - **Practice follows a review schedule (FSRS).** An answer's first successful grade earns a rating: Again below 0.4, Hard below 0.7, Good below 0.9, Easy from 0.9, and Again whenever a claim contradicts the sources. The rating decides the practice day the question comes back, between 1 and 30 days later. `GET /practice/next` serves the question most overdue for review, then a new one from the weakest topic, then practice ahead on the question likeliest to have been forgotten. Grading an answer again doesn't reschedule it.
+- **Practice earns XP, a level and coins,** all worked out from the review history, none of it stored.
+  - An answer earns ten times its score and five for answering, half as much again when the question was due (late or not), five more inside an interview time limit, and the streak's length that day, up to ten. An attempt carries what its first successful grade `earned`: the XP part by part, the level it reached and any coins.
+  - Seven levels start at 50·(n−1)·n XP, from Apprentice at 0 to Daedalus at 2,100. The streak counts practice days in a row.
+  - Each of the ten coins is minted by the first answer that meets its condition. Conditions about the library count only the questions it held at the time, so new questions never take a coin back.
+  - The map's rooms fill a grid six wide, in topic order. A seeded maze joins them, so the same topics always give the same map. The Minotaur waits in the weakest room: the lowest mastery, then the one practised least.
 
 ```sh
 curl -X POST localhost:8000/documents/arxiv -H 'Content-Type: application/json' -d '{"arxiv_id": "1706.03762"}'
@@ -316,7 +324,8 @@ backend/          FastAPI app (uv)
   app/llm/        model routing, per-provider pacing, embeddings
   app/questions/  concept tags, topics, generation, quote grounding, validation, batch runs
   app/retrieval/  hybrid search and rank fusion
-  app/scheduling/ review schedule (FSRS), the next-question picker, mastery
+  app/scheduling/ review schedule (FSRS), the next-question picker, mastery, XP and coins,
+                  the labyrinth map
   scripts/        setup check, ingest, worker, topics, generate and calibrate commands, the
                   API schema the frontend client is generated from, and the glyph pictures
   tests/

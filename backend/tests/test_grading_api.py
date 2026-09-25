@@ -211,6 +211,56 @@ def test_a_failed_attempt_can_be_graded_again(client, sessions, corpus) -> None:
     assert client.post("/attempts/999/grades").status_code == 404
 
 
+def test_an_answer_comes_with_what_it_earned_and_a_regrade_earns_nothing_more(
+    client, sessions, corpus
+) -> None:
+    question_id = asyncio.run(add_question(sessions, corpus.scaling))
+    use_grader(grading(corpus.scaling))
+
+    attempt = client.post(f"/questions/{question_id}/attempts", json={"answer": ANSWER}).json()
+
+    earned = attempt["earned"]
+    # Scored 0.6667: 7 for the score, 5 for answering, 1 for the streak's first day
+    assert earned["parts"] == {"score": 7, "answered": 5, "due": 0, "interview": 0, "streak": 1}
+    assert (earned["xp"], earned["total_xp"], earned["streak"]) == (13, 13, 1)
+    assert (earned["level"]["name"], earned["level_up"]) == ("Apprentice", False)
+    # The only question, from the only source, answered for the first time
+    assert [coin["id"] for coin in earned["coins"]] == [
+        "first-thread",
+        "cartographer",
+        "labyrinth-walker",
+    ]
+    assert client.get(f"/attempts/{attempt['id']}").json()["earned"] == earned
+    again = client.post(f"/attempts/{attempt['id']}/grades").json()
+    assert again["earned"] == earned
+    assert client.get("/practice/progress").json()["xp"] == 13
+
+
+def test_an_answer_earns_nothing_until_it_is_graded(client, sessions, corpus) -> None:
+    question_id = asyncio.run(add_question(sessions, corpus.scaling))
+    use_grader(refusing())
+    failed = client.post(f"/questions/{question_id}/attempts", json={"answer": ANSWER}).json()
+
+    assert failed["earned"] is None
+
+    use_grader(grading(corpus.scaling))
+    graded = client.post(f"/attempts/{failed['id']}/grades").json()
+
+    assert graded["earned"]["xp"] == 13
+
+
+def test_an_answer_inside_its_interview_limit_earns_five_more(client, sessions, corpus) -> None:
+    question_id = asyncio.run(add_question(sessions, corpus.scaling))
+    use_grader(grading(corpus.scaling))
+
+    attempt = client.post(
+        f"/questions/{question_id}/attempts",
+        json={"answer": ANSWER, "seconds": 150, "time_limit": 180},
+    ).json()
+
+    assert (attempt["earned"]["parts"]["interview"], attempt["earned"]["xp"]) == (5, 18)
+
+
 def test_attempts_are_listed_newest_first(client, sessions, corpus) -> None:
     question_id = asyncio.run(add_question(sessions, corpus.scaling))
     use_grader(grading(corpus.scaling))
