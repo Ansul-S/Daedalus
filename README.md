@@ -4,7 +4,7 @@ AI/ML interview practice built on your own study material. Daedalus generates co
 
 Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work and fast grading.
 
-**Status:** Phases 1–3 are built: ingestion and retrieval, question generation, and grading. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages and checked against them. Answers are graded against the same passages, every key point labelled and every claim checked against a cited source, and on 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.96). Phase 4, the practice app, is in progress: questions come back on a review schedule (FSRS) and can be corrected or retired, and in the web app you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the day the question comes back. Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank lists every question with its passages, checks and corrections; a question can be corrected, retired or rated there, and a grade rated fair or unfair from its verdict. The library adds material, builds the topic map and writes questions from the browser, following each job as the worker runs it. A landing page at `/` introduces the app: how it works, the dashboard's Minotaur, and the grader's measured agreement with hand grades. An end-to-end test (`make e2e`) walks through the whole app in a browser on stand-in models, from the landing page to a graded answer and its room on the dashboard. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**Status:** Phases 1–4 are built: ingestion and retrieval, question generation, grading, and the practice app. PDFs, notebooks and arXiv papers are split into passages, searchable with page, cell or section citations; a topic map is built over them, and questions are written from the passages and checked against them. In the browser you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the question comes back on a review schedule (FSRS). On 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.95). Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank corrects, retires and rates questions, and the library adds material and writes questions, all from the browser. An end-to-end test (`make e2e`) walks through the whole app on stand-in models. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
 
 ## Prerequisites (macOS)
 
@@ -155,10 +155,22 @@ says why.
 | trivia | that model reads it as recalling a fact rather than explaining something |
 | duplicate | it is within `DUPLICATE_SIMILARITY` of a question already accepted |
 
+## Practising
+
+With the API running and the frontend built and started (step 5 of [Setup](#setup)), open http://localhost:3000 and press **Enter the labyrinth**. Set `PRACTICE_TIMEZONE` to your time zone first: practice days, the streak and due dates are counted in it.
+
+- **One question at a time.** The practice page serves the question due for review, most overdue first; with nothing due, a new question from your weakest topic; with nothing new, the one you are likeliest to have forgotten. It says why it picked it.
+- **Answer** in Markdown, with `$…$` for LaTeX, and press `⌘↵`. The verdict comes back in about 2 s: each key point covered, partly covered or missing, each claim checked against a cited passage, the score and the rating it earns, and the day the question comes back, 1 to 30 practice days later (see [Grading answers](#grading-answers), and the [API](#api) on the schedule).
+- **Interview mode** gives each answer three minutes, counted down on a dimension line that runs on into overtime.
+- **Progress.** Answers earn XP, levels, a daily streak and coins. The dashboard draws your topics as a labyrinth of rooms, hatched by mastery, with the Minotaur in the weakest.
+- **The question bank** (`/questions`) shows every question with its passages and checks, and corrects, retires or rates it. **The library** (`/library`) adds material, builds the topic map and writes questions, with `make worker` running.
+
+Each page is described in [frontend/README.md](frontend/README.md#pages).
+
 ## Grading answers
 
-Answer a question from the library, and the answer is graded against the passages the
-question was written from:
+Every answer is graded against the passages its question was written from. The practice page
+sends it; from the command line:
 
 ```sh
 curl -X POST localhost:8000/questions/31/attempts -H 'Content-Type: application/json' \

@@ -29,7 +29,7 @@ Retrieval and grading are implemented directly rather than through a RAG framewo
 
  3. PRACTICE (Next.js ⇄ FastAPI)
  scheduler (FSRS) picks a due or weak-topic question ─► user answers ─► GRADER:
-   a. load the question's saved source chunks (+ hybrid search on the answer)
+   a. load the question's saved source chunks (later: + hybrid search on the answer)
    b. LLM marks each key point: covered / partial / missing (quoting the answer)
    c. LLM checks each claim: supported / contradicted / not in sources (with citation)
    d. code computes the score ─► feedback, model answer, follow-up question
@@ -263,7 +263,73 @@ Retrieval and grading are implemented directly rather than through a RAG framewo
 - **The grader is paced on what it writes, too.** On the free tier Groq holds Qwen 3.8 to 1,000 output tokens a minute, a limit its documentation does not list and its 429 responses name. A grade writes about 500, so the pacer books 900 for each request until its real length is known, which comes to about one grade a minute. The day's budget counts grades and questions together, by model: a free tier's allowance belongs to the model, and Gemini both writes and grades.
 - **A refusal for the day empties the day, which then refills.** A 429 that names a daily limit marks the provider's day spent at once, so a fallback chain moves on and a calibration run stops with what it has graded. Groq refills its daily tokens gradually, so the delay such a refusal names buys about one more request, not the rest of a batch. The pacer's day refills at the same rate: the API keeps one grader for as long as it runs, and it tries Groq again as soon as a request's worth has come back, minutes later, and never counts yesterday against today.
 - **Calibration measures the grader alone.** `make calibrate` grades with Groq's Qwen and nothing to fall back to, since a grade from another model would measure that model. Grades are kept per answer and prompt version, so a new prompt is measured on the same answers and an unchanged one is not paid for twice.
-- **Left for later:** hybrid search over the answer, for claims that reach beyond the question's own passages; a second opinion from `gemma4:12b`, which at 4.9 tokens a second would add about 100 s to a grade; and streaming feedback, which waits for the practice page (Phase 4).
+- **Left for later:** hybrid search over the answer, for claims that reach beyond the question's own passages; a second opinion from `gemma4:12b`, which at 4.9 tokens a second would add about 100 s to a grade; and streaming feedback, which the practice page (Phase 4) went without, since a grade on Groq takes about 2 s.
+
+## Practice (Phase 4)
+
+```
+ GET /practice/next ─► pick    1. due    the question most overdue for review
+                               2. new    never practised, from the weakest topic, easiest first
+                               3. ahead  the question likeliest to have been forgotten
+                    ─► serve   the question without its reference answer or key points,
+                               and why it was picked
+
+ POST /questions/{id}/attempts   {answer, seconds, time_limit}
+   ─► grade   as in Phase 3; only an attempt's first successful grade is rated
+   ─► rate    Again < 0.4 ≤ Hard < 0.7 ≤ Good < 0.9 ≤ Easy, and Again whenever a claim is
+              contradicted
+   ─► review  py-fsrs moves the question's card to a practice day 1 to 30 days on
+   ─► earn    XP, the level and coins, replayed from every review up to this one
+
+ GET /practice/progress · /practice/map · /practice/stats
+   ─► XP, the streak, coins, the labyrinth and the charts, worked out from the reviews
+      whenever they are asked for; none of it is stored
+```
+
+The web app is the way in: a landing page, practice, the question bank, the library, the dashboard, a setup page that checks every dependency, and a pattern book of the design system. `frontend/README.md` describes each page. The pages call the API from the browser (the setup page checks it from the server), through a client generated from the API's OpenAPI schema, so everything they do is also an API call (listed in the README).
+
+**Tables** (Alembic migrations `0006`-`0008`):
+- **`cards`:** one per practised question: py-fsrs's memory state (JSON: stability, difficulty, the last review) and the practice day it is due.
+- **`reviews`:** at most one per attempt: the grade behind it, the rating (1-4) and the score, the practice day it counted for and the day the question is due again. XP, the streak, coins, the map and the dashboard's charts are all worked out from these rows.
+- **`attempts.seconds`** and **`attempts.time_limit`:** how long an answer took, and the limit it was given in interview mode.
+- **`ratings`:** a rating of a question or of a grade (exactly one of the two), +1 or −1, with an optional note. Every rating is kept, and the latest stands.
+- **`jobs.kind`** gains `topics`: the topic map is built as a queued job.
+
+### Practice decisions
+- **A grade's score becomes an FSRS rating on lines drawn from the calibration:** Again below 0.4, Hard below 0.7, Good below 0.9, Easy from 0.9. The grader marks partial answers about a step lower than a person does, so 0.4 is about half the key points as a person would judge them. All 26 calibration answers the hand scored 2 out of 10 or less fall below it, and 25 of the 27 it scored 9 or 10 rate Good or Easy (see [measurements](#phase-4-measurements)).
+- **A contradicted claim makes the rating Again, whatever the score.** Once a question is known, Hard, Good and Easy all send it the full 30 days away, so a confident mistake would go a month unchallenged; Again brings it back in 3 days, and a good answer then in 8. Of the 18 calibration answers in which the grader found a contradiction, 17 score below 0.4 anyway.
+- **No learning steps.** By default py-fsrs asks a new card again after 1 minute and then 10, the pace of flashcards: simulated, an answer that was always partly right came back every 6 minutes for good, and a wrong one after a minute. With no steps the shortest wait is a day.
+- **At most 30 days between reviews, at a retention of 0.9.** Uncapped, good answers in a row put a question 2, 11, 46, 163 and 497 days out, and a retention of 0.85 stretches the first three to 4, 31 and 173. With the cap everything practised comes back within a month, and the load stays light (see [measurements](#phase-4-measurements)).
+- **Time is counted in practice days.** A day starts at 04:00 in `PRACTICE_TIMEZONE`, so a session past midnight is one day. FSRS sees each day as its midnight in UTC, which makes the days between two answers calendar days, whatever the hour. py-fsrs itself counts whole 24-hour spans: a good answer at 21:00 and another 36 hours later made one day between them, and an interval of 7 days where calendar days give 11.
+- **An attempt reschedules its question once.** Only its first successful grade makes a review, so grading an answer again never counts it twice, and a failed grade makes none. A grade that arrives after a newer answer to the same question has been reviewed counts for that answer's day, so a schedule never runs backwards.
+- **The picker serves what is due, then what is new, then practice ahead.** The most overdue question comes first. Next comes a question never practised, from the topic with the lowest mastery and, among equals, the one practised least, so a newcomer meets every topic in turn; within the topic, the easiest question first. With nothing due or new, the question likeliest to have been forgotten. The reason comes with the question ("new, from your weakest topic: semantic retrieval"). Only accepted questions are picked, so a retired one drops out.
+- **Mastery is a score that fades.** A question's mastery is its latest score times FSRS's estimate of recalling it that day, so it falls while the question goes unpractised; a topic's is the mean over its questions, about what they would score if all were asked that day. The picker, the dashboard's rooms and the coin for five strong topics all use it.
+- **XP, levels, the streak and coins are replayed, never stored.** They are worked out from the reviews whenever they are asked for, so a rule can change without a migration. Each answer is judged on what had happened by then, so later practice never changes what an earlier answer earned. A condition about the library, such as every question answered once, counts the questions it held when the answer was given, so a new question never takes a coin back. The cost is a replay on every request, which grows with the history (see [measurements](#phase-4-measurements)).
+- **An answer earns ten times its score and five for answering,** half as much again when its question was due, late or not, since clearing a backlog should still pay. Interview mode adds five inside its limit of three minutes, a soft limit: the timer runs on into overtime rather than cutting the answer off. The day's first answer adds the streak's length that day, up to ten. Added to every answer, the streak could outweigh the score on a long run; once a day, it pays for coming back rather than for answering more. Seven levels start at 50·(n−1)·n XP, from Apprentice at 0 to Daedalus at 2,100, about a hundred answers.
+- **What an answer earned belongs to its attempt,** not to the request that graded it: `GET /attempts/{id}` shows it, and grading the answer again adds nothing.
+- **The dashboard's map is a seeded maze of topics.** Each topic with questions in the library is a room, in topic order on a grid six wide. A depth-first search from the entrance at the bottom left carves the passages, so every room is reachable, and by exactly one way. The search draws with `random()`, whose sequence for a seed Python keeps from one version to the next (its other methods may change), so the same topics always give the same map. The Minotaur waits in the weakest room by the picker's rule, where practice leads next, and today's thread runs from the entrance through the rooms answered in, along the passages.
+- **A correction is held to the rule generation works to.** Each key point's quote has to be found in the passage it names, by the grounding check of Phase 2; a quote that isn't found refuses the whole edit, and the error points at its field. Every change goes into the question's validation report with what it replaced and why.
+  - A new question text is embedded again. With Ollama away its embedding is cleared instead, so the duplicate check passes over the question rather than comparing a stale vector.
+  - The row is locked only after the embedding model has answered, so a slow model holds nothing up, and with `FOR NO KEY UPDATE`, which lets answers to the question be recorded meanwhile.
+  - A rejected question stays the record of why the checks turned it down, and can't be edited.
+- **Retiring keeps everything.** A retired question leaves practice and the duplicate check but keeps its answers and its schedule, so putting it back resumes where it stopped. The calibration reads retired questions too: retiring one had made `make calibrate` refuse the hand-graded answers to it.
+- **Ratings are evaluation data, and every one is kept.** Questions and grades are rated in one table, +1 or −1 with an optional note. The latest rating stands, and a change of mind leaves a trace. A failed grade has no verdict to judge and can't be rated. A rejected question can: rated good, it marks a check that turned down too much.
+- **The topic map is a job for the worker.** A build tags the passages that have no tags yet, then clusters every tag in the library, so new material costs about 12 s a passage rather than a pass over the whole library. A build that fails keeps the tags it wrote. The worker takes ingestion first, since somebody is usually waiting on it, then the topic map, then question batches, which are planned from the passages the map has tagged. `make topics` takes the worker's lock, so the two never load the local models side by side.
+- **Whether a worker is running is read from its lock.** The worker holds a Postgres advisory lock for as long as it runs, and `GET /worker` looks for it in `pg_locks`. A lock dies with its connection, so a job left `running` by a stopped worker is told apart from one under way, however the worker stopped.
+- **A document is listed as the database stood at one moment.** A document's row, its passage counts and its latest job come from three queries, and at Postgres's default isolation, READ COMMITTED, each query sees what has been committed by the time it starts. A listing that straddled the worker's commit showed a reading's job done beside its document still pending, and the library page, seeing nothing under way, stopped following it. The listing now reads in one REPEATABLE READ snapshot. The end-to-end test found this.
+- **The browser calls the API directly,** not through a Next.js rewrite, whose proxy gives up on a request after 30 s by default. A grade can take longer: a second answer within the same minute waits about a minute for Groq's output limit, and the local model needs over a minute. The API's `CORS_ORIGINS` admits the frontend's address.
+- **The API client is generated.** `make client` writes FastAPI's OpenAPI schema without starting a server, and generates typed functions and TanStack Query options from it (`@hey-api/openapi-ts`). Each operation is named after its handler (`practiceNext()`). Once the client is generated again, a route that changed shape fails the frontend's type check rather than a request at run time.
+- **The verdict arrives whole.** A grade takes about 2 s on Groq, which leaves nothing worth streaming.
+- **The charts are the app's own SVG,** not Recharts. The two of them, the days practised and the latest scores, didn't justify a dependency, and they draw in the design system's lines and type. Each has a readout for the pointer and the arrow keys, and a table for screen readers.
+- **The landing page quotes these notes.** Its figures for the grader are read from the [milestone table](#milestone-checks) when the page is built. The page never states a number the notes don't, and the build fails if that row changes shape.
+- **The end-to-end test runs on stand-in models** (`FAKE_MODELS`, `app/llm/fakes.py`).
+  - Each stand-in answers in its real model's schema from the prompt alone, the same way every time. The pipeline around it runs as it does for real, quote grounding, checks, the duplicate test and scoring included.
+  - The writer quotes whole sentences of its passage, so its quotes are found. The tagger tags a passage with its section, so each section becomes a topic. The grader counts a key point covered by the share of its words the answer uses.
+  - Embeddings count a text's words, hashed into 1,024 dimensions by a stand-in for Ollama's `/api/embed`, so the API and the worker, two processes, agree.
+  - The test's servers get dummy API keys and an Ollama address nothing answers at, so a call that misses the stand-ins fails at once instead of spending quota.
+- **Stand-ins are refused in production, by a check on that one setting.** A validator over all the settings repeats their raw input when it fails, API keys from `.env` included; a validator on the field names only the field.
+- **The end-to-end test runs on the usual ports, in a database of its own.** The frontend is built with the API's address in it. A second build for other ports needed a second build folder, which made Next.js rewrite `tsconfig.json` and `next-env.d.ts` and left two sets of route types clashing in the type check. So `make e2e` refuses to start while ports 8000 or 3000 are taken. It makes `daedalus_e2e` afresh and drops it at the end, pass or fail, and `pnpm start` serves the same build afterwards.
+- **Left for later:** streamed feedback, and unit tests for the frontend's helpers, which the end-to-end test covers only along its one walk.
 
 ## Tech stack (free tiers as of September 2026)
 
@@ -306,9 +372,9 @@ Each task has its own fallback chain (Pydantic AI `FallbackModel`): generation u
 |---|---|
 | LLM calls | **Pydantic AI** (MIT): typed Pydantic outputs; native Groq, Google, Mistral and OpenRouter providers; Ollama via `OllamaModel`; `FallbackModel`; OpenTelemetry tracing. |
 | Orchestration | Plain Python services first; **LangGraph** (MIT) in Phase 7 for an interviewer that asks follow-up questions. |
-| API | **FastAPI** + Pydantic v2 + **SQLAlchemy 2** + **Alembic** + `pgvector` + `pydantic-settings`; server-sent events (SSE) for streaming feedback. |
-| Review scheduling | **fsrs** (py-fsrs, MIT). Grades map to Again / Hard / Good / Easy, plus a running mastery score per topic. |
-| Frontend | **Next.js** (App Router, TypeScript) · **Tailwind** · **shadcn/ui** · **TanStack Query** · **react-markdown + remark-math + rehype-katex** · **Recharts** · **@hey-api/openapi-ts** (typed client generated from FastAPI's OpenAPI schema) |
+| API | **FastAPI** + Pydantic v2 + **SQLAlchemy 2** + **Alembic** + `pgvector` + `pydantic-settings`. Feedback isn't streamed: a grade on Groq takes about 2 s. |
+| Review scheduling | **fsrs** (py-fsrs 6.3.2, MIT): FSRS-6 without learning steps, a retention of 0.9 and at most 30 days between reviews. Scores map to Again / Hard / Good / Easy; a topic's mastery is the mean over its questions of the latest score times the chance of recall. |
+| Frontend | **Next.js** 16 (App Router, TypeScript) · **React** 19 · **Tailwind** 4 · **shadcn/ui** (Radix), restyled to the design system · **TanStack Query** · **@hey-api/openapi-ts** (typed client generated from FastAPI's OpenAPI schema) · **react-markdown + remark-gfm + remark-math + rehype-katex** · **canvas-confetti** (the level-up burst) · charts in SVG by the app's own components · fonts self-hosted through `next/font` |
 
 ### Quality, observability, tooling
 | Need | Choice |
@@ -452,6 +518,47 @@ Measured on the same Mac, grading answers to the 25 accepted questions.
   errs towards stopping early.
 - **Tests:** 346 fast tests in about 23 s.
 
+## Phase 4 measurements
+Measured on the same Mac. The schedule and the cost of replaying a long history were simulated; the rest comes from the app and the calibration answers.
+
+- **Ratings on the calibration answers.** The rating each of the 75 answers earns from its grade, against the hand's own score out of 10 (with the key points as corrected in this phase; see the [Phase 3 result](#phase-3-milestone-result)):
+
+  | Hand score | Again | Hard | Good | Easy |
+  |---|---|---|---|---|
+  | 0–2 | 26 | | | |
+  | 3 | 4 | 1 | | |
+  | 4–6 | 7 | 7 | | |
+  | 7–8 | 1 | 2 | | |
+  | 9–10 | | 2 | 4 | 21 |
+
+  - With the line for Again at 0.3, three of the answers scored 4 to 6 would rate Hard instead, and nothing else would change.
+  - The contradiction rule changes one rating: an answer to q57 that repeats the error the question used to carry, graded 0.56, goes from Hard to Again.
+- **The schedule**, simulated without fuzzing:
+
+  | Answers | The next review, days later |
+  |---|---|
+  | A first answer: Again, Hard, Good or Easy | 1, 1, 2 or 8 |
+  | Good in a row | 2, 11, 30, 30 (uncapped 2, 11, 46, 163, 497) |
+  | Easy in a row | 8, 30 (uncapped 8, 66, 397) |
+  | Hard, then Good in a row | 1, 5, 17, 30 |
+  | Good three times, then Again, Hard, Good or Easy | 3, 30, 30 or 30 |
+
+  The load, for 24 questions with three new ones a day: 6.6 reviews a day in the first week, 2.7 on days 8 to 29, and 1.2 after (0.8 uncapped).
+- **The first real answer in the browser:** 210 characters written in 41 s, graded by Qwen 3.8 on Groq in 1.3 s for 1,848 tokens (1,445 read, 403 written) in one request. Both key points were partial, so 0.50: Hard, back the next day. Practice then served a new question from the weakest topic.
+- **Replaying the history.** `GET /practice/progress` and every attempt the API returns replay all the reviews. On simulated practice, answering each day whatever is due and three new questions:
+
+  | Library | Practised | Answers | Longest streak | Replay |
+  |---|---|---|---|---|
+  | 24 questions | a month | 164 | 30 days | 4 ms |
+  | 24 questions | a year | 440 | 17 days | 8 ms |
+  | 100 questions | a year | 1,745 | 90 days | 75 ms |
+  | 200 questions | a year | 3,412 | 216 days | 243 ms |
+  | 200 questions | two years | 5,944 | 730 days | 0.94 s |
+
+  The streak is counted back a day at a time for every answer, so the cost grows faster than the history once a streak runs long: in the two-year run, unbroken throughout, that counting takes more than half the time.
+- **The end-to-end test:** `make e2e` took 24.6 s from start to finish, 22.7 s of it in Playwright (the frontend's build, the three servers and the walk) and 10.4 s the walk itself. Reading the notebook took 2.4 s, the topic map 4.4 s and three questions 2.4 s, most of it the worker and the page each checking every two seconds; answering took 0.3 s. The five runs before it walked in 10.3–10.6 s.
+- **Tests:** 550 fast tests in about 35 s, including creating the test database.
+
 ## Roadmap
 **Phase 0: Setup**
 - Postgres + pgvector (Docker), FastAPI backend, Next.js frontend, setup checks (`make check`).
@@ -509,14 +616,19 @@ Measured on the same Mac, grading answers to the 25 accepted questions.
 - Calibration against hand grades (`make calibrate`).
 - Left for later: hybrid search over the answer, a "second opinion" that re-grades with `gemma4:12b` and flags disagreements, and feedback streamed to the browser.
 
-**Phase 4: Practice app**
+**Phase 4: Practice app** (built; see [Practice](#practice-phase-4) and the [milestone result](#phase-4-milestone-result))
 - Pages:
-  - **Library:** uploads, arXiv IDs, job progress.
-  - **Question bank:** filter, edit, retire weak questions.
-  - **Practice:** Markdown + LaTeX answer box, timer, streamed feedback.
-  - **Dashboard:** topic mastery heatmap, score trend, reviews due.
-- The next question comes from the FSRS schedule, weighted toward weak topics.
-- 👍/👎 ratings on questions and grades are stored as evaluation data.
+  - **Practice:** the question due next and why it was picked; a Markdown + LaTeX answer box with a stopwatch, or three minutes in interview mode; then the verdict, with its claims cited, the rating, the day the question comes back and what the answer earned.
+  - **Question bank:** filter, read each question with its passages and checks, correct, retire, rate.
+  - **Library:** uploads, arXiv IDs, the topic map and batches of questions, following each job.
+  - **Dashboard:** the topics as a labyrinth of rooms hatched by mastery, reviews due, the days practised, the latest scores, the level and the coins.
+  - **Landing page** at `/`, and a setup page that checks every dependency.
+- The next question comes from the FSRS schedule: what is due, then new questions from the weakest topic.
+- XP, levels, a streak and ten coins, all worked out from the review history.
+- Questions can be corrected and retired, each corrected quote checked against its passage.
+- Ratings of questions and grades are stored as evaluation data.
+- A Playwright test walks through the app on stand-in models (`make e2e`).
+- Left for later: streamed feedback.
 
 **Phase 5: Evaluation**
 - **Retrieval evaluation without manual labels.** Each question's saved chunks serve as ground truth. Recall@5 and MRR are compared across vector only, full-text only, hybrid, and hybrid + reranker.
@@ -545,17 +657,18 @@ Daedalus/
 ├── db/init/                  # enables pgvector when the database is created
 ├── data/                     # uploads, arXiv downloads, calibration answers (not committed)
 ├── backend/
-│   ├── pyproject.toml        # uv; main deps = API; groups: ingest | eval | dev
+│   ├── pyproject.toml        # uv; main deps = API; groups: ingest | eval | glyphs | dev
 │   ├── app/
 │   │   ├── main.py           # FastAPI app + routers
-│   │   ├── api/              # health, documents + jobs, search (citations, source links),
-│   │   │                     #   questions + topics, attempts + grades; sessions, stats (planned)
+│   │   ├── api/              # health, documents + jobs + the worker, search (citations, source
+│   │   │                     #   links), questions + topics, attempts + grades, practice, ratings
 │   │   ├── core/             # settings, dependency checks
 │   │   ├── db/               # SQLAlchemy models, sessions, Alembic migrations
-│   │   ├── llm/              # model routing (fallback chains), per-provider pacing, embeddings
+│   │   ├── llm/              # model routing (fallback chains), per-provider pacing, embeddings,
+│   │   │                     #   stand-ins for every model (fakes.py)
 │   │   ├── ingest/
 │   │   │   ├── storage.py        # uploads stored once per content hash
-│   │   │   ├── queue.py          # Postgres job queue and ingest lock
+│   │   │   ├── queue.py          # Postgres job queue, ingest lock, is a worker running
 │   │   │   ├── pipeline.py       # parse → chunk → embed → store
 │   │   │   ├── pdf.py            # Docling PDF conversion
 │   │   │   ├── arxiv.py          # IDs, OAI-PMH metadata, rate-limited downloads
@@ -567,7 +680,7 @@ Daedalus/
 │   │   ├── retrieval/        # search (vector, full-text, hybrid), fusion (RRF); reranker (planned)
 │   │   ├── questions/
 │   │   │   ├── tagging.py        # concept tags and worth-asking, model plus rules
-│   │   │   ├── topics.py         # tag clustering into topics, topic of a question
+│   │   │   ├── topics.py         # clustering tags into topics, the map as a job, a question's topic
 │   │   │   ├── generation.py     # prompts, schema, the quote-repair round
 │   │   │   ├── grounding.py      # is this quote really in its chunk
 │   │   │   ├── validation.py     # the checks a question has to pass, and storing it
@@ -575,24 +688,40 @@ Daedalus/
 │   │   ├── grading/
 │   │   │   ├── grader.py         # prompt, schema, grading an answer, storing the grade
 │   │   │   └── scoring.py        # the score, from the labels and the key points' weights
-│   │   └── scheduling/       # FSRS + topic mastery (planned)
-│   ├── scripts/              # check_setup, ingest, worker, topics, generate, calibrate
+│   │   └── scheduling/
+│   │       ├── schedule.py       # the rating a grade earns, py-fsrs, practice days
+│   │       ├── picker.py         # the next question: due, new from the weakest topic, ahead
+│   │       ├── mastery.py        # how well each question and topic is known on a day
+│   │       ├── progress.py       # XP, levels, the streak and coins, replayed from the reviews
+│   │       └── labyrinth.py      # the dashboard's maze of topics
+│   ├── scripts/              # check_setup, ingest, worker, topics, generate, calibrate; openapi
+│   │                         #   (the schema the client is generated from), glyphs, e2e
 │   └── tests/                # unit and database tests, slow PDF test;
 │                             #   DeepEval regression (planned)
-└── frontend/                 # Next.js + Tailwind; shadcn/ui (planned)
-    └── src/app/              # setup status page; library, questions, practice, dashboard (planned)
+└── frontend/                 # Next.js (App Router) + Tailwind + shadcn/ui, restyled
+    ├── src/app/              # pages: landing, practice, question bank, library, dashboard,
+    │                         #   setup, pattern book
+    ├── src/components/       # the design system's pieces; ui/ = shadcn/ui components
+    ├── src/client/           # typed API client, generated by make client
+    ├── src/lib/              # API errors, grades, drafts, progress in words, the glyph pictures
+    ├── e2e/                  # the end-to-end test and the notebook written for it
+    └── playwright.config.ts  # the servers the end-to-end test runs on
 ```
 
 ## Milestone checks
 | Phase | Check |
 |---|---|
-| 0 | `make check LIVE=1` passes: database, Ollama and all four models, Groq and Gemini each answer a test prompt. The home page lists every check as ok. |
+| 0 | `make check LIVE=1` passes: database, Ollama and all four models, Groq and Gemini each answer a test prompt. The Setup page lists every check as ok. |
 | 1 | One PDF, one arXiv paper and one notebook ingested; chunk counts look right and math and code survive; `/search` returns relevant chunks with page or cell citations. **Passed**; see below. |
 | 2 | 20 generated questions; at least 90% pass validation; 10 reviewed by hand. **Not met on the pass rate**: 35%, 45% and 45% over three runs of 20; see below. |
-| 3 | Grader agreement with hand grades reaches Spearman ρ ≥ 0.7 before scores are trusted. **Passed**: ρ 0.96 and Cohen's κ 0.82 on 75 hand-graded answers; see below. |
-| 4 | A Playwright test covers upload → generate → practice → cited feedback → dashboard update. |
+| 3 | Grader agreement with hand grades reaches Spearman ρ ≥ 0.7 before scores are trusted. **Passed**: ρ 0.95 and Cohen's κ 0.82 on 75 hand-graded answers (ρ 0.96 before two flawed questions were corrected in Phase 4); see below. |
+| 4 | A Playwright test covers upload → generate → practice → cited feedback → dashboard update. **Passed**: `make e2e` walks it in a browser on stand-in models, in about 25 s; see below. |
 | 5 | Retrieval report produced; DeepEval suite runs in CI (LLM-dependent tests on demand, to save free quota). |
 | 6 | The deployed app works after waking from sleep, and daily limits are enforced. |
+
+The landing page quotes row 3's figures, read from this table when the frontend is built: a
+change here shows there after the next `pnpm build`, and the build fails if the row stops
+reading "**Passed**: ρ … and Cohen's κ … on … hand-graded answers".
 
 ## Phase 1 milestone result
 Four sources were ingested: lecture notes (PDF), a notebook, and two arXiv papers (1706.03762 from HTML, 2510.10824 from its PDF). Math and code survive, and search returns relevant chunks with page, cell or section citations.
@@ -723,8 +852,9 @@ three runs, although the prompt describes 1 to 5.
   change to try first when question generation is taken up again.
 
 ## Phase 3 milestone result
-**Passed: the grader's scores rank answers the way hand grades do, at Spearman ρ 0.96 against
-the 0.7 set for trusting them.**
+**Passed: the grader's scores rank answers the way hand grades do, at Spearman ρ 0.95 against
+the 0.7 set for trusting them.** It measured 0.96 before two flawed questions were corrected in
+Phase 4 (see below).
 
 **Evaluation method.**
 - **Answers:** 75, written by hand, three for each of the 25 accepted questions: mostly a
@@ -732,20 +862,34 @@ the 0.7 set for trusting them.**
   attempts and a few answers that say nothing (a non-answer, generic filler, a restatement of
   the question).
 - **Hand grades:** a label for each key point (covered, partial or missing), the number of
-  claims that contradict the sources, and an overall score out of 10 (for 73 of the 75).
+  claims that contradict the sources, and an overall score out of 10 (for 73 of the 75, and
+  all 75 after the corrections below).
 - **Grading:** `make calibrate` with the prompt `grade-v1`, on Groq's Qwen alone.
 - **Metrics:** Spearman ρ between the grader's score and the score the same formula gives
   the hand labels; Cohen's κ between the grader's key-point labels and the hand labels.
 
-| Measure | Result |
-|---|---|
-| Spearman ρ, the grader's scores against the hand labels' scores | **0.96** |
-| Spearman ρ against the overall hand scores (73 answers) | 0.96; the formula on the hand labels 0.99 |
-| Key-point labels the same | 89% (208 of 234); Cohen's κ **0.82**, linear-weighted 0.88 |
-| Answers with every label the same | 53 of 75 |
-| Mean score difference | 0.06 |
-| Answers with a contradicted claim | both 15, neither 57, the grader only 2, the hand only 1 |
-| Prompt-injection attempts | 4; none raised a score |
+| Measure | First measured | After the corrections |
+|---|---|---|
+| Spearman ρ, the grader's scores against the hand labels' scores | **0.956** | **0.954** |
+| Spearman ρ against the overall hand scores | 0.96 on 73 answers; the formula on the hand labels 0.99 | 0.96 on 75; the formula 0.99 |
+| Key-point labels the same | 89% (208 of 234) | 88% (207 of 234) |
+| Cohen's κ on the labels | **0.824**, linear-weighted 0.88 | **0.817**, linear-weighted 0.88 |
+| Answers with every label the same | 53 of 75 | 53 of 75 |
+| Mean score difference | 0.06 | 0.06 |
+| Answers with a contradicted claim | both 15, neither 57, the grader only 2, the hand only 1 | both 15, neither 56, the grader only 3, the hand only 1 |
+| Prompt-injection attempts | 4; none raised a score | the same |
+
+**After the corrections.** Five questions were found flawed (the last point below), and
+Phase 4 dealt with them in the question bank: q41 and q57 were corrected, q30 and q50 tidied,
+and q63 retired. The six answers to q41 and q57 were graded again against the corrected key
+points (10,824 tokens on Groq), and four of them relabelled by hand where the correction
+changed what they should be credited with. The answers to q30 and q50, whose tidied key points
+kept their weights, and to the retired q63 kept the grades and labels they had. On the same 75
+answers ρ moved from 0.956 to 0.954 and κ from 0.824 to 0.817, and the grader is still a step
+stricter than the hand: 26 of the 27 labels that differ are lower, and 22 answers score lower,
+1 higher and 52 the same. Leaving out the answers to q41, q57 and q63, as the last point below
+does, nothing changed: ρ 0.965, κ 0.856 on 66 answers. The milestone table quotes the second
+measurement; the points below are from the first.
 
 - **The grader is one step stricter than the hand.** 25 of the 26 labels that differ are
   lower -- partial for covered 11 times, missing for partial 13 times, missing for covered
@@ -760,13 +904,13 @@ the 0.7 set for trusting them.**
 - **Scoring in code loses nothing.** The formula applied to the hand labels ranks the answers
   as the overall hand scores do (ρ 0.99), so the labels and weights carry the hand's own
   judgement.
-- **The calibration reads the question bank too.** Three questions are flawed: q41 credits
-  dropout with what the paper says of label smoothing, q57's third key point has the paper's
+- **The calibration reads the question bank too.** Three questions were flawed: q41 credited
+  dropout with what the paper says of label smoothing, q57's third key point had the paper's
   cost comparison backwards (convolutional layers are more expensive than recurrent ones, by
-  a factor of k), and q63's key points are all reported results, so an answer that explains
-  the why scores nothing. Without those three, ρ is 0.965 and κ 0.856. The trial found two
-  more: q30's fourth key point quotes a passage that does not support it, and q50's third and
-  fourth points overlap.
+  a factor of k), and q63's key points were all reported results, so an answer that explains
+  the why scored nothing. Without those three, ρ is 0.965 and κ 0.856. The trial found two
+  more: q30's fourth key point quoted a passage that does not support it, and q50's third and
+  fourth points overlapped.
 
 **A more generous prompt was tried and not adopted.** Since `grade-v1` is a step stricter than
 the hand, a rewrite of its key-point rules alone, `grade-v2`, was measured against it. It asked the grader
@@ -804,6 +948,45 @@ generous prompt could only have lowered them, so the comparison below, which kee
   answers, which tells a candidate they know what they don't. The same 75 answers have now
   chosen between two prompts, so a further change to the grader is judged on answers written
   after it.
+
+## Phase 4 milestone result
+**Passed: a Playwright test walks through the app in a browser, from the landing page to a
+graded answer and its room on the dashboard, on stand-in models.** `make e2e` takes about 25 s,
+the frontend's build included.
+
+The check asked for upload → generate → practice → cited feedback → dashboard update. The test,
+`frontend/e2e/labyrinth.spec.ts`, goes through the pages as a person would, against the real
+API, worker, database and built frontend, and checks what each page shows:
+
+1. **Enter.** Enter the labyrinth, on the landing page, opens the practice page, which has
+   nothing to practise yet and points to the library.
+2. **Upload.** A notebook written for the test (three short sections on training deep
+   networks) is uploaded, and the worker reads it into three passages.
+3. **The topic map.** A build tags the three passages and finds three topics, one per section.
+4. **Generate.** A batch of three questions, all accepted by the checks every question goes
+   through.
+5. **Practice and cited feedback.** The test answers the question practice serves. The verdict
+   names the stand-in grader and shows 0.75 and Good, two claims supported and cited by
+   notebook and cell, and the XP earned.
+6. **The dashboard.** Three rooms, the one answered in practised, at a mastery of 0.75 and on
+   today's thread, and the wing showing the same XP.
+
+- **What it proves:** the pieces work together. An upload is queued, read, tagged and grouped
+  into topics; questions are written and checked; an answer is graded, reviewed and scheduled;
+  progress and the map are worked out from it; and each step reaches the page. It has passed
+  every run since its fix, six in a row, with every real model out of reach.
+- **What it can't prove:** that the real models write good questions or grade fairly. The
+  stand-ins pass the checks by construction. The real grader is measured by `make calibrate`
+  (the [Phase 3 result](#phase-3-milestone-result)), and the real writer was measured by the
+  [Phase 2 runs](#phase-2-milestone-result).
+- **What it found:** its second run stalled at Pending. The library had stopped following a
+  notebook the worker had already read, because a listing showed the document still pending
+  beside its job done (see the [decisions](#practice-decisions)). The fix came with a database
+  test that commits the worker's change between the listing's queries.
+- **Real practice came first.** Before the test existed, the first answer written in the
+  browser was graded against its passages with a claim cited, scheduled for the next day, and
+  practice moved on to a different question (see the
+  [measurements](#phase-4-measurements)).
 
 ## References
 - Groq limits: https://console.groq.com/docs/rate-limits · models: https://console.groq.com/docs/models
