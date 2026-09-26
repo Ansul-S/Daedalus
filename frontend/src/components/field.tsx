@@ -69,3 +69,34 @@ export function Select({ className, ...props }: React.ComponentProps<"select">) 
     </span>
   );
 }
+
+/** A text or number box in a hairline, like the select. */
+export function Input({ className, ...props }: React.ComponentProps<"input">) {
+  return (
+    <input
+      className={cn(
+        "h-9 w-full min-w-0 border border-line-2 bg-ground px-2.5 font-mono text-xs tracking-[0.02em] text-fg transition-colors placeholder:text-fg-3 hover:border-fg focus-visible:border-fg aria-invalid:border-thread",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** A native checkbox in the accent, with its words beside it and a note on what it changes. */
+export function Checkbox({
+  label,
+  hint,
+  className,
+  ...props
+}: Omit<React.ComponentProps<"input">, "type"> & { label: React.ReactNode; hint?: React.ReactNode }) {
+  return (
+    <label className={cn("flex cursor-pointer items-baseline gap-2.5 text-small", className)}>
+      <input type="checkbox" className="shrink-0 translate-y-0.5 accent-thread" {...props} />
+      <span>
+        {label}
+        {hint && <span className="text-fg-2"> · {hint}</span>}
+      </span>
+    </label>
+  );
+}

@@ -392,6 +392,23 @@
     repeating-linear-gradient(-45deg, currentColor 0 1.2px, transparent 1.2px 5px);
 }
 
+/* a job that failed: the box struck through, corner to corner */
+@utility hatch-cross {
+  background:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.8px),
+      currentColor calc(50% - 0.8px) calc(50% + 0.8px),
+      transparent calc(50% + 0.8px)
+    ),
+    linear-gradient(
+      -45deg,
+      transparent calc(50% - 0.8px),
+      currentColor calc(50% - 0.8px) calc(50% + 0.8px),
+      transparent calc(50% + 0.8px)
+    );
+}
+
 /* ---------- Markdown: questions, answers, feedback ---------- */
 
 @layer components {

@@ -10,11 +10,10 @@ import { ThemeSwitch } from "@/components/theme-switch";
 import { number } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 
-// Pages still to be built stay in the nav, unlinked, so the shape of the app is visible.
 const NAV = [
   { href: "/practice", label: "Practice" },
   { href: "/questions", label: "Questions" },
-  { href: "/library", label: "Library", soon: true },
+  { href: "/library", label: "Library" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/setup", label: "Setup" },
 ] as const;
@@ -52,14 +51,6 @@ export function SiteHeader() {
           <ul className="flex gap-[18px] py-1.5 font-mono text-[10.5px] leading-none tracking-[0.1em] whitespace-nowrap uppercase">
             {NAV.map((item) => {
               const current = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              if ("soon" in item) {
-                return (
-                  <li key={item.href} className="text-fg-3" title="Not built yet">
-                    {item.label}
-                    <span className="sr-only"> (not built yet)</span>
-                  </li>
-                );
-              }
               return (
                 <li key={item.href}>
                   <Link

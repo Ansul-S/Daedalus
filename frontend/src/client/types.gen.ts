@@ -262,6 +262,10 @@ export type DocumentOut = {
      * Chunk Count
      */
     chunk_count?: number;
+    /**
+     * Tagged Count
+     */
+    tagged_count?: number;
     latest_job?: JobOut | null;
 };
 
@@ -1190,6 +1194,21 @@ export type StreakOut = {
 };
 
 /**
+ * TopicMapOut
+ */
+export type TopicMapOut = {
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Untagged
+     */
+    untagged: number;
+    job: JobOut | null;
+};
+
+/**
  * TopicOut
  */
 export type TopicOut = {
@@ -1245,6 +1264,18 @@ export type ValidationError = {
     ctx?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * WorkerOut
+ */
+export type WorkerOut = {
+    /**
+     * Running
+     *
+     * Whether a worker, or `make ingest` or `make generate`, is running
+     */
+    running: boolean;
 };
 
 /**
@@ -1426,6 +1457,42 @@ export type GetDocumentResponses = {
 
 export type GetDocumentResponse = GetDocumentResponses[keyof GetDocumentResponses];
 
+export type ListJobsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Kind
+         */
+        kind?: 'ingest' | 'generate' | 'topics' | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/jobs';
+};
+
+export type ListJobsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListJobsError = ListJobsErrors[keyof ListJobsErrors];
+
+export type ListJobsResponses = {
+    /**
+     * Response List Jobs
+     *
+     * Successful Response
+     */
+    200: Array<JobOut>;
+};
+
+export type ListJobsResponse = ListJobsResponses[keyof ListJobsResponses];
+
 export type GetJobData = {
     body?: never;
     path: {
@@ -1455,6 +1522,22 @@ export type GetJobResponses = {
 };
 
 export type GetJobResponse = GetJobResponses[keyof GetJobResponses];
+
+export type WorkerStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/worker';
+};
+
+export type WorkerStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkerOut;
+};
+
+export type WorkerStatusResponse = WorkerStatusResponses[keyof WorkerStatusResponses];
 
 export type SearchChunksData = {
     body?: never;
@@ -1690,6 +1773,22 @@ export type ListTopicsResponses = {
 };
 
 export type ListTopicsResponse = ListTopicsResponses[keyof ListTopicsResponses];
+
+export type BuildTopicMapData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/topics/build';
+};
+
+export type BuildTopicMapResponses = {
+    /**
+     * Successful Response
+     */
+    202: TopicMapOut;
+};
+
+export type BuildTopicMapResponse = BuildTopicMapResponses[keyof BuildTopicMapResponses];
 
 export type ListAttemptsData = {
     body?: never;

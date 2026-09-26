@@ -11,6 +11,7 @@ import {
   VerdictMark,
 } from "@/components/hatching";
 import { Coin } from "@/components/coin";
+import { JobLine } from "@/components/job-status";
 import { LabyrinthMark } from "@/components/labyrinth-mark";
 import { Markdown } from "@/components/markdown";
 import { Sheet, SheetHead, SheetSection, TitleBlock } from "@/components/sheet";
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 import {
   ControlsDemo,
   FieldsDemo,
+  FileDropDemo,
   MosaicLab,
   RatingDemo,
   TimerDemo,
@@ -266,7 +268,7 @@ export default function PatternBookPage() {
         <SheetHead as="h2" id="controls" number="Sheet 03" title="Controls" sigil="κ">
           Buttons are lettering on a drawing, and a rating is said in words, the chosen one inked
           in. Chips, tabs and filters are mono labels in hairline boxes; the answer box is raised
-          paper. Square corners throughout.
+          paper, and files are dropped in a dashed box. Square corners throughout.
         </SheetHead>
         <Part title="Rating · a question good or poor, a grade fair or unfair">
           <RatingDemo />
@@ -276,6 +278,9 @@ export default function PatternBookPage() {
         </Part>
         <Part title="Filters and fields">
           <FieldsDemo />
+        </Part>
+        <Part title="Files · dropped, or chosen">
+          <FileDropDemo />
         </Part>
         <Part title="Chips">
           <div className="flex flex-wrap items-center gap-3">
@@ -295,7 +300,8 @@ export default function PatternBookPage() {
           The mark is the Cretan labyrinth, drawn square as on the coins of Knossos. Ariadne&apos;s
           thread is the one line in the accent colour, and timers are dimension lines borrowed
           from a technical drawing. What practice earns is struck in ochre, and the wing grows
-          a feather with each step towards the next level.
+          a feather with each step towards the next level. Work in the worker&apos;s queue is
+          marked as hatching marks everything else.
         </SheetHead>
         <div className="grid grid-cols-1 items-start gap-[clamp(24px,4vw,56px)] md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           <TracedMark />
@@ -346,6 +352,19 @@ export default function PatternBookPage() {
                   <Coin name="Theseus" glyph="Θ" minted={false} />
                   not yet
                 </figure>
+              </div>
+            </Part>
+            <Part title="Jobs · waiting, under way, stopped part way, done, failed">
+              <div className="grid gap-2.5">
+                <JobLine state="queued">waiting for the worker</JobLine>
+                <JobLine state="running">tagging passage 3 of 40</JobLine>
+                <JobLine state="interrupted">
+                  tagging passage 3 of 40 · picked up again when a worker starts
+                </JobLine>
+                <JobLine state="done" label="Built">
+                  25 Sep, 14:02 · 3 passages tagged, 148 topics
+                </JobLine>
+                <JobLine state="failed">stopped at grouping the tags into topics</JobLine>
               </div>
             </Part>
           </div>

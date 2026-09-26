@@ -32,3 +32,16 @@ export function dateLabel(isoDate: string): string {
 export function weekdayOf(isoDate: string): string {
   return calendar(isoDate).weekday;
 }
+
+/** 17 Sep, 10:40: a moment in the reader's own time zone. */
+export function momentLabel(iso: string): string {
+  const at = new Date(iso);
+  const time = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+  return `${at.getDate()} ${MONTHS[at.getMonth()]}, ${time}`;
+}
+
+/** 17 Sep: the day of a moment, in the reader's own time zone. */
+export function dayOfMoment(iso: string): string {
+  const at = new Date(iso);
+  return `${at.getDate()} ${MONTHS[at.getMonth()]}`;
+}

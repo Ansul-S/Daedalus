@@ -240,6 +240,77 @@
         }
       }
     },
+    "/jobs": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List Jobs",
+        "description": "The newest jobs first: what is waiting, what is running and how the latest ones ended.\n\nOnly one topic map and one batch of questions are queued at a time, so the newest job of\nthose kinds is the one to follow.",
+        "operationId": "list_jobs",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ingest",
+                    "generate",
+                    "topics"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobOut"
+                  },
+                  "title": "Response List Jobs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/jobs/{job_id}": {
       "get": {
         "tags": [
@@ -275,6 +346,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/worker": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Worker Status",
+        "description": "Whether a worker is running to take the queued jobs (`make worker`).",
+        "operationId": "worker_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerOut"
                 }
               }
             }
@@ -748,6 +841,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/topics/build": {
+      "post": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Build Topic Map",
+        "description": "Queue a build of the topic map: the chunks without tags are tagged, then every tag is\ngrouped into topics. Returns 202 with the job the worker will run.\n\nOne build at a time: while a job is still queued or running it is returned unchanged,\nsince it will tag whatever is untagged when it gets there.",
+        "operationId": "build_topic_map",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicMapOut"
                 }
               }
             }
@@ -1556,6 +1671,11 @@
           "chunk_count": {
             "type": "integer",
             "title": "Chunk Count",
+            "default": 0
+          },
+          "tagged_count": {
+            "type": "integer",
+            "title": "Tagged Count",
             "default": 0
           },
           "latest_job": {
@@ -3265,6 +3385,35 @@
         ],
         "title": "StreakOut"
       },
+      "TopicMapOut": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "untagged": {
+            "type": "integer",
+            "title": "Untagged"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "untagged",
+          "job"
+        ],
+        "title": "TopicMapOut"
+      },
       "TopicOut": {
         "properties": {
           "id": {
@@ -3345,6 +3494,20 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WorkerOut": {
+        "properties": {
+          "running": {
+            "type": "boolean",
+            "title": "Running",
+            "description": "Whether a worker, or `make ingest` or `make generate`, is running"
+          }
+        },
+        "type": "object",
+        "required": [
+          "running"
+        ],
+        "title": "WorkerOut"
       },
       "XpOut": {
         "properties": {

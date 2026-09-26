@@ -32,11 +32,12 @@ Set them in the environment or in `frontend/.env.local`.
 | `/practice` | One question at a time: the question due next and why it was picked, your answer, the grader's verdict, then the next question (see below) |
 | `/questions` | The question bank: every question, accepted, retired or rejected, filtered by topic, style, difficulty, source and your rating (see below) |
 | `/questions/[id]` | One question with everything behind it: its passages, key points and quotes, the checks it went through and every correction since. It can be corrected, retired or put back, and rated |
+| `/library` | The material questions are written from: add PDFs, notebooks and arXiv papers, build the topic map and write questions, following each job as the worker runs it (see below) |
 | `/dashboard` | What practice has built: the labyrinth of topics, the level and its wing, the days practised, the latest scores and the coins (see below) |
 | `/setup` | The status of the database, the local models and the API keys, checked each time the page loads |
-| `/pattern-book` | The design system, live: pigments, type, controls, marks (with the coins and the wing), hatching, glyph pictures and Markdown with LaTeX |
+| `/pattern-book` | The design system, live: pigments, type, controls, marks (with the coins, the wing and the states of a job), hatching, glyph pictures and Markdown with LaTeX |
 
-Library is in the navigation, without a link, until it is built. The header shows the streak and the XP.
+The header shows the streak and the XP.
 
 ### Practising
 
@@ -67,6 +68,17 @@ Library is in the navigation, without a link, until it is built. The header show
 - **Retiring** takes a question out of practice and out of the duplicate check, with an optional reason; Put back returns it where its schedule left off. A rejected question stays as the record of why the checks turned it down: it can be rated, but not corrected.
 - **Rating** a question works as on the verdict. Every rating is kept and the latest one stands.
 
+### The library
+
+The page runs from material to practice in four steps. Adding material, building the topic map and writing questions each queue a job for the worker (`make worker`), and the page follows each job until it ends.
+
+- **Adding material.** Drop PDFs and notebooks on the page, or choose them; any other file is left out, by name. They are uploaded one after another, and each then shows how its reading goes: queued, running with the worker's progress, then ready with its passages, or failed with the reason. An arXiv paper is added by its ID (`1706.03762`, or `1706.03762v7` for one version) or its arxiv.org address. Formulas as LaTeX (on unless unticked, and slower) and OCR for scanned pages apply to PDFs, and to an arXiv paper without an HTML version. A file or paper already in the library is not read again unless Read it again is ticked, or a different arXiv version is asked for.
+- **Building the topic map.** The local model tags the passages that have no tags yet, about 12 s each, and every tag in the library is then grouped into topics. With every passage tagged, Build it again only groups the tags again. A build that fails keeps the tags it wrote, so the next one carries on from there.
+- **Writing questions.** How many (1 to 100), from every source or one of them. The API plans the batch when it is asked, from the passages the topic map has tagged by then, so the page says when passages are still outside the map and waits while a build is under way. One batch runs at a time. A batch that uses up the day's allowance stops with the rest of it left in the queue; one in which every question failed says so, and the worker's output gives each reason.
+- **The worker.** The page asks the API every five seconds whether a worker is running (`GET /worker`). Without one, a line says that what is asked for here waits; once something waits, a notice counts the jobs and shows how to start a worker. A job still marked running while no worker is running was stopped part way, and is marked so until the next worker to start queues it again. A reading stopped part way starts again from the beginning; a build keeps the tags it wrote, and a batch the questions.
+- **Following a job.** While a job waits or runs, the page asks after it every two seconds, and each step in its progress fetches again what it changes: the documents and their counts while the map is built, then the topics; the questions while a batch is written, then what practice and the dashboard show. While nothing waits or runs, the page only asks after the worker.
+- **The shelves** hold every document, newest first: the kind of source, its file or arXiv ID, how its reading went, its length, its passages and how many are in the topic map, and its accepted questions, which open the question bank filtered to that source. A reading that failed says why; a document read before keeps its passages when a later reading fails.
+
 ## Structure
 
 ```
@@ -74,13 +86,14 @@ src/app/             pages, the root layout (fonts, theme, header, footer), erro
 src/app/globals.css  tokens, themes, type roles, hatching and Markdown styles
 src/components/      the design system's pieces: labyrinth mark, Ariadne's thread, hatching,
                      dimension-line timer, drafting sheet and title block, glyph mosaic, Markdown,
-                     coins and the wing, the rating control, form fields
+                     coins and the wing, the rating control, form fields, job status marks, the
+                     file drop
 src/components/ui/   shadcn/ui components (Radix, "lyra" style), restyled to the tokens
 src/client/          typed API client (generated)
 src/lib/             API address and error type, theme, reading a grade, drafts, the stopwatch,
                      interview mode, what practice earned in words, the level-up burst, naming a
-                     question and reading its validation report, the glyph pictures' engine and
-                     grids
+                     question and reading its validation report, the library's work in words,
+                     the glyph pictures' engine and grids
 openapi.json         the API schema the client is generated from (generated)
 ```
 
@@ -89,8 +102,8 @@ openapi.json         the API schema the client is generated from (generated)
 - **Four pigments:** bone (the paper), ink, ochre (only for what is earned) and sinopia, the accent (Ariadne's thread, focus). Components use role tokens such as `ground`, `surface`, `fg`, `line` and `thread`, which the dark theme redefines. Tailwind's default colours are switched off, so only these exist.
 - **Three typefaces,** self-hosted through `next/font`: Big Shoulders for titles and numbers, Source Serif 4 for reading text and questions, JetBrains Mono for labels, measurements and the glyph pictures.
 - **Themes.** Light and dark follow the system; the switch in the header picks Light, Dark or Auto, and the browser remembers it.
-- **Status never depends on colour alone.** Hatching marks key points (covered, partial, missing), ratings (Again, Hard, Good, Easy) and a topic's mastery on the dashboard.
-- **Motion.** A glyph picture settles out of noise when it comes into view, a room with reviews due sends out a ring, and a new level throws up Greek letters (`canvas-confetti`, loaded only then). With reduced motion the picture is drawn settled and nothing else moves.
+- **Status never depends on colour alone.** Hatching marks key points (covered, partial, missing), ratings (Again, Hard, Good, Easy), a topic's mastery on the dashboard and where a job in the library stands (waiting, under way, stopped part way, done, failed).
+- **Motion.** A glyph picture settles out of noise when it comes into view, a room with reviews due and a job under way send out a ring, and a new level throws up Greek letters (`canvas-confetti`, loaded only then). With reduced motion the picture is drawn settled and nothing else moves.
 
 `/pattern-book` is the reference: every piece, live, in both themes. A component added with the shadcn/ui CLI (`components.json`) arrives in the CLI's own style: restyle it to the tokens, and check `package.json` for packages the CLI added.
 

@@ -5,7 +5,8 @@ import { toast } from "sonner";
 
 import type { RatingIn, RatingOut } from "@/client/types.gen";
 import { DimensionTimer } from "@/components/dimension-timer";
-import { Field, Select } from "@/components/field";
+import { Checkbox, Field, Input, Select } from "@/components/field";
+import { FileDrop } from "@/components/file-drop";
 import { GlyphMosaic } from "@/components/glyph-mosaic";
 import { LABYRINTH_LENGTH, LabyrinthMark } from "@/components/labyrinth-mark";
 import { Markdown } from "@/components/markdown";
@@ -17,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Wing } from "@/components/wing";
 import { GRIDS } from "@/lib/glyph/grids";
+import { FILE_TYPES, fileSize } from "@/lib/library";
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -219,9 +221,12 @@ export function RatingDemo() {
   );
 }
 
-/** A filter, and a field the API refused, as the question bank draws them. */
+/** A filter, boxes to type in and to tick, and a field the API refused, as the question bank
+ * and the library draw them. */
 export function FieldsDemo() {
   const [topic, setTopic] = useState("");
+  const [count, setCount] = useState("10");
+  const [formulas, setFormulas] = useState(true);
   return (
     <div className="grid max-w-3xl grid-cols-1 items-start gap-x-6 gap-y-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
       <Field label="Topic">
@@ -233,6 +238,31 @@ export function FieldsDemo() {
           </Select>
         )}
       </Field>
+      <Field
+        label="arXiv ID or address"
+        hint="1706.03762, or 1706.03762v7 for one version; its arxiv.org address works too"
+      >
+        {(control) => <Input {...control} placeholder="1706.03762" spellCheck={false} />}
+      </Field>
+      <Field label="How many">
+        {(control) => (
+          <Input
+            {...control}
+            type="number"
+            min={1}
+            max={100}
+            value={count}
+            onChange={(event) => setCount(event.target.value)}
+          />
+        )}
+      </Field>
+      <Checkbox
+        label="Formulas as LaTeX"
+        hint="PDFs only; slower"
+        checked={formulas}
+        onChange={(event) => setFormulas(event.target.checked)}
+        className="sm:pt-6"
+      />
       <Field
         label="Its quote, word for word"
         hint="Six or more words copied from the passage, showing the point is there."
@@ -313,6 +343,32 @@ export function ControlsDemo() {
           <Progress value={53} aria-label="Example progress" />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Files dropped or chosen, listed as the library lists them before they are sent. Nothing
+ * leaves the page. */
+export function FileDropDemo() {
+  const [files, setFiles] = useState<File[]>([]);
+  return (
+    <div className="grid max-w-md grid-cols-1 gap-3">
+      <FileDrop accept={FILE_TYPES} onFiles={(chosen) => setFiles((kept) => [...kept, ...chosen])}>
+        Drop PDFs or notebooks here, or
+      </FileDrop>
+      {files.length > 0 && (
+        <ul aria-label="Chosen" className="border-t border-line-2">
+          {files.map((file, i) => (
+            <li
+              key={i}
+              className="flex justify-between gap-3 border-b border-dotted border-line-2 py-1 font-mono text-[11px] leading-[1.4]"
+            >
+              <span className="min-w-0 truncate">{file.name}</span>
+              <span className="shrink-0 text-fg-2">{fileSize(file.size)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

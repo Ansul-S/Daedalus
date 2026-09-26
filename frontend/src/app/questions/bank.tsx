@@ -403,7 +403,11 @@ export function QuestionBank({ children }: { children: React.ReactNode }) {
             <>
               <p className="mb-5 max-w-[62ch]">
                 No questions yet. Add study material, build the topic map and write questions
-                from it:
+                from it in the{" "}
+                <Link href="/library" className="thread-link">
+                  library
+                </Link>
+                , or from the command line:
               </p>
               <Commands title="Filling the labyrinth" lines={FILL_THE_LABYRINTH} />
             </>

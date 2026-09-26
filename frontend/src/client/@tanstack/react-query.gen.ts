@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { addArxivPaper, addRating, answerQuestion, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listQuestions, listTopics, type Options, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument } from '../sdk.gen';
-import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse } from '../types.gen';
+import { addArxivPaper, addRating, answerQuestion, buildTopicMap, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listJobs, listQuestions, listTopics, type Options, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument, workerStatus } from '../sdk.gen';
+import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -153,6 +153,29 @@ export const getDocumentOptions = (options: Options<GetDocumentData>) => queryOp
     queryKey: getDocumentQueryKey(options)
 });
 
+export const listJobsQueryKey = (options?: Options<ListJobsData>) => createQueryKey('listJobs', options);
+
+/**
+ * List Jobs
+ *
+ * The newest jobs first: what is waiting, what is running and how the latest ones ended.
+ *
+ * Only one topic map and one batch of questions are queued at a time, so the newest job of
+ * those kinds is the one to follow.
+ */
+export const listJobsOptions = (options?: Options<ListJobsData>) => queryOptions<ListJobsResponse, ListJobsError, ListJobsResponse, ReturnType<typeof listJobsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listJobs({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listJobsQueryKey(options)
+});
+
 export const getJobQueryKey = (options: Options<GetJobData>) => createQueryKey('getJob', options);
 
 /**
@@ -169,6 +192,26 @@ export const getJobOptions = (options: Options<GetJobData>) => queryOptions<GetJ
         return data;
     },
     queryKey: getJobQueryKey(options)
+});
+
+export const workerStatusQueryKey = (options?: Options<WorkerStatusData>) => createQueryKey('workerStatus', options);
+
+/**
+ * Worker Status
+ *
+ * Whether a worker is running to take the queued jobs (`make worker`).
+ */
+export const workerStatusOptions = (options?: Options<WorkerStatusData>) => queryOptions<WorkerStatusResponse, DefaultError, WorkerStatusResponse, ReturnType<typeof workerStatusQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await workerStatus({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: workerStatusQueryKey(options)
 });
 
 export const searchChunksQueryKey = (options: Options<SearchChunksData>) => createQueryKey('searchChunks', options);
@@ -390,6 +433,29 @@ export const listTopicsInfiniteOptions = (options?: Options<ListTopicsData>) => 
         queryKey: listTopicsInfiniteQueryKey(options)
     });
     return opts as Omit<typeof opts, 'initialData'>;
+};
+
+/**
+ * Build Topic Map
+ *
+ * Queue a build of the topic map: the chunks without tags are tagged, then every tag is
+ * grouped into topics. Returns 202 with the job the worker will run.
+ *
+ * One build at a time: while a job is still queued or running it is returned unchanged,
+ * since it will tag whatever is untagged when it gets there.
+ */
+export const buildTopicMapMutation = (options?: Partial<Options<BuildTopicMapData>>): UseMutationOptions<BuildTopicMapResponse, DefaultError, Options<BuildTopicMapData>> => {
+    const mutationOptions: UseMutationOptions<BuildTopicMapResponse, DefaultError, Options<BuildTopicMapData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await buildTopicMap({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listAttemptsQueryKey = (options: Options<ListAttemptsData>) => createQueryKey('listAttempts', options);

@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses } from './types.gen';
+import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -72,9 +72,26 @@ export const listDocuments = <ThrowOnError extends boolean = false>(options?: Op
 export const getDocument = <ThrowOnError extends boolean = false>(options: Options<GetDocumentData, ThrowOnError>): RequestResult<GetDocumentResponses, GetDocumentErrors, ThrowOnError> => (options.client ?? client).get<GetDocumentResponses, GetDocumentErrors, ThrowOnError>({ url: '/documents/{document_id}', ...options });
 
 /**
+ * List Jobs
+ *
+ * The newest jobs first: what is waiting, what is running and how the latest ones ended.
+ *
+ * Only one topic map and one batch of questions are queued at a time, so the newest job of
+ * those kinds is the one to follow.
+ */
+export const listJobs = <ThrowOnError extends boolean = false>(options?: Options<ListJobsData, ThrowOnError>): RequestResult<ListJobsResponses, ListJobsErrors, ThrowOnError> => (options?.client ?? client).get<ListJobsResponses, ListJobsErrors, ThrowOnError>({ url: '/jobs', ...options });
+
+/**
  * Get Job
  */
 export const getJob = <ThrowOnError extends boolean = false>(options: Options<GetJobData, ThrowOnError>): RequestResult<GetJobResponses, GetJobErrors, ThrowOnError> => (options.client ?? client).get<GetJobResponses, GetJobErrors, ThrowOnError>({ url: '/jobs/{job_id}', ...options });
+
+/**
+ * Worker Status
+ *
+ * Whether a worker is running to take the queued jobs (`make worker`).
+ */
+export const workerStatus = <ThrowOnError extends boolean = false>(options?: Options<WorkerStatusData, ThrowOnError>): RequestResult<WorkerStatusResponses, unknown, ThrowOnError> => (options?.client ?? client).get<WorkerStatusResponses, unknown, ThrowOnError>({ url: '/worker', ...options });
 
 /**
  * Search Chunks
@@ -141,6 +158,17 @@ export const editQuestion = <ThrowOnError extends boolean = false>(options: Opti
  * The topic map, the topics with the most passages behind them first.
  */
 export const listTopics = <ThrowOnError extends boolean = false>(options?: Options<ListTopicsData, ThrowOnError>): RequestResult<ListTopicsResponses, ListTopicsErrors, ThrowOnError> => (options?.client ?? client).get<ListTopicsResponses, ListTopicsErrors, ThrowOnError>({ url: '/topics', ...options });
+
+/**
+ * Build Topic Map
+ *
+ * Queue a build of the topic map: the chunks without tags are tagged, then every tag is
+ * grouped into topics. Returns 202 with the job the worker will run.
+ *
+ * One build at a time: while a job is still queued or running it is returned unchanged,
+ * since it will tag whatever is untagged when it gets there.
+ */
+export const buildTopicMap = <ThrowOnError extends boolean = false>(options?: Options<BuildTopicMapData, ThrowOnError>): RequestResult<BuildTopicMapResponses, unknown, ThrowOnError> => (options?.client ?? client).post<BuildTopicMapResponses, unknown, ThrowOnError>({ url: '/topics/build', ...options });
 
 /**
  * List Attempts

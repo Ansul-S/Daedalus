@@ -89,7 +89,11 @@ export function QuestionProblem({ error, retry }: { error: Error; retry: () => v
         </StepLabel>
         <p className="mt-3 mb-5 max-w-[62ch]">
           There is nothing to practise yet. Add study material, build the topic map and write
-          questions from it:
+          questions from it in the{" "}
+          <Link href="/library" className="thread-link">
+            library
+          </Link>
+          , or from the command line:
         </p>
         <Commands title="Filling the labyrinth" lines={FILL_THE_LABYRINTH} />
       </ThreadStep>
