@@ -104,6 +104,14 @@ class ArxivIn(IngestOptions):
     arxiv_id: str = Field(examples=["1706.03762", "https://arxiv.org/abs/1706.03762v7"])
 
 
+async def _one_snapshot(session: AsyncSession) -> None:
+    """Read what follows as the database stood at one moment. A document is listed from three
+    queries, and each would otherwise see whatever was committed when it began: one that ran
+    across the worker's commit showed a reading's job done beside its document still pending,
+    and the library, seeing nothing under way, stopped following it."""
+    await session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+
+
 async def _documents_out(session: AsyncSession, documents: list[Document]) -> list[DocumentOut]:
     """Two queries for any number of documents: chunk and tag counts, and each latest job."""
     ids = [document.id for document in documents]
@@ -201,12 +209,14 @@ async def add_arxiv_paper(body: ArxivIn, session: SessionDep, response: Response
 
 @router.get("/documents")
 async def list_documents(session: SessionDep) -> list[DocumentOut]:
+    await _one_snapshot(session)
     documents = await session.scalars(select(Document).order_by(Document.created_at.desc()))
     return await _documents_out(session, list(documents))
 
 
 @router.get("/documents/{document_id}")
 async def get_document(document_id: int, session: SessionDep) -> DocumentOut:
+    await _one_snapshot(session)
     document = await session.get(Document, document_id)
     if document is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")

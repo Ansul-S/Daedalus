@@ -1,9 +1,11 @@
 import asyncio
 import json
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, update
+from sqlalchemy import event, func, select, update
+from sqlalchemy.engine import make_url
 
 from app.api.search import get_embedder
 from app.db.models import Chunk, ChunkTags, Document, Job
@@ -139,6 +141,37 @@ def test_documents_show_their_chunk_count_and_latest_job(client, sessions, corpu
     assert client.get(f"/jobs/{finished_id}").json()["progress"] == "3 chunks"
     assert client.get("/documents/999").status_code == 404
     assert client.get("/jobs/999").status_code == 404
+
+
+def test_a_document_and_its_latest_job_are_read_at_one_moment(client, engine, database_url) -> None:
+    """The worker finishes a reading in one transaction. A listing whose queries straddled it
+    showed the document still pending with its job already done, and the library, seeing no
+    job under way, stopped following it."""
+    added = upload(client, "lesson.ipynb", NOTEBOOK).json()
+    worker = make_url(database_url).set(drivername="postgresql")
+    finished: list[bool] = []
+
+    def finish_the_reading(conn, cursor, statement: str, *args) -> None:
+        # After the documents are read and before their counts and jobs are
+        if finished or "FROM chunks" not in statement:
+            return
+        with psycopg.connect(worker.render_as_string(hide_password=False)) as other:
+            other.execute("UPDATE jobs SET status = 'done' WHERE id = %s", [added["job"]["id"]])
+            other.execute(
+                "UPDATE documents SET status = 'ready' WHERE id = %s", [added["document"]["id"]]
+            )
+        finished.append(True)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", finish_the_reading)
+    try:
+        [during] = client.get("/documents").json()
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", finish_the_reading)
+    [after] = client.get("/documents").json()
+
+    assert finished
+    assert (during["status"], during["latest_job"]["status"]) == ("pending", "queued")
+    assert (after["status"], after["latest_job"]["status"]) == ("ready", "done")
 
 
 def test_a_job_that_writes_questions_belongs_to_no_document(client, sessions) -> None:
