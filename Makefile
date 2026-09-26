@@ -1,7 +1,7 @@
-.PHONY: help ollama db-up db-down migrate api web client glyphs worker ingest topics generate calibrate check test test-slow lint
+.PHONY: help ollama db-up db-down migrate api web client glyphs worker ingest topics generate calibrate check test test-slow e2e lint
 
 help: ## List commands
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
 
 ollama: ## Run the Ollama server with settings sized for a 16 GB Mac
 	OLLAMA_CONTEXT_LENGTH=16384 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=5m \
@@ -52,6 +52,9 @@ test: ## Run backend tests (database tests need `make db-up` and are skipped wit
 
 test-slow: ## Run the slow tests that load Docling's PDF models
 	cd backend && uv run --group ingest pytest -m slow
+
+e2e: ## Walk through the app in a browser on fake models, in a database of its own: make e2e [ARGS=--headed]
+	cd backend && uv run python -m scripts.e2e $(ARGS)
 
 lint: ## Lint backend and frontend
 	cd backend && uv run ruff check . && uv run ruff format --check .

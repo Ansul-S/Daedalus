@@ -4,7 +4,7 @@ AI/ML interview practice built on your own study material. Daedalus generates co
 
 Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work and fast grading.
 
-**Status:** Phases 1–3 are built: ingestion and retrieval, question generation, and grading. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages and checked against them. Answers are graded against the same passages, every key point labelled and every claim checked against a cited source, and on 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.96). Phase 4, the practice app, is in progress: questions come back on a review schedule (FSRS) and can be corrected or retired, and in the web app you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the day the question comes back. Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank lists every question with its passages, checks and corrections; a question can be corrected, retired or rated there, and a grade rated fair or unfair from its verdict. The library adds material, builds the topic map and writes questions from the browser, following each job as the worker runs it. A landing page at `/` introduces the app: how it works, the dashboard's Minotaur, and the grader's measured agreement with hand grades. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**Status:** Phases 1–3 are built: ingestion and retrieval, question generation, and grading. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages and checked against them. Answers are graded against the same passages, every key point labelled and every claim checked against a cited source, and on 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.96). Phase 4, the practice app, is in progress: questions come back on a review schedule (FSRS) and can be corrected or retired, and in the web app you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the day the question comes back. Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank lists every question with its passages, checks and corrections; a question can be corrected, retired or rated there, and a grade rated fair or unfair from its verdict. The library adds material, builds the topic map and writes questions from the browser, following each job as the worker runs it. A landing page at `/` introduces the app: how it works, the dashboard's Minotaur, and the grader's measured agreement with hand grades. An end-to-end test (`make e2e`) walks through the whole app in a browser on stand-in models, from the landing page to a graded answer and its room on the dashboard. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
 
 ## Prerequisites (macOS)
 
@@ -291,7 +291,8 @@ curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"qu
 | `make calibrate` | Grades hand-graded answers and measures how far the grader agrees (see [Checking the grader](#checking-the-grader-against-your-own-grades)) |
 | `make check` | Checks the database and its migrations, Ollama and its models, and API keys. `make check LIVE=1` also sends a one-word prompt to each model. |
 | `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`). |
-| `make test-slow` | The end-to-end PDF test, which loads Docling's models |
+| `make test-slow` | The PDF parsing test, which loads Docling's models |
+| `make e2e` | Walks through the app in a browser on stand-in models, in a database of its own: from the landing page through the library to a graded answer and its room on the dashboard. `make e2e ARGS=--headed` shows the browser. It needs Postgres (`make db-up`), ports 8000 and 3000 free, and Playwright's Chromium, downloaded once (see [frontend/README.md](frontend/README.md#the-end-to-end-test)) |
 | `make lint` | Ruff (backend) and ESLint (frontend) |
 | `make help` | Lists all commands |
 
@@ -315,7 +316,7 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `TOPIC_SIMILARITY` | `0.8` | How close two concept tags have to be to share a topic. Higher keeps topics narrow; 0.7 merged RNN, LSTM, ReLU and dropout into one. |
 | `DUPLICATE_SIMILARITY` | `0.75` | Above this, two questions are the same question in other words. Short texts sit much closer together than passages do, so the line is far below the 0.9 it looks like it should be. |
 | `PRACTICE_TIMEZONE` | `UTC` | The time zone practice days are counted in, e.g. `Asia/Kolkata`. A day starts at 04:00 there, so a session past midnight still counts as one day. |
-| `FAKE_MODELS` | `false` | Stand-ins for every model, for testing (`backend/app/llm/fakes.py`): they answer at once, the same way every time, and send nothing anywhere. What they write is made up, so point `DATABASE_URL` at a throwaway database. `make check` says when they are on, `make calibrate` refuses them, and so does `ENVIRONMENT=production`. |
+| `FAKE_MODELS` | `false` | Stand-ins for every model, for testing (`backend/app/llm/fakes.py`): they answer at once, the same way every time, and send nothing anywhere. What they write is made up, so point `DATABASE_URL` at a throwaway database. `make e2e` runs the whole app on them in a database of its own. `make check` says when they are on, `make calibrate` refuses them, and so does `ENVIRONMENT=production`. |
 
 The frontend has three settings of its own, which it doesn't take from the repository's `.env`: set them in the environment it is built and run in, or in `frontend/.env.local`.
 
@@ -341,7 +342,8 @@ backend/          FastAPI app (uv)
   app/scheduling/ review schedule (FSRS), the next-question picker, mastery, XP and coins,
                   the labyrinth map
   scripts/        setup check, ingest, worker, topics, generate and calibrate commands, the
-                  API schema the frontend client is generated from, and the glyph pictures
+                  API schema the frontend client is generated from, the glyph pictures, and
+                  make e2e, which runs the end-to-end test in a database of its own
   tests/
 frontend/         Next.js (App Router, TypeScript, Tailwind)
   src/app/        pages: the landing page, practice, the question bank, the library, the
@@ -352,6 +354,7 @@ frontend/         Next.js (App Router, TypeScript, Tailwind)
                   reports, interview mode, what practice earned, the level-up burst, the grader's
                   measurement read from the design notes, and the glyph pictures' engine, grids
                   and drawings
+  e2e/            the end-to-end test: a walk through the app in the browser on stand-in models
 db/init/          SQL that runs when the database is first created (enables pgvector)
 docs/             Design, decisions, measurements and roadmap
 data/             Your material, uploads, downloads and calibration answers (not committed)

@@ -89,6 +89,17 @@ The page runs from material to practice in four steps. Adding material, building
 - **Following a job.** While a job waits or runs, the page asks after it every two seconds, and each step in its progress fetches again what it changes: the documents and their counts while the map is built, then the topics; the questions while a batch is written, then what practice and the dashboard show. While nothing waits or runs, the page only asks after the worker.
 - **The shelves** hold every document, newest first: the kind of source, its file or arXiv ID, how its reading went, its length, its passages and how many are in the topic map, and its accepted questions, which open the question bank filtered to that source. A reading that failed says why; a document read before keeps its passages when a later reading fails.
 
+## The end-to-end test
+
+`make e2e`, from the repository root, walks through the app in a browser on the stand-in models of `FAKE_MODELS` (`backend/app/llm/fakes.py`). Enter the labyrinth on the landing page leads to an empty practice page and on to the library, where the test uploads a notebook written for it (`e2e/fixtures/training-notes.ipynb`, three short sections on training deep networks). The worker reads it into three passages, the topic map finds three topics, and a batch of three questions is written, all accepted. The test answers the question practice brings up and checks the verdict: graded by `fake-grader`, 0.75 and Good, two claims supported and cited by notebook and cell, and the XP earned. On the dashboard the labyrinth has three rooms, the one answered in practised with a mastery of 0.75, and the wing shows the same XP.
+
+- **Before the first run,** download the browser it drives, Playwright's own Chromium (about 560 MB once unpacked): `pnpm exec playwright install chromium` in this folder. Postgres has to be running (`make db-up`), and ports 8000 and 3000 free: stop `make api`, and `make web` or `pnpm start`. Ollama and the API keys aren't needed.
+- **A database of its own.** `backend/scripts/e2e.py` makes `daedalus_e2e` afresh on the Postgres server of `make db-up`, and a temporary folder for uploads. Both are removed when the run ends, whether it passed or not, and the development database is never touched. `playwright.config.ts` starts the API, a worker and the frontend on them, and stops them at the end; passages may be small there, so that each of the notebook's sections is one. Playwright started any other way refuses to run, since the database isn't there.
+- **Nothing real is within reach.** The servers get dummy API keys and an Ollama address nothing answers at, so a model call that missed the stand-ins fails at once instead of spending quota.
+- **The stand-ins** answer at once and the same way every time. A question is made from its passage's own sentences, which are also the quotes behind its key points, so it passes every check. The grader counts a key point covered by how many of its words the answer uses, and supports a claim that shares enough words with a passage. Embeddings count a text's words, hashed into 1,024 dimensions. The test proves the pieces work together, not what the models would write: `make calibrate` measures the real grader.
+- **The frontend is built** as `pnpm build` builds it, with the API at `http://localhost:8000`, so `pnpm start` serves the same app afterwards. A run takes about half a minute, the build included; the walk itself takes about 10 s.
+- **Watching it.** `make e2e ARGS=--headed` runs it in a browser window, and `make e2e ARGS="--trace on"` records every step. A failed run keeps its trace and a screenshot in `test-results/`, and `pnpm exec playwright show-trace test-results/*/trace.zip` replays it, with the page at each step.
+
 ## Structure
 
 ```
@@ -107,6 +118,8 @@ src/lib/             API address and error type, theme, reading a grade, drafts,
                      the grader's measurement from the design notes, the glyph pictures' engine,
                      grids and drawings
 openapi.json         the API schema the client is generated from (generated)
+e2e/                 the end-to-end test and the notebook written for it
+playwright.config.ts the servers the end-to-end test runs on
 ```
 
 ## Design system
