@@ -15,8 +15,7 @@ from app.core.checks import check_ollama
 from app.core.config import get_settings
 from app.db.session import SessionFactory, engine
 from app.ingest import queue
-from app.llm.embeddings import Embedder
-from app.llm.models import helper_model, paced_generation_model
+from app.llm.models import embedding_model, helper_model, paced_generation_model
 from app.questions.batch import run_job, spent_today, start_run
 from scripts.ingest import configure_logging
 
@@ -30,8 +29,10 @@ async def main(args: argparse.Namespace) -> int:
     if settings.environment != "local":
         print("Question generation runs locally (ENVIRONMENT=local).")
         return 1
-    # The checker and the duplicate check both run on the local models.
-    failed = [check for check in await check_ollama(settings) if check.status == "fail"]
+    # The checker and the duplicate check both run on the local models; the stand-ins of
+    # FAKE_MODELS need no Ollama.
+    checks = [] if settings.fake_models else await check_ollama(settings)
+    failed = [check for check in checks if check.status == "fail"]
     if failed:
         for check in failed:
             print(f"{check.name}: {check.detail}")
@@ -59,7 +60,7 @@ async def main(args: argparse.Namespace) -> int:
             for name, (requests, tokens) in spent.items():
                 print(f"{name} in the last day: {requests} requests, {tokens:,} tokens.")
 
-            async with Embedder(settings) as embedder:
+            async with embedding_model(settings) as embedder:
                 summary = await run_job(
                     SessionFactory,
                     job_id,

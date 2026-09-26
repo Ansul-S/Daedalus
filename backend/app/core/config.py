@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import SecretStr, field_validator
+from pydantic import SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -69,6 +69,22 @@ class Settings(BaseSettings):
     # "Asia/Kolkata". A day starts at 04:00 there, so a session that runs past midnight
     # still counts as one day.
     practice_timezone: str = "UTC"
+
+    # Stand-ins for every model (`app/llm/fakes.py`), for the end-to-end test: they answer at
+    # once, the same way every time, and send nothing anywhere. What they write is made up, so
+    # they run on a throwaway database, and never in production.
+    fake_models: bool = False
+
+    # A field's own validator, so that its error shows this value alone: a model-wide one would
+    # print every setting it was given, API keys included.
+    @field_validator("fake_models")
+    @classmethod
+    def no_fake_models_in_production(cls, fake: bool, info: ValidationInfo) -> bool:
+        if fake and info.data.get("environment") == "production":
+            raise ValueError(
+                "FAKE_MODELS is for testing: it is refused when ENVIRONMENT=production"
+            )
+        return fake
 
     @field_validator("practice_timezone")
     @classmethod

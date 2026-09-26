@@ -1,9 +1,10 @@
+import asyncio
 from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
 
-from app.core.checks import check_cloud_keys, is_installed
+from app.core.checks import check_cloud_keys, is_installed, run_checks
 from app.core.config import Settings
 
 
@@ -43,3 +44,16 @@ def test_practice_days_are_counted_in_a_known_time_zone() -> None:
     assert settings.practice_zone == ZoneInfo("Asia/Kolkata")
     with pytest.raises(ValidationError, match="unknown time zone"):
         Settings(_env_file=None, practice_timezone="India/Standard")
+
+
+def test_checks_report_fake_models_instead_of_ollama(engine) -> None:
+    """Neither Ollama nor a key is needed, and every grade is made up: the checks say so."""
+    settings = Settings(_env_file=None, fake_models=True, groq_api_key=None, gemini_api_key=None)
+
+    checks = asyncio.run(run_checks(settings, engine))
+
+    assert [(check.name, check.status) for check in checks] == [
+        ("postgres", "ok"),
+        ("database schema", "ok"),
+        ("models", "warn"),
+    ]

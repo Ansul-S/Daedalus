@@ -18,8 +18,7 @@ from app.core.checks import check_ollama
 from app.core.config import Settings, get_settings
 from app.db.session import SessionFactory, engine
 from app.ingest import queue
-from app.llm.embeddings import Embedder
-from app.llm.models import helper_model
+from app.llm.models import embedding_model, helper_model
 from app.questions.tagging import TaggedChunk, apply_rules, tag_chunks
 from app.questions.topics import TopicDraft, build_topic_map, build_topics
 from scripts.ingest import configure_logging
@@ -49,12 +48,13 @@ def report_topics(topics: list[TopicDraft]) -> None:
 
 
 async def build(args: argparse.Namespace, settings: Settings) -> None:
+    model = helper_model(settings)
     if not (args.tag_only or args.cluster_only or args.rules_only):
-        print(f"Tagging chunks with {settings.helper_model}, then clustering the tags...")
-        async with Embedder(settings) as embedder:
+        print(f"Tagging chunks with {model.model_name}, then clustering the tags...")
+        async with embedding_model(settings) as embedder:
             built = await build_topic_map(
                 SessionFactory,
-                helper_model(settings),
+                model,
                 embedder,
                 similarity=args.similarity,
                 document_id=args.document,
@@ -71,10 +71,10 @@ async def build(args: argparse.Namespace, settings: Settings) -> None:
         print("Judging the stored tags by the rules again...")
         await apply_rules(SessionFactory, report=say)
     elif not args.cluster_only:
-        print(f"Tagging chunks with {settings.helper_model}...")
+        print(f"Tagging chunks with {model.model_name}...")
         tagged = await tag_chunks(
             SessionFactory,
-            helper_model(settings),
+            model,
             document_id=args.document,
             limit=args.limit,
             retag=args.retag,
@@ -84,7 +84,7 @@ async def build(args: argparse.Namespace, settings: Settings) -> None:
     if args.tag_only:
         return
     print("\nClustering tags into topics...")
-    async with Embedder(settings) as embedder:
+    async with embedding_model(settings) as embedder:
         topics = await build_topics(
             SessionFactory, embedder, similarity=args.similarity, report=say
         )
@@ -96,7 +96,9 @@ async def main(args: argparse.Namespace) -> int:
     if settings.environment != "local":
         print("The topic map is built locally (ENVIRONMENT=local).")
         return 1
-    failed = [check for check in await check_ollama(settings) if check.status == "fail"]
+    # The stand-ins of FAKE_MODELS need no Ollama.
+    checks = [] if settings.fake_models else await check_ollama(settings)
+    failed = [check for check in checks if check.status == "fail"]
     if failed:
         for check in failed:
             print(f"{check.name}: {check.detail}")

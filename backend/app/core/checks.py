@@ -115,6 +115,10 @@ async def run_checks(settings: Settings, engine: AsyncEngine) -> list[Check]:
     checks = [database]
     if database.status == "ok":
         checks.append(await check_schema(engine))
+    if settings.fake_models:
+        # Neither Ollama nor a cloud key is used, and every grade is made up: say so instead.
+        detail = "stand-ins for testing (FAKE_MODELS): nothing is sent to a model"
+        return [*checks, Check(name="models", status="warn", detail=detail)]
     if settings.environment == "local":
         checks += await check_ollama(settings)
     checks += check_cloud_keys(settings)

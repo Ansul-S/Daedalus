@@ -1,5 +1,6 @@
 """Calibrating the grader against hand grades: the answer file, grading it, the agreement."""
 
+import argparse
 import asyncio
 import json
 import tomllib
@@ -10,8 +11,10 @@ from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.profiles import ModelProfile
 
+from app.core.config import Settings
 from app.db.models import Question, QuestionSource
 from app.llm.pacing import QuotaExhausted
+from scripts import calibrate
 from scripts.calibrate import (
     AnswerFileError,
     HandGrade,
@@ -341,3 +344,17 @@ def test_no_grades_yet_means_no_agreement_to_report() -> None:
     pytest.importorskip("sklearn")
 
     assert agreement([hand_grade(1, "cc")], {}, {5: [2, 1]}) is None
+
+
+def test_calibration_refuses_fake_models(monkeypatch: pytest.MonkeyPatch, tmp_path, capsys) -> None:
+    """A stand-in's grades measure nothing, and would go into the file with the real ones."""
+    settings = Settings(_env_file=None, fake_models=True, data_dir=tmp_path)
+    monkeypatch.setattr(calibrate, "get_settings", lambda: settings)
+
+    def no_database() -> None:
+        raise AssertionError("the refusal comes before the database is opened")
+
+    monkeypatch.setattr(calibrate, "SessionFactory", no_database)
+
+    assert asyncio.run(calibrate.run(argparse.Namespace(command="grade"))) == 1
+    assert "unset FAKE_MODELS" in capsys.readouterr().out

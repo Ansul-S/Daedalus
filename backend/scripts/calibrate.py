@@ -14,10 +14,11 @@ contradictions with the hand count. An answer keeps counting after its question 
 from practice: it was graded against the question as it stood, whose passages are still there.
 
 The answers are graded by the grader alone, with no fallback: a grade from another model
-would measure that model instead. When the provider says the day is spent, grading stops and
-the rest waits for the next run. Grades are kept in data/calibration/grades.jsonl, one per
-answer and prompt version, so running again grades only what is new. The file is personal
-practice data and stays out of the repository with the rest of data/.
+would measure that model instead, and for the same reason the stand-ins of FAKE_MODELS are
+refused. When the provider says the day is spent, grading stops and the rest waits for the
+next run. Grades are kept in data/calibration/grades.jsonl, one per answer and prompt version,
+so running again grades only what is new. The file is personal practice data and stays out of
+the repository with the rest of data/.
 """
 
 import argparse
@@ -408,6 +409,9 @@ async def main(args: argparse.Namespace) -> int:
 
 
 async def run(args: argparse.Namespace) -> int:
+    if args.command == "grade" and get_settings().fake_models:
+        print("Calibration measures the real grader: unset FAKE_MODELS to grade.")
+        return 1
     folder = calibration_dir()
     answers_path, results_path = folder / "answers.toml", folder / "grades.jsonl"
     async with SessionFactory() as session:

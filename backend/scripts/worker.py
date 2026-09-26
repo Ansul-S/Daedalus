@@ -21,7 +21,7 @@ from app.ingest import queue
 from app.ingest.arxiv import ArxivClient
 from app.ingest.pipeline import Ingestor
 from app.llm.embeddings import Embedder
-from app.llm.models import helper_model, paced_generation_model
+from app.llm.models import embedding_model, helper_model, paced_generation_model
 from app.questions.batch import run_job, spent_today
 from app.questions.topics import run_topics_job
 from scripts.ingest import configure_logging, print_progress
@@ -91,10 +91,12 @@ async def main() -> int:
                 if requeued := await queue.requeue_interrupted(session):
                     print(f"Queued {requeued} interrupted job(s) again.")
             async with (
-                Embedder(settings) as embedder,
+                embedding_model(settings) as embedder,
                 ArxivClient(settings.data_dir / "arxiv") as arxiv,
             ):
                 ingestor = Ingestor(settings, SessionFactory, embedder, arxiv, print_progress)
+                if settings.fake_models:
+                    print("Every model is a stand-in (FAKE_MODELS): what they write is made up.")
                 print("Waiting for jobs. Press Ctrl+C to stop.", flush=True)
                 while True:
                     if not await take_a_job(settings, ingestor, embedder):

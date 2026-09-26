@@ -22,6 +22,7 @@ from app.ingest.arxiv import ArxivClient
 from app.ingest.chunking import SECTION_SEPARATOR, ChunkDraft, ParsedDocument, pack_blocks
 from app.ingest.queue import claim_next_job
 from app.ingest.tokens import token_counter
+from app.llm import fakes
 from app.llm.embeddings import Embedder
 
 log = logging.getLogger(__name__)
@@ -106,9 +107,15 @@ class Ingestor:
         return True
 
     def _chunk(self, parsed: ParsedDocument) -> list[ChunkDraft]:
+        # The stand-in embedder of FAKE_MODELS has no tokenizer to download: it counts words.
+        count_tokens = (
+            fakes.count_tokens
+            if self.settings.fake_models
+            else token_counter(self.settings.tokenizer_model)
+        )
         return pack_blocks(
             parsed.blocks,
-            token_counter(self.settings.tokenizer_model),
+            count_tokens,
             max_tokens=self.settings.chunk_max_tokens,
             min_tokens=self.settings.chunk_min_tokens,
         )

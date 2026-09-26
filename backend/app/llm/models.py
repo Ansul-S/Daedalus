@@ -7,6 +7,9 @@ the local model, then to Gemini. The generator is gpt-oss, so grading never fall
 it -- a model family does not grade its own questions. Tagging chunks and checking that a
 question is answerable are light local work with no fallback. In production there is no
 Ollama, so only cloud models are used.
+
+With FAKE_MODELS, every task gets a stand-in from `app.llm.fakes` instead, embeddings
+included: the end-to-end test runs the whole app on them.
 """
 
 from collections.abc import Mapping
@@ -26,6 +29,8 @@ from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.settings import ModelSettings
 
 from app.core.config import Settings
+from app.llm import fakes
+from app.llm.embeddings import Embedder
 from app.llm.pacing import Limits, PacedModel, Pacer
 
 # Ollama serves the same output for the same prompt at this seed.
@@ -122,6 +127,8 @@ def _chain(*candidates: Model | None) -> Model:
 
 def generation_model(settings: Settings) -> Model:
     """Question generation: Groq, then Gemini, then the local grader model."""
+    if settings.fake_models:
+        return fakes.writer()
     return _chain(groq(settings), gemini(settings), ollama(settings, settings.grader_model))
 
 
@@ -131,6 +138,8 @@ def grading_model(settings: Settings, spent: Mapping[str, tuple[int, int]] | Non
     Both cloud models are paced; `spent` is what each has used today, by model name, as for
     generation.
     """
+    if settings.fake_models:
+        return fakes.grader()
     spent = spent or {}
     return _chain(
         groq_grader(settings, spent),
@@ -158,6 +167,8 @@ def paced_generation_model(
     already used today, by model name, so that the day's budget is the day's and not the
     batch's.
     """
+    if settings.fake_models:
+        return fakes.writer()
     spent = spent or {}
     return _chain(
         _paced(groq(settings), "groq", GROQ_FREE, spent.get(settings.groq_model)),
@@ -174,10 +185,20 @@ def _paced(
     return PacedModel(model, Pacer(name, limits, spent=spent or (0, 0)))
 
 
-def helper_model(settings: Settings, http_client: Any = None) -> OllamaModel:
+def helper_model(settings: Settings, http_client: Any = None) -> Model:
     """Tagging chunks and checking answerability: the small local model only. Both jobs run
     over the whole library, so they stay off the cloud quotas."""
+    if settings.fake_models:
+        return fakes.helper()
     model = ollama(settings, settings.helper_model, http_client)
     if model is None:
         raise RuntimeError(f"{settings.helper_model} needs Ollama, which only runs locally")
     return model
+
+
+def embedding_model(settings: Settings) -> Embedder:
+    """Embeddings for passages, tags, questions and search queries: the local Ollama model,
+    or with FAKE_MODELS the same client answered by a stand-in."""
+    if settings.fake_models:
+        return Embedder(settings, fakes.ollama_embeddings())
+    return Embedder(settings)

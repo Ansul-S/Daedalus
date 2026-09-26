@@ -315,6 +315,7 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `TOPIC_SIMILARITY` | `0.8` | How close two concept tags have to be to share a topic. Higher keeps topics narrow; 0.7 merged RNN, LSTM, ReLU and dropout into one. |
 | `DUPLICATE_SIMILARITY` | `0.75` | Above this, two questions are the same question in other words. Short texts sit much closer together than passages do, so the line is far below the 0.9 it looks like it should be. |
 | `PRACTICE_TIMEZONE` | `UTC` | The time zone practice days are counted in, e.g. `Asia/Kolkata`. A day starts at 04:00 there, so a session past midnight still counts as one day. |
+| `FAKE_MODELS` | `false` | Stand-ins for every model, for testing (`backend/app/llm/fakes.py`): they answer at once, the same way every time, and send nothing anywhere. What they write is made up, so point `DATABASE_URL` at a throwaway database. `make check` says when they are on, `make calibrate` refuses them, and so does `ENVIRONMENT=production`. |
 
 The frontend has three settings of its own, which it doesn't take from the repository's `.env`: set them in the environment it is built and run in, or in `frontend/.env.local`.
 
@@ -334,7 +335,7 @@ backend/          FastAPI app (uv)
   app/db/         tables (SQLAlchemy) and Alembic migrations
   app/grading/    grading an answer against its question's sources, and scoring it
   app/ingest/     parsers (PDF, arXiv, notebooks), chunking, file storage, job queue, pipeline
-  app/llm/        model routing, per-provider pacing, embeddings
+  app/llm/        model routing, per-provider pacing, embeddings, and stand-ins for testing
   app/questions/  concept tags, topics, generation, quote grounding, validation, batch runs
   app/retrieval/  hybrid search and rank fusion
   app/scheduling/ review schedule (FSRS), the next-question picker, mastery, XP and coins,
@@ -364,6 +365,7 @@ data/             Your material, uploads, downloads and calibration answers (not
 - **Grading:** Groq `qwen/qwen3.8-27b` → local `qwen3.5:9b` → Gemini. gpt-oss, which writes the questions, never grades the answers to them.
 - **Tagging chunks and checking questions:** local `qwen3.5:4b` only, with no fallback. Both run over the whole library, so they stay off the cloud quotas, and both run with thinking off, temperature 0 and a fixed seed, which makes them repeatable.
 - With `ENVIRONMENT=production` (free cloud hosting), Ollama is skipped and only cloud models are used.
+- With `FAKE_MODELS=true`, every task gets a deterministic stand-in instead, embeddings and the counting of chunk sizes included, and nothing is sent to a model. The writer quotes whole sentences of the passage, so its questions pass the checks; the grader labels key points and claims by the words an answer shares with them.
 
 In a batch and when grading, each cloud model also keeps its own pace: a sliding window of requests and tokens (and, for Qwen on Groq, of the tokens it writes), a daily allowance that comes back over 24 hours, and a wait when the provider says `retry-after`. A provider that is briefly full is waited out rather than abandoned, so a 429 doesn't spend the next provider's quota; one that says the day's allowance is spent is skipped until a request's worth has come back, and the next model takes over meanwhile.
 

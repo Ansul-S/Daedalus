@@ -7,7 +7,7 @@ from fastapi.routing import APIRoute
 
 from app.api import documents, grading, health, practice, questions, ratings, search
 from app.core.config import get_settings
-from app.llm.embeddings import Embedder
+from app.llm.models import embedding_model
 
 
 @asynccontextmanager
@@ -15,7 +15,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     # Query embeddings need Ollama, which only runs locally; production search is keyword-only.
     if settings.environment == "local":
-        async with Embedder(settings) as embedder:
+        async with embedding_model(settings) as embedder:
             app.state.embedder = embedder
             yield
     else:

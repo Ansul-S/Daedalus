@@ -23,7 +23,7 @@ from app.ingest import queue
 from app.ingest.arxiv import ArxivClient, parse_arxiv_id
 from app.ingest.pipeline import Ingestor
 from app.ingest.storage import SOURCE_TYPES, save_file
-from app.llm.embeddings import Embedder
+from app.llm.models import embedding_model
 
 # Loggers that report every table cell they could not place
 _NOISY_LOGGERS = ("MatchingPostProcessor", "TFPredictor")
@@ -166,7 +166,7 @@ async def main(args: argparse.Namespace) -> int:
                 async with SessionFactory() as session:
                     await queue.requeue_interrupted(session)
                 async with (
-                    Embedder(settings) as embedder,
+                    embedding_model(settings) as embedder,
                     ArxivClient(settings.data_dir / "arxiv") as arxiv,
                 ):
                     ingestor = Ingestor(settings, SessionFactory, embedder, arxiv, print_progress)
