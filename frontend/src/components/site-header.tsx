@@ -38,7 +38,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-line bg-ground/93 backdrop-blur-[6px]">
       <div className="mx-auto flex max-w-[calc(1240px+2*var(--gutter))] flex-wrap items-center gap-x-6 gap-y-2 px-(--gutter) py-2.5">
         <Link
-          href="/practice"
+          href="/"
           className="inline-flex items-center gap-2 font-display text-[1.05rem] leading-none font-extrabold tracking-[0.08em] uppercase"
         >
           <LabyrinthMark className="h-6 w-[22px]" />

@@ -481,12 +481,14 @@ export default function PatternBookPage() {
             <b className="font-semibold text-fg">What ships.</b> No image file: grids of steps made
             offline (<code className="font-mono">make glyphs</code>), run-length encoded, drawn on
             a canvas in the page&apos;s own ink. On a dark ground the steps flip, so the picture stays
-            positive.
+            positive. The landing page&apos;s small drawings are made in code and sampled cell by
+            cell; being lines, not pictures of paper, they never flip.
           </li>
           <li className="border-t border-line-2 pt-3 text-small text-fg-2">
             <b className="font-semibold text-fg">Where it comes from.</b> Charles Holroyd died in
             1917, so his etching <i>Daedalus</i> (1895, British Museum 1918,0608.347) is in the
-            public domain.
+            public domain, as is Antonio Tempesta&apos;s <i>Theseus and the Minotaur</i> (after
+            1606), which the Metropolitan Museum of Art shares as an open-access scan.
           </li>
         </ul>
       </SheetSection>

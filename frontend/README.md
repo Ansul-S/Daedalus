@@ -21,6 +21,7 @@ For development, `make web` from the repository root runs the development server
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | The API's address as the browser sees it. It is written into the build, so a change needs `pnpm build` again |
 | `API_URL` | `NEXT_PUBLIC_API_URL` | The API's address as this app's server sees it, for when the two differ (e.g. in a container). The Setup page checks the API from the server |
+| `SITE_URL` | `http://localhost:3000` | This app's own address, from which a shared link's preview picture is fetched. It is written into the build |
 
 Set them in the environment or in `frontend/.env.local`.
 
@@ -28,7 +29,7 @@ Set them in the environment or in `frontend/.env.local`.
 
 | Page | What it shows |
 |---|---|
-| `/` | Redirects to `/practice` |
+| `/` | The landing page: what Daedalus does and how, the dashboard's Minotaur, the grader's measured agreement with hand grades, and questions asked before starting (see below) |
 | `/practice` | One question at a time: the question due next and why it was picked, your answer, the grader's verdict, then the next question (see below) |
 | `/questions` | The question bank: every question, accepted, retired or rejected, filtered by topic, style, difficulty, source and your rating (see below) |
 | `/questions/[id]` | One question with everything behind it: its passages, key points and quotes, the checks it went through and every correction since. It can be corrected, retired or put back, and rated |
@@ -37,7 +38,16 @@ Set them in the environment or in `frontend/.env.local`.
 | `/setup` | The status of the database, the local models and the API keys, checked each time the page loads |
 | `/pattern-book` | The design system, live: pigments, type, controls, marks (with the coins, the wing and the states of a job), hatching, glyph pictures and Markdown with LaTeX |
 
-The header shows the streak and the XP.
+The header shows the streak and the XP, and its name leads back to the landing page.
+
+### The landing page
+
+- **The front.** The headline and what Daedalus does, Enter the labyrinth (to `/practice`; `Enter` does the same while nothing on the page has focus) and How it works, the quick start (the Setup page's commands), and Charles Holroyd's *Daedalus* in Greek letters, settling out of noise as the page opens. On a narrow screen the picture is drawn from its coarse grid, 104 letters across, so the letters still read as letters.
+- **How it works.** Four steps, from reading the sources to grading an answer, each with a small glyph picture: a page, the meander and the labyrinth mark, drawn in code and sampled cell by cell (`src/lib/glyph/drawings.ts`), and Daedalus at his bench from the etching. Being lines rather than pictures of paper, the drawings don't flip in the dark theme.
+- **The Minotaur** stands for the dashboard: Antonio Tempesta's *Theseus and the Minotaur* in Greek letters, what the rooms and the lair are, and the coin for facing it. Face the Minotaur opens the dashboard. The picture is mounted on the panel as a print, ink on bone in both themes: flipped onto the dark panel, the etching's light line-work would sink into its hatched arena.
+- **The grader, measured.** Spearman ρ, Cohen's κ and the number of hand-graded answers are read from the milestone table in `docs/design.md` when the page is built (`src/lib/measured.ts`), so the page quotes the design notes rather than restating them. If that sentence changes shape the build fails, naming the file to change. How it was measured links to the notes' section on GitHub.
+- **Nothing on the page needs the API** (the header's streak and XP apart), so it stands on a fresh clone and with the API stopped.
+- **The preview picture** of a shared link, `src/app/(landing)/opengraph-image.jpg` (1200 × 630, its alt text beside it), is a still of the front: the section as the built page draws it at 1360 px with reduced motion and without the paper grain, fitted onto the field. Take it again when the front changes.
 
 ### Practising
 
@@ -83,6 +93,7 @@ The page runs from material to practice in four steps. Adding material, building
 
 ```
 src/app/             pages, the root layout (fonts, theme, header, footer), error and 404 pages
+src/app/(landing)/   the landing page at /, its parts and its preview picture
 src/app/globals.css  tokens, themes, type roles, hatching and Markdown styles
 src/components/      the design system's pieces: labyrinth mark, Ariadne's thread, hatching,
                      dimension-line timer, drafting sheet and title block, glyph mosaic, Markdown,
@@ -93,7 +104,8 @@ src/client/          typed API client (generated)
 src/lib/             API address and error type, theme, reading a grade, drafts, the stopwatch,
                      interview mode, what practice earned in words, the level-up burst, naming a
                      question and reading its validation report, the library's work in words,
-                     the glyph pictures' engine and grids
+                     the grader's measurement from the design notes, the glyph pictures' engine,
+                     grids and drawings
 openapi.json         the API schema the client is generated from (generated)
 ```
 
@@ -103,7 +115,7 @@ openapi.json         the API schema the client is generated from (generated)
 - **Three typefaces,** self-hosted through `next/font`: Big Shoulders for titles and numbers, Source Serif 4 for reading text and questions, JetBrains Mono for labels, measurements and the glyph pictures.
 - **Themes.** Light and dark follow the system; the switch in the header picks Light, Dark or Auto, and the browser remembers it.
 - **Status never depends on colour alone.** Hatching marks key points (covered, partial, missing), ratings (Again, Hard, Good, Easy), a topic's mastery on the dashboard and where a job in the library stands (waiting, under way, stopped part way, done, failed).
-- **Motion.** A glyph picture settles out of noise when it comes into view, a room with reviews due and a job under way send out a ring, and a new level throws up Greek letters (`canvas-confetti`, loaded only then). With reduced motion the picture is drawn settled and nothing else moves.
+- **Motion.** A glyph picture settles out of noise when it comes into view (on the landing page, as the page opens), a room with reviews due and a job under way send out a ring, and a new level throws up Greek letters (`canvas-confetti`, loaded only then). With reduced motion the picture is drawn settled and nothing else moves.
 
 `/pattern-book` is the reference: every piece, live, in both themes. A component added with the shadcn/ui CLI (`components.json`) arrives in the CLI's own style: restyle it to the tokens, and check `package.json` for packages the CLI added.
 
@@ -112,4 +124,4 @@ openapi.json         the API schema the client is generated from (generated)
 Both are committed, and rebuilt by a command rather than edited by hand.
 
 - **The API client,** `src/client/`. `make client` writes the backend's OpenAPI schema to `openapi.json` and generates the client from it with `@hey-api/openapi-ts` (`openapi-ts.config.ts`): types, one function per API operation named after its backend handler (`practiceNext()`), and TanStack Query options. Run it after changing the API. A failed call throws an `ApiError` (`src/lib/api-errors.ts`) carrying the HTTP status, or `null` when the API couldn't be reached.
-- **The glyph pictures,** `src/lib/glyph/grids.ts`. `make glyphs IMAGE=path/to/etching.jpeg` redraws Charles Holroyd's etching *Daedalus* (1895, British Museum 1918,0608.347, public domain) in Greek letters, in 13 steps from paper to ink, and writes the grids run-length encoded. The crop boxes were measured on a 736 × 942 copy of the etching, and only the grids enter the repository, never the picture. The script, `backend/scripts/glyphs.py`, runs in the backend's `glyphs` dependency group (NumPy, OpenCV, Pillow).
+- **The glyph pictures,** `src/lib/glyph/grids.ts`. `make glyphs DAEDALUS=… MINOTAUR=…` redraws two etchings in the public domain in Greek letters, in 13 steps from paper to ink, and writes the grids run-length encoded: Charles Holroyd's *Daedalus* (1895, British Museum 1918,0608.347), whose crop boxes were measured on a 736 × 942 copy, and Antonio Tempesta's *Theseus and the Minotaur* (after 1606, the Metropolitan Museum of Art, 35.6(75)), whose crop box was measured on the museum's 4000 × 3570 open-access scan (https://images.metmuseum.org/CRDImages/dp/original/DP-15360-001.jpg). Only the grids enter the repository, never the pictures. The script, `backend/scripts/glyphs.py`, runs in the backend's `glyphs` dependency group (NumPy, OpenCV, Pillow).

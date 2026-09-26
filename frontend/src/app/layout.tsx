@@ -29,7 +29,11 @@ const mono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
 });
 
+// The app's own address: a shared page's preview links its picture from here.
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: { default: "Daedalus", template: "%s · Daedalus" },
   description:
     "Practice that remembers what you forget: AI/ML interview questions written from your own study material, graded claim by claim against the same sources.",

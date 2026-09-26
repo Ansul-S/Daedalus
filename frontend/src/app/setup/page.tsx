@@ -3,7 +3,7 @@ import { connection } from "next/server";
 
 import { dependencies } from "@/client/sdk.gen";
 import type { Check } from "@/client/types.gen";
-import { Commands } from "@/components/commands";
+import { Commands, QUICK_START } from "@/components/commands";
 import { GlyphMosaic } from "@/components/glyph-mosaic";
 import { Sheet, SheetHead, SheetSection } from "@/components/sheet";
 import { SERVER_API_URL } from "@/lib/api";
@@ -72,12 +72,7 @@ export default async function SetupPage() {
             <Commands
               title="Quick start · local"
               note="free tiers only"
-              lines={[
-                { command: "make db-up && make migrate" },
-                { command: "make ollama", comment: "local models, in its own terminal" },
-                { command: "make api", comment: "FastAPI on :8000" },
-                { command: "cd frontend && pnpm build && pnpm start" },
-              ]}
+              lines={QUICK_START}
             />
           </div>
           <GlyphMosaic

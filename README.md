@@ -4,7 +4,7 @@ AI/ML interview practice built on your own study material. Daedalus generates co
 
 Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work and fast grading.
 
-**Status:** Phases 1–3 are built: ingestion and retrieval, question generation, and grading. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages and checked against them. Answers are graded against the same passages, every key point labelled and every claim checked against a cited source, and on 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.96). Phase 4, the practice app, is in progress: questions come back on a review schedule (FSRS) and can be corrected or retired, and in the web app you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the day the question comes back. Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank lists every question with its passages, checks and corrections; a question can be corrected, retired or rated there, and a grade rated fair or unfair from its verdict. The library adds material, builds the topic map and writes questions from the browser, following each job as the worker runs it. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**Status:** Phases 1–3 are built: ingestion and retrieval, question generation, and grading. PDFs, notebooks and arXiv papers are parsed, split into chunks, embedded and searchable with page, cell or section citations; a topic map is built over them, and questions are written from those passages and checked against them. Answers are graded against the same passages, every key point labelled and every claim checked against a cited source, and on 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.96). Phase 4, the practice app, is in progress: questions come back on a review schedule (FSRS) and can be corrected or retired, and in the web app you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the day the question comes back. Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank lists every question with its passages, checks and corrections; a question can be corrected, retired or rated there, and a grade rated fair or unfair from its verdict. The library adds material, builds the topic map and writes questions from the browser, following each job as the worker runs it. A landing page at `/` introduces the app: how it works, the dashboard's Minotaur, and the grader's measured agreement with hand grades. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
 
 ## Prerequisites (macOS)
 
@@ -30,7 +30,7 @@ Everything runs on free resources: open-source models on your Mac (Ollama), plus
    **Always sync the backend with `uv sync --group ingest`.** A plain `uv sync` removes the ingestion libraries again, because uv removes every package that the requested dependency groups don't include. `make ingest`, `make worker` and `make test-slow` reinstall them before they run.
 5. **Run.** `make api` and `make web` (each in its own terminal), then open http://localhost:3000.
    - `make web` runs the frontend's development server, which reloads as files change. To run the production build instead: `cd frontend && pnpm build && pnpm start`.
-   - The app opens on the practice page. The Setup page, http://localhost:3000/setup, shows the status of every dependency.
+   - The app opens on its landing page, and Enter the labyrinth goes to the practice page. The Setup page, http://localhost:3000/setup, shows the status of every dependency.
    - The API's interactive documentation is at http://localhost:8000/docs.
 
 ## Adding study material
@@ -283,7 +283,7 @@ curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"qu
 | `make ollama` | Runs Ollama with settings sized for a 16 GB Mac |
 | `make api`, `make web` | Runs the API on port 8000 / the frontend's development server on port 3000 |
 | `make client` | Regenerates the frontend's typed API client from the backend's routes. Run it after changing the API |
-| `make glyphs IMAGE=…` | Redraws the frontend's glyph pictures from a copy of Charles Holroyd's etching *Daedalus* (see [frontend/README.md](frontend/README.md#generated-code)) |
+| `make glyphs DAEDALUS=… MINOTAUR=…` | Redraws the frontend's glyph pictures from copies of two etchings, Charles Holroyd's *Daedalus* and Antonio Tempesta's *Theseus and the Minotaur* (see [frontend/README.md](frontend/README.md#generated-code)) |
 | `make ingest SRC="…"` | Ingests files, folders and arXiv papers (see [Adding study material](#adding-study-material)) |
 | `make topics` | Tags every chunk with the local model and clusters the tags into topics |
 | `make generate N=20` | Writes questions from the topic map (see [Generating questions](#generating-questions)) |
@@ -316,12 +316,13 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `DUPLICATE_SIMILARITY` | `0.75` | Above this, two questions are the same question in other words. Short texts sit much closer together than passages do, so the line is far below the 0.9 it looks like it should be. |
 | `PRACTICE_TIMEZONE` | `UTC` | The time zone practice days are counted in, e.g. `Asia/Kolkata`. A day starts at 04:00 there, so a session past midnight still counts as one day. |
 
-The frontend has two settings of its own, which it doesn't take from the repository's `.env`: set them in the environment it is built and run in, or in `frontend/.env.local`.
+The frontend has three settings of its own, which it doesn't take from the repository's `.env`: set them in the environment it is built and run in, or in `frontend/.env.local`.
 
 | Setting | Default | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | The API's address as the browser sees it; the browser calls the API directly. It is written into the build, so a change needs `pnpm build` again. The API's `CORS_ORIGINS` has to include the frontend's address. |
 | `API_URL` | `NEXT_PUBLIC_API_URL` | The API's address as the frontend's server sees it, for when the two differ (e.g. in a container). The Setup page checks the API from the server. |
+| `SITE_URL` | `http://localhost:3000` | The frontend's own address, from which a shared link's preview picture is fetched. It is written into the build. |
 
 ## Layout
 
@@ -342,13 +343,14 @@ backend/          FastAPI app (uv)
                   API schema the frontend client is generated from, and the glyph pictures
   tests/
 frontend/         Next.js (App Router, TypeScript, Tailwind)
-  src/app/        pages: practice, the question bank, the library, the dashboard, setup, and the
-                  pattern book, which shows the design system
+  src/app/        pages: the landing page, practice, the question bank, the library, the
+                  dashboard, setup, and the pattern book, which shows the design system
   src/components/ the design system's pieces; ui/ holds shadcn/ui components restyled to it
   src/client/     typed API client, generated by make client
   src/lib/        API address and errors, theme, grades and drafts, questions and their validation
-                  reports, interview mode, what practice earned, the level-up burst, and the glyph
-                  pictures' engine and grids
+                  reports, interview mode, what practice earned, the level-up burst, the grader's
+                  measurement read from the design notes, and the glyph pictures' engine, grids
+                  and drawings
 db/init/          SQL that runs when the database is first created (enables pgvector)
 docs/             Design, decisions, measurements and roadmap
 data/             Your material, uploads, downloads and calibration answers (not committed)

@@ -1,11 +1,21 @@
+import { drawSteps, type DrawingName } from "./drawings";
 import { GRIDS, RAMP, type GridName } from "./grids";
 
-// Draws a glyph grid on a canvas, one letter per cell, and reveals it the way a diffusion model
-// denoises: every cell starts as a random step and settles on its own, the top rows first.
+// Draws a glyph picture on a canvas, one letter per cell, and reveals it the way a diffusion
+// model denoises: every cell starts as a random step and settles on its own, the top rows first.
 
 const TOP = RAMP.length - 1;
 const REVEAL_MS = 950;
 const REDUCED = "(prefers-reduced-motion: reduce)";
+// Cells narrower than this, in CSS pixels, stop reading as letters: a grid with a coarse version
+// switches to it.
+const MIN_CELL = 3;
+
+/** An etching's grid, with a coarser one for narrow boxes, or a drawing made in code, `cols`
+ * letters across and as many rows as its box holds. */
+export type Picture =
+  | { grid: GridName; coarse?: GridName }
+  | { drawing: DrawingName; cols: number };
 
 /** A grid's steps, 0 (paper) to 12 (ink), row by row. */
 export function decodeGrid(name: GridName): Uint8Array {
@@ -31,9 +41,10 @@ export function decodeGrid(name: GridName): Uint8Array {
 
 export class Mosaic {
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly base: Uint8Array;
-  private readonly cols: number;
-  private readonly rows: number;
+  private readonly decoded = new Map<GridName, Uint8Array>();
+  private base: Uint8Array = new Uint8Array(0);
+  private cols = 0;
+  private rows = 0;
   private target = new Uint8Array(0);
   private cur = new Uint8Array(0);
   private lockAt = new Float64Array(0);
@@ -54,13 +65,10 @@ export class Mosaic {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly box: HTMLElement,
-    grid: GridName,
+    private readonly picture: Picture,
     private readonly onProgress?: (done: number) => void,
   ) {
     this.ctx = canvas.getContext("2d")!;
-    this.base = decodeGrid(grid);
-    this.cols = GRIDS[grid].cols;
-    this.rows = GRIDS[grid].rows;
   }
 
   /** Waits for the mono font's Greek letters: a canvas can't fall back once it has drawn. */
@@ -95,6 +103,7 @@ export class Mosaic {
     this.boxH = rect.height;
     const width = Math.max(40, rect.width);
     const height = Math.max(40, rect.height);
+    this.shape(width, height);
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.cellW = width / this.cols;
     this.cellH = height / this.rows;
@@ -171,8 +180,32 @@ export class Mosaic {
     this.running = false;
   }
 
+  /** The grid to draw in a box this size: its letters across and down, and their steps. */
+  private shape(width: number, height: number): void {
+    const { picture } = this;
+    if ("drawing" in picture) {
+      this.cols = picture.cols;
+      this.rows = Math.max(6, Math.round(picture.cols * (height / width) * 0.6));
+      this.base = drawSteps(picture.drawing, this.cols, this.rows);
+      return;
+    }
+    const narrow = width / GRIDS[picture.grid].cols < MIN_CELL;
+    const grid = picture.coarse && narrow ? picture.coarse : picture.grid;
+    let steps = this.decoded.get(grid);
+    if (!steps) {
+      steps = decodeGrid(grid);
+      this.decoded.set(grid, steps);
+    }
+    this.cols = GRIDS[grid].cols;
+    this.rows = GRIDS[grid].rows;
+    this.base = steps;
+  }
+
   private computeTargets(): void {
-    const flip = getComputedStyle(this.canvas).getPropertyValue("--art-invert").trim() === "1";
+    // an etching is a picture of paper and ink; a drawing is only lines
+    const flip =
+      "grid" in this.picture &&
+      getComputedStyle(this.canvas).getPropertyValue("--art-invert").trim() === "1";
     this.target = Uint8Array.from(this.base, (step) => (flip ? TOP - step : step));
   }
 

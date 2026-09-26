@@ -124,43 +124,80 @@ export function WingDemo() {
   );
 }
 
-/** Holroyd's Daedalus at either density, and the reveal on demand. */
+const PICTURES = [
+  { id: "daedalus", label: "Holroyd · fine, 168 across, as on the landing page" },
+  { id: "daedalus-coarse", label: "Holroyd · coarse, 104 across, for small screens" },
+  { id: "minotaur", label: "Tempesta · 150 across, as on the landing page" },
+  { id: "page", label: "A page · drawn in code" },
+  { id: "meander", label: "The meander · drawn in code" },
+  { id: "labyrinth", label: "The mark · drawn in code" },
+] as const;
+
+type PictureId = (typeof PICTURES)[number]["id"];
+
+const ETCHINGS = {
+  daedalus: (
+    <>
+      Charles Holroyd, <i>Daedalus</i>, 1895
+    </>
+  ),
+  minotaur: (
+    <>
+      Antonio Tempesta, <i>Theseus and the Minotaur</i>, after 1606
+    </>
+  ),
+};
+
+// The landing page's how-it-works drawings: 72 letters across a box shaped like Daedalus at his
+// bench
+const DRAWING_COLS = 72;
+const DRAWING_ASPECT = "57.6 / 43";
+
+/** The etchings, Holroyd's at either density, the drawings made in code, and the reveal on
+ * demand. */
 export function MosaicLab() {
-  const [grid, setGrid] = useState<"daedalus" | "daedalus-coarse">("daedalus");
+  const [picture, setPicture] = useState<PictureId>("daedalus");
   const [round, setRound] = useState(0);
-  const { cols, rows } = GRIDS[grid];
+  const reveal = round ? "load" : "view";
 
   return (
     <div className="grid grid-cols-1 gap-[clamp(24px,4vw,48px)] md:grid-cols-2">
       <div className="w-full max-w-[520px]">
         <div className="text-fg outline outline-1 outline-offset-[9px] outline-line-2">
-          <GlyphMosaic
-            key={`${grid}-${round}`}
-            grid={grid}
-            reveal={round ? "load" : "view"}
-          />
+          {picture === "daedalus" || picture === "daedalus-coarse" || picture === "minotaur" ? (
+            <GlyphMosaic key={`${picture}-${round}`} grid={picture} reveal={reveal} />
+          ) : (
+            <GlyphMosaic
+              key={`${picture}-${round}`}
+              drawing={picture}
+              cols={DRAWING_COLS}
+              aspect={DRAWING_ASPECT}
+              reveal={reveal}
+            />
+          )}
         </div>
         <p className="type-label mt-[18px] text-[10px] tracking-[0.08em] text-fg-2">
-          Fig. 3 · Charles Holroyd, <i>Daedalus</i>, 1895 · {cols} × {rows} letters · move over
-          it
+          {picture === "daedalus" || picture === "daedalus-coarse" || picture === "minotaur" ? (
+            <>
+              Fig. 3 · {ETCHINGS[picture === "minotaur" ? "minotaur" : "daedalus"]} ·{" "}
+              {GRIDS[picture].cols} × {GRIDS[picture].rows} letters · move over it
+            </>
+          ) : (
+            <>Fig. 3 · drawn in code · {DRAWING_COLS} letters across · never flipped</>
+          )}
         </p>
       </div>
       <div className="grid content-start gap-4">
         <fieldset className="border border-line-2 px-3 pt-2.5 pb-3">
-          <legend className="type-label px-1.5">Letters across</legend>
-          {(
-            [
-              ["daedalus", "Fine · 168, as on the page"],
-              ["daedalus-coarse", "Coarse · 104, for small screens"],
-            ] as const
-          ).map(([value, label]) => (
-            <label key={value} className="mt-2 flex cursor-pointer items-center gap-2 text-small">
+          <legend className="type-label px-1.5">Picture</legend>
+          {PICTURES.map(({ id, label }) => (
+            <label key={id} className="mt-2 flex cursor-pointer items-center gap-2 text-small">
               <input
                 type="radio"
-                name="density"
-                value={value}
-                checked={grid === value}
-                onChange={() => setGrid(value)}
+                name="picture"
+                value={id}
+                checked={picture === id}
+                onChange={() => setPicture(id)}
                 className="accent-thread"
               />
               {label}

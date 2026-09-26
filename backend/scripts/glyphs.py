@@ -1,17 +1,23 @@
-"""Redraw an etching in Greek letters: the grids behind the frontend's glyph pictures.
+"""Redraw etchings in Greek letters: the grids behind the frontend's glyph pictures.
 
 Each cell of a monospace grid (0.6 em wide, 1 em tall) takes one of 13 steps from paper to ink,
 and the frontend draws each step as a letter; the four darkest are solid cells with the letter
-cut out. Only the grids ship, run-length encoded: never the picture itself.
+cut out. Only the grids ship, run-length encoded: never the pictures themselves.
 
-The picture is Charles Holroyd's etching *Daedalus* (1895, British Museum 1918,0608.347), in the
-public domain. The crop boxes below were measured on a 736 x 942 copy of it.
+Both etchings are in the public domain:
+- Charles Holroyd, *Daedalus* (1895, British Museum 1918,0608.347). Its crop boxes were measured
+  on a 736 x 942 copy.
+- Antonio Tempesta, *Theseus and the Minotaur* (published after 1606, the Metropolitan Museum of
+  Art, 35.6(75)). Its crop box was measured on the museum's 4000 x 3570 open-access scan,
+  https://images.metmuseum.org/CRDImages/dp/original/DP-15360-001.jpg
 
-Run from backend/:  uv run --group glyphs python -m scripts.glyphs path/to/daedalus.jpeg
+Run from backend/:
+  uv run --group glyphs python -m scripts.glyphs --daedalus daedalus.jpeg --minotaur minotaur.jpg
 """
 
 import argparse
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
@@ -21,9 +27,6 @@ import numpy as np
 from app.core.config import REPO_ROOT
 
 OUTPUT = REPO_ROOT / "frontend" / "src" / "lib" / "glyph" / "grids.ts"
-
-# The copy the crop boxes were measured on
-SOURCE_SIZE = (736, 942)
 
 # A cell's width over its height: JetBrains Mono advances 0.6 em, and lines are 1 em apart.
 CELL = 0.6
@@ -58,7 +61,7 @@ LETTERS = "abcdefghijklm"
 
 @dataclass(frozen=True)
 class Spec:
-    box: tuple[int, int, int, int]  # crop (left, top, right, bottom) in the 736 x 942 copy
+    box: tuple[int, int, int, int]  # crop (left, top, right, bottom) in the measured copy
     cols: int
     blur: float  # Gaussian blur, in cells: turns the etched hatching into tone
     clahe: float  # local contrast (CLAHE clip limit)
@@ -68,22 +71,50 @@ class Spec:
     floor: float  # darkness below this is bare paper
 
 
+@dataclass(frozen=True)
+class Picture:
+    credit: str  # the artist, the title and the date, as the grids' module names them
+    size: tuple[int, int]  # the copy its crop boxes were measured on, width x height
+    specs: dict[str, Spec]  # its grids, by name
+
+
 PLATE = (40, 30, 698, 902)
-SPECS = {
-    # The whole plate, for the landing page, and a coarser grid for small screens
-    "daedalus": Spec(PLATE, 168, 0.7, 1.4, 6, 55, 6, 0.10),
-    "daedalus-coarse": Spec(PLATE, 104, 0.7, 1.4, 6, 55, 6, 0.10),
-    # Daedalus at his bench: the plate's upper right
-    "thinker": Spec((210, 30, 698, 396), 96, 0.7, 1.3, 4, 55, 6, 0.10),
+# Tempesta's scene inside its frame line, without the plate number and the caption under it
+ARENA = (548, 708, 2928, 2596)
+PICTURES = {
+    "daedalus": Picture(
+        "Charles Holroyd, Daedalus (1895)",
+        (736, 942),
+        {
+            # The whole plate, for the landing page, and a coarser grid for small screens
+            "daedalus": Spec(PLATE, 168, 0.7, 1.4, 6, 55, 6, 0.10),
+            "daedalus-coarse": Spec(PLATE, 104, 0.7, 1.4, 6, 55, 6, 0.10),
+            # Daedalus at his bench: the plate's upper right
+            "thinker": Spec((210, 30, 698, 396), 96, 0.7, 1.3, 4, 55, 6, 0.10),
+        },
+    ),
+    "minotaur": Picture(
+        "Antonio Tempesta, Theseus and the Minotaur (after 1606)",
+        (4000, 3570),
+        {
+            # The figures are drawn in outline against a hatched arena: less local contrast, a
+            # later midpoint and more bare paper keep them light, where Daedalus's settings sink
+            # them into it.
+            # The landing page's band, and a coarser grid for small screens
+            "minotaur": Spec(ARENA, 150, 0.8, 1.0, 4, 70, 5, 0.18),
+            "minotaur-coarse": Spec(ARENA, 120, 0.8, 1.0, 4, 70, 5, 0.18),
+        },
+    ),
 }
 
 
-def luminance(image: Path, box: tuple[int, int, int, int]) -> np.ndarray:
-    """The crop's luminance, from 0 (ink) to 1 (paper)."""
+def luminance(image: Path, box: tuple[int, int, int, int], size: tuple[int, int]) -> np.ndarray:
+    """The crop's luminance, from 0 (ink) to 1 (paper). `box` was measured on a copy `size`
+    wide and tall; `image` may be a copy of any size."""
     from PIL import Image
 
     with Image.open(image) as picture:
-        scale = picture.width / SOURCE_SIZE[0]
+        scale = picture.width / size[0]
         crop = tuple(round(edge * scale) for edge in box)
         rgb = np.asarray(picture.convert("RGB").crop(crop)).astype(np.float32) / 255
     return 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
@@ -132,11 +163,18 @@ def encode(grid: np.ndarray) -> str:
     return "".join(runs)
 
 
-def build(image: Path) -> dict[str, dict]:
+def build(images: Mapping[str, Path]) -> dict[str, dict]:
+    """Every grid, from each picture's copy in `images` (by picture name)."""
     grids = {}
-    for name, spec in SPECS.items():
-        grid = levels(tone(luminance(image, spec.box), spec), spec.floor)
-        grids[name] = {"cols": int(grid.shape[1]), "rows": int(grid.shape[0]), "data": encode(grid)}
+    for picture_name, picture in PICTURES.items():
+        for name, spec in picture.specs.items():
+            lum = luminance(images[picture_name], spec.box, picture.size)
+            grid = levels(tone(lum, spec), spec.floor)
+            grids[name] = {
+                "cols": int(grid.shape[1]),
+                "rows": int(grid.shape[0]),
+                "data": encode(grid),
+            }
     return grids
 
 
@@ -145,9 +183,15 @@ def write_module(grids: dict[str, dict], path: Path) -> None:
         {"glyph": glyph, "weight": weight, "reversed": rev, "coverage": float(coverage)}
         for (glyph, weight, rev), coverage in zip(RAMP, COVERAGE, strict=True)
     ]
+    credits = [
+        f"//   {', '.join(names)}: {picture.credit}"
+        for picture in PICTURES.values()
+        if (names := [name for name in picture.specs if name in grids])
+    ]
     lines = [
-        "// Generated by `make glyphs` (backend/scripts/glyphs.py) from Charles Holroyd's",
-        "// etching Daedalus (1895, public domain). Do not edit by hand.",
+        "// Generated by `make glyphs` (backend/scripts/glyphs.py) from etchings in the public",
+        "// domain. Do not edit by hand.",
+        *credits,
         "",
         "export type GlyphStep = {",
         "  glyph: string;",
@@ -177,19 +221,32 @@ def write_module(grids: dict[str, dict], path: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Redraw Holroyd's Daedalus in Greek letters.")
-    parser.add_argument("image", type=Path, help="the etching, a 736 x 942 copy")
+    parser = argparse.ArgumentParser(description="Redraw the etchings in Greek letters.")
+    parser.add_argument(
+        "--daedalus", type=Path, required=True, help="Holroyd's Daedalus, a 736 x 942 copy"
+    )
+    parser.add_argument(
+        "--minotaur",
+        type=Path,
+        required=True,
+        help="Tempesta's Theseus and the Minotaur, the Met's 4000 x 3570 scan",
+    )
     parser.add_argument(
         "--out", type=Path, default=OUTPUT, help="where to write the grids (TypeScript)"
     )
     return parser.parse_args()
 
 
-def main(args: argparse.Namespace) -> None:
-    image = args.image.expanduser()
+def located(image: Path) -> Path:
+    """An image path as given on the command line, from backend/ or from the repository root."""
+    image = image.expanduser()
     if not image.is_absolute() and not image.exists():
         image = REPO_ROOT / image  # `make glyphs` runs from backend/; paths come from the root
-    grids = build(image)
+    return image
+
+
+def main(args: argparse.Namespace) -> None:
+    grids = build({"daedalus": located(args.daedalus), "minotaur": located(args.minotaur)})
     write_module(grids, args.out)
     for name, grid in grids.items():
         size = f"{grid['cols']} x {grid['rows']} letters"

@@ -2,6 +2,14 @@ import { cn } from "@/lib/utils";
 
 type Line = { command: string; comment?: string };
 
+/** From a fresh clone to the app in the browser. */
+export const QUICK_START: Line[] = [
+  { command: "make db-up && make migrate" },
+  { command: "make ollama", comment: "local models, in its own terminal" },
+  { command: "make api", comment: "FastAPI on :8000" },
+  { command: "cd frontend && pnpm build && pnpm start" },
+];
+
 /** From nothing to a library to practise: study material, the topic map, questions. */
 export const FILL_THE_LABYRINTH: Line[] = [
   { command: 'make ingest SRC="notes.pdf 1706.03762"' },
@@ -21,8 +29,11 @@ export function Commands({
   lines: Line[];
   className?: string;
 }) {
-  // comments line up in one column after the longest command
-  const width = Math.max(0, ...lines.map(({ command }) => command.length));
+  // comments line up in one column after the longest command that has one
+  const width = Math.max(
+    0,
+    ...lines.filter(({ comment }) => comment).map(({ command }) => command.length),
+  );
   return (
     <figure className={cn("m-0 max-w-xl bg-ink text-bone", className)}>
       <figcaption className="flex justify-between gap-3 border-b border-bone/16 px-3.5 py-2 font-mono text-[10px] leading-tight tracking-[0.1em] text-bone/70 uppercase">
