@@ -1,6 +1,9 @@
 # Weekly update pull requests: minor and patch versions together, one per ecosystem, majors on
-# their own. The cooldown matches the week the lock files already wait (uv's exclude-newer,
-# pnpm's minimumReleaseAge).
+# their own. The cooldown matches the week uv's exclude-newer already waits.
+#
+# The frontend is left out: pnpm's minimumReleaseAge refuses the `--no-save` update Dependabot
+# falls back to (ERR_PNPM_STRICT_MIN_RELEASE_AGE_REQUIRES_SAVE), so its packages are updated by
+# hand with `pnpm update`, which keeps the week's wait.
 version: 2
 updates:
   - package-ecosystem: uv
@@ -11,17 +14,6 @@ updates:
       default-days: 7
     groups:
       backend:
-        patterns: ["*"]
-        update-types: [minor, patch]
-
-  - package-ecosystem: npm
-    directory: /frontend
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    groups:
-      frontend:
         patterns: ["*"]
         update-types: [minor, patch]
 
