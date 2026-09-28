@@ -27,6 +27,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
+# Imported first for what it sets: DeepEval offline, before any test can import it
+from app import evaluation  # noqa: F401
 from app.api.search import get_embedder
 from app.core.config import Settings, get_settings
 from app.db.models import EMBEDDING_DIMENSIONS, Base, Chunk, Document

@@ -1,0 +1,94 @@
+# Stand-in questions for the grader's regression suite, with the passages they were written
+# from. The passages are notes written for this repository, not copied from any source, so the
+# suite can run anywhere without anyone's study material. Chunk ids are the fixture's own.
+# The answers graded against them are in answers.toml.
+
+[[question]]
+id = 1
+text = "Why does a batch normalization layer behave differently during training and at inference?"
+key_points = [
+    { weight = 2, text = "During training it normalizes each feature with the mean and variance of the current mini-batch." },
+    { weight = 2, text = "At inference it uses running averages of the mean and variance kept during training." },
+    { weight = 1, text = "Stored statistics keep a prediction from depending on the other examples in the batch, which at inference may be a single example." },
+]
+
+[[question.passage]]
+chunk_id = 101
+citation = "Training notes > Batch normalization > During training"
+text = """
+Batch normalization standardizes each feature over the current mini-batch: it subtracts the \
+mini-batch mean, divides by the mini-batch standard deviation (plus a small epsilon for \
+numerical stability), then applies a learned scale and shift. Because the statistics come from \
+the batch, the output for one example depends on the other examples that happen to share its \
+batch, and that noise acts as a mild regularizer. With very small batches the mean and variance \
+are poor estimates, which is one reason batch normalization degrades when the batch size is tiny.
+"""
+
+[[question.passage]]
+chunk_id = 102
+citation = "Training notes > Batch normalization > At inference"
+text = """
+At inference a model may see a single example, and its prediction should not change with \
+whatever else is in the batch. So while training, the layer also keeps running averages of the \
+mean and variance, updated after every batch, and at inference it normalizes with those stored \
+statistics instead of the batch's own. Forgetting to put the model in evaluation mode leaves it \
+using batch statistics at test time, and its predictions then shift with the makeup of the \
+batch. Layer normalization sidesteps the issue: it normalizes over the features of each example, \
+so it computes the same thing in training and at inference.
+"""
+
+[[question]]
+id = 2
+text = "What problem does gradient clipping address, and how does clipping by global norm work?"
+key_points = [
+    { weight = 2, text = "It guards against exploding gradients, where one oversized update throws the weights off course." },
+    { weight = 2, text = "When the norm of all the gradients together exceeds a threshold, every gradient is multiplied by the threshold divided by that norm." },
+    { weight = 1, text = "Scaling all the gradients together keeps the update's direction, unlike clipping each value on its own." },
+]
+
+[[question.passage]]
+chunk_id = 201
+citation = "Training notes > Gradient clipping"
+text = """
+In deep and recurrent networks, gradients can grow very large, because backpropagation \
+multiplies them through many layers or time steps. A single oversized update can throw the \
+weights far off course and make the loss spike or turn into NaN. Gradient clipping limits the \
+size of an update. Clipping by value caps every gradient component at a threshold on its own, \
+which can change the direction of the update. Clipping by global norm measures the norm of all \
+the gradients taken together and, when it exceeds the threshold, multiplies every gradient by \
+the threshold divided by that norm: the update keeps its direction and only its length shrinks. \
+Clipping does nothing for vanishing gradients, which need other remedies such as gated units, \
+residual connections or careful initialization.
+"""
+
+[[question]]
+id = 3
+text = "How does early stopping decide when to stop, and why does it count as regularization?"
+key_points = [
+    { weight = 2, text = "It stops once the loss on a held-out validation set has not improved for a set number of epochs, the patience." },
+    { weight = 1, text = "The weights from the epoch with the best validation loss are restored." },
+    { weight = 2, text = "Limiting the number of training steps limits how far the weights move from their initial values, which restrains the model like a penalty on weight size." },
+]
+
+[[question.passage]]
+chunk_id = 301
+citation = "Training notes > Early stopping"
+text = """
+Early stopping watches the loss on a held-out validation set while the model trains. Training \
+loss usually keeps falling, but once the model starts to overfit, validation loss stops \
+improving and then rises. Training stops when the validation loss has not improved for a set \
+number of epochs, the patience, and the weights from the epoch with the best validation loss \
+are restored. A patience of more than one epoch keeps a noisy validation curve from ending \
+training too early.
+"""
+
+[[question.passage]]
+chunk_id = 302
+citation = "Training notes > Early stopping > Why it regularizes"
+text = """
+Early stopping counts as regularization because the number of training steps bounds how far \
+the weights can travel from their initial values, which restrains the model much as a penalty \
+on the size of the weights would. The validation set that picks the stopping point should not \
+also report the final performance: having been used to choose, it gives an optimistic \
+estimate, so a separate test set is kept for that.
+"""

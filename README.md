@@ -77,7 +77,8 @@ data/
 │                                  the grader's grades of them (see make calibrate)
 ├── eval/                          hand-questions.toml and also-answers.toml, the labels
 │                                  the retrieval report adds (see make eval-retrieval)
-└── reports/                       retrieval-<date>.md, the retrieval reports
+└── reports/                       retrieval-<date>.md and grader-<date>.md, the reports of
+                                   make eval-retrieval and make eval-grader
 ```
 
 ## Generating questions
@@ -226,6 +227,40 @@ make calibrate ARGS=report     # report on the grades already made, without grad
   second run grades only what is new. Both files are personal practice data and stay out of
   the repository.
 
+### The grader's regression suite
+
+`make eval-grader` checks that the grader still agrees with the hand grades, and fails when it
+no longer does. Each answer is a [DeepEval](https://deepeval.com) test case, judged by custom
+metrics worked out from the labels: no model judges anything, and DeepEval sends nothing
+anywhere.
+
+```sh
+make eval-grader                        # the calibration answers, from their saved grades
+make eval-grader LIVE=1                 # grade what has no saved grade first, then check
+make eval-grader SET=stand-ins          # the stand-in answers kept with the tests
+make eval-grader SET=stand-ins LIVE=1   # the stand-ins, graded afresh by the real grader
+```
+
+- **Each answer** is checked for key-point agreement (at least half its key points labelled
+  as yours), score gap (within 0.25 of your own score out of 10, or of your labels scored when
+  you gave none), a contradiction caught (where you counted one) and an injection held (an
+  answer that tries to talk the grader round scores no more than you gave it).
+- **A run passes** when every answer has a grade, Spearman's ρ is at least 0.90 and Cohen's κ
+  at least 0.75, every injection held, and at least 90% of the answers each other check
+  applies to pass it. ρ and κ count from 30 graded answers: on fewer, such as the 12
+  stand-ins, one answer can move ρ by a tenth, so they are reported but don't decide the run.
+- **Replayed, it spends nothing.** The grades saved under the current prompt version are
+  scored by today's rules, so a change to the scoring shows at once. An answer without a
+  saved grade fails with "grade it first": after a prompt change, `LIVE=1` grades the answers
+  again, on Groq's Qwen alone, as `make calibrate` does.
+- **The stand-ins** in `backend/tests/fixtures/grader_suite/` are answers written for the
+  repository, with their hand grades and the output the grader would send back for each.
+  Replayed through the same code as a live grade, they check everything between the model and
+  the score without anyone's practice data, and `make test` runs them. Live, the real grader
+  grades them afresh (about 20K tokens, which the report counts) and nothing is saved.
+- **The report** is printed, and saved to `data/reports/grader-<date>.md` for the calibration
+  answers.
+
 ## Measuring search
 
 `make eval-retrieval` searches for every question with saved passages and scores how near the
@@ -325,6 +360,7 @@ curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"qu
 | `make worker` | Processes jobs queued through the API: ingestion first, then the topic map, then question batches |
 | `make calibrate` | Grades hand-graded answers and measures how far the grader agrees (see [Checking the grader](#checking-the-grader-against-your-own-grades)) |
 | `make eval-retrieval` | Measures search against the questions' own passages and writes the retrieval report (see [Measuring search](#measuring-search)) |
+| `make eval-grader` | Checks the grader against hand-graded answers and fails when it no longer agrees (see [The grader's regression suite](#the-graders-regression-suite)) |
 | `make check` | Checks the database and its migrations, Ollama and its models, and API keys. `make check LIVE=1` also sends a one-word prompt to each model. |
 | `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`). |
 | `make test-slow` | The PDF parsing test, which loads Docling's models |
@@ -370,7 +406,8 @@ backend/          FastAPI app (uv)
                   topics, attempts and grades, practice, ratings
   app/core/       settings, setup checks
   app/db/         tables (SQLAlchemy) and Alembic migrations
-  app/evaluation/ retrieval evaluation: question sets, labels, scores, fusion variants
+  app/evaluation/ retrieval evaluation: question sets, labels, scores, fusion variants; the
+                  grader's regression suite: its metrics and what a run has to meet
   app/grading/    grading an answer against its question's sources, and scoring it
   app/ingest/     parsers (PDF, arXiv, notebooks), chunking, file storage, job queue, pipeline
   app/llm/        model routing, per-provider pacing, embeddings, and stand-ins for testing
@@ -378,10 +415,11 @@ backend/          FastAPI app (uv)
   app/retrieval/  hybrid search and rank fusion
   app/scheduling/ review schedule (FSRS), the next-question picker, mastery, XP and coins,
                   the labyrinth map
-  scripts/        setup check, ingest, worker, topics, generate, calibrate and eval-retrieval
-                  commands, the API schema the frontend client is generated from, the glyph
-                  pictures, and make e2e, which runs the end-to-end test in a database of its own
-  tests/
+  scripts/        setup check, ingest, worker, topics, generate, calibrate, eval-retrieval and
+                  eval-grader commands, the API schema the frontend client is generated from,
+                  the glyph pictures, and make e2e, which runs the end-to-end test in a
+                  database of its own
+  tests/          fixtures/grader_suite/ holds the stand-in answers of the grader's suite
 frontend/         Next.js (App Router, TypeScript, Tailwind)
   src/app/        pages: the landing page, practice, the question bank, the library, the
                   dashboard, setup, and the pattern book, which shows the design system
@@ -413,5 +451,6 @@ In a batch and when grading, each cloud model also keeps its own pace: a sliding
 ## Dependency safety
 
 - **Python:** uv ignores any package uploaded to PyPI in the last 7 days (`exclude-newer` in `backend/pyproject.toml`). Commit `uv.lock`.
+- **DeepEval** (the `eval` group) caps click, rich and tabulate below the versions the API and ingestion use, and uv resolves every group together. `override-dependencies` lifts those caps and keeps the bounds every other package sets, so the evaluation tools don't change what the app runs on; the grader suite's tests cover the parts of DeepEval it uses.
 - **Frontend:** pnpm only installs versions published at least 7 days ago (`minimumReleaseAge`) and blocks dependency install scripts unless they're allowed (`allowBuilds`); both are set in `frontend/pnpm-workspace.yaml`. The pnpm version itself is pinned in `package.json`. Commit `pnpm-lock.yaml`.
 - **Secrets:** never commit `.env`; `.gitignore` already excludes it.
