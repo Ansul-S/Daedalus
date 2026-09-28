@@ -11,6 +11,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import Settings
+from app.llm.tracing import switched_off
 
 Status = Literal["ok", "warn", "fail"]
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "db" / "migrations"
@@ -110,6 +111,22 @@ def check_cloud_keys(settings: Settings) -> list[Check]:
     ]
 
 
+def check_tracing(settings: Settings) -> Check:
+    """Whether model calls are traced, and what a trace holds. Off is a choice, not a
+    problem, unless only one of the two keys is set."""
+    off = switched_off(settings)
+    if off is None:
+        holds = (
+            "everything, prompts and answers included (LANGFUSE_CONTENT)"
+            if settings.langfuse_content
+            else "timings, tokens and models, no prompts or answers"
+        )
+        detail = f"to Langfuse at {settings.langfuse_base_url}: {holds}"
+        return Check(name="tracing", status="ok", detail=detail)
+    one_key = (settings.langfuse_public_key is None) != (settings.langfuse_secret_key is None)
+    return Check(name="tracing", status="warn" if one_key else "ok", detail=f"off: {off}")
+
+
 async def run_checks(settings: Settings, engine: AsyncEngine) -> list[Check]:
     database = await check_database(engine)
     checks = [database]
@@ -118,8 +135,10 @@ async def run_checks(settings: Settings, engine: AsyncEngine) -> list[Check]:
     if settings.fake_models:
         # Neither Ollama nor a cloud key is used, and every grade is made up: say so instead.
         detail = "stand-ins for testing (FAKE_MODELS): nothing is sent to a model"
-        return [*checks, Check(name="models", status="warn", detail=detail)]
+        models = Check(name="models", status="warn", detail=detail)
+        return [*checks, models, check_tracing(settings)]
     if settings.environment == "local":
         checks += await check_ollama(settings)
     checks += check_cloud_keys(settings)
+    checks.append(check_tracing(settings))
     return checks

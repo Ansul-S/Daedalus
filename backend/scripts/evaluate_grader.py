@@ -34,6 +34,7 @@ import tomllib
 import warnings
 from collections import Counter
 from collections.abc import Iterator
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -65,6 +66,7 @@ from app.evaluation.grader_metrics import (
 from app.grading.grader import PROMPT_VERSION, grade_answer, spent_today, why_failed
 from app.grading.scoring import score
 from app.llm.models import groq_grader
+from app.llm.tracing import traced, tracing
 from app.questions.batch import out_of_budget
 from app.questions.generation import Source
 from scripts.calibrate import (
@@ -232,9 +234,12 @@ async def stand_in_suite(folder: Path, *, model: Model | None, say=say) -> Suite
             continue
         question = questions[grade.question_id]
         try:
-            graded = await grade_answer(
-                grader, question.text, question.key_points, sources[question.id], grade.text
-            )
+            with traced(
+                "grade", version=PROMPT_VERSION, question=question.id, stand_in=grade.number
+            ):
+                graded = await grade_answer(
+                    grader, question.text, question.key_points, sources[question.id], grade.text
+                )
         except (AgentRunError, ExceptionGroup) as exc:
             if out_of_budget(exc):
                 for rest in hand[count - 1 :]:
@@ -471,4 +476,7 @@ if __name__ == "__main__":
     )
     # Waits and retries, so a slow stretch explains itself
     logging.getLogger("app.llm.pacing").setLevel(logging.INFO)
-    sys.exit(asyncio.run(main(parser.parse_args())))
+    arguments = parser.parse_args()
+    # A replay calls no model, and its stand-in grader is not worth a trace
+    with tracing(get_settings(), "eval-grader") if arguments.live else nullcontext():
+        sys.exit(asyncio.run(main(arguments)))

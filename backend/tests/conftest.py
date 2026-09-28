@@ -42,6 +42,17 @@ BACKEND = Path(__file__).resolve().parents[1]
 TEST_DATABASE = "daedalus_test"
 
 
+@pytest.fixture(autouse=True, scope="session")
+def no_tracing() -> Iterator[None]:
+    """Whatever keys `.env` holds, no test sends a trace: settings read from the environment
+    have tracing switched off. The tracing tests set their own, with nothing sent anywhere."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("LANGFUSE_TRACING_ENABLED", "false")
+        get_settings.cache_clear()
+        yield
+    get_settings.cache_clear()
+
+
 class FakeEmbedder:
     """Stands in for Ollama. Every distinct word gets its own dimension, so texts that share
     words are close and the ranking of a test corpus is predictable."""

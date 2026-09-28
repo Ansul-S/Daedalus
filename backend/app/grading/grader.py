@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Attempt, Grade, Question, QuestionSource
 from app.grading.scoring import Score, score
+from app.llm.tracing import traced
 from app.questions import batch
 from app.questions.generation import Source
 from app.questions.grounding import normalize
@@ -198,6 +199,7 @@ def grading_settings() -> ModelSettings:
 def grader(model: Model, chunk_ids: Sequence[int], points: int) -> Agent[None, GraderOutput]:
     agent = Agent(
         model,
+        name="grader",
         output_type=NativeOutput(output_type(chunk_ids), strict=True),
         instructions=INSTRUCTIONS,
         # One chance to send back a grade that skips or reorders key points
@@ -278,7 +280,9 @@ async def grade_answer(
     agent = grader(model, [source.chunk_id for source in sources], len(key_points))
     started = time.perf_counter()
     result = await agent.run(
-        request(question, key_points, sources, answer), model_settings=grading_settings()
+        request(question, key_points, sources, answer),
+        model_settings=grading_settings(),
+        metadata={"prompt_version": PROMPT_VERSION},
     )
     seconds = time.perf_counter() - started
     output = result.output
@@ -335,9 +339,10 @@ async def grade_attempt(session: AsyncSession, model: Model, attempt: Attempt) -
     question = await session.get_one(Question, attempt.question_id)
     sources = await question_sources(session, question.id)
     try:
-        graded = await grade_answer(
-            model, question.text, question.key_points, sources, attempt.answer
-        )
+        with traced("grade", version=PROMPT_VERSION, question=question.id, attempt=attempt.id):
+            graded = await grade_answer(
+                model, question.text, question.key_points, sources, attempt.answer
+            )
     except (AgentRunError, ExceptionGroup) as exc:
         log.warning("attempt %d could not be graded: %s", attempt.id, exc)
         grade = Grade(

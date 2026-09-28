@@ -16,6 +16,7 @@ from app.core.config import get_settings
 from app.db.session import SessionFactory, engine
 from app.ingest import queue
 from app.llm.models import embedding_model, helper_model, paced_generation_model
+from app.llm.tracing import tracing
 from app.questions.batch import run_job, spent_today, start_run
 from scripts.ingest import configure_logging
 
@@ -98,4 +99,5 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     arguments = parse_args()
     configure_logging(arguments.verbose)
-    sys.exit(asyncio.run(main(arguments)))
+    with tracing(get_settings(), "generate"):
+        sys.exit(asyncio.run(main(arguments)))

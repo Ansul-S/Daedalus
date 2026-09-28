@@ -46,6 +46,7 @@ from app.db.session import SessionFactory, engine
 from app.grading.grader import PROMPT_VERSION, grade_answer, question_sources, spent_today
 from app.grading.scoring import score
 from app.llm.models import groq_grader
+from app.llm.tracing import traced, tracing
 from app.questions.batch import out_of_budget
 
 STATUSES = ("covered", "partial", "missing")
@@ -227,9 +228,12 @@ async def grade_all(
         question = questions[grade.question_id]
         sources = await question_sources(session, question.id)
         try:
-            graded = await grade_answer(
-                model, question.text, question.key_points, sources, grade.text
-            )
+            with traced(
+                "grade", version=PROMPT_VERSION, question=question.id, calibration=grade.number
+            ):
+                graded = await grade_answer(
+                    model, question.text, question.key_points, sources, grade.text
+                )
         except (AgentRunError, ExceptionGroup) as exc:
             if out_of_budget(exc):
                 left = len(todo) - count + 1
@@ -453,4 +457,5 @@ if __name__ == "__main__":
     )
     # Waits and retries, so a slow stretch explains itself
     logging.getLogger("app.llm.pacing").setLevel(logging.INFO)
-    sys.exit(asyncio.run(main(parser.parse_args())))
+    with tracing(get_settings(), "calibrate"):
+        sys.exit(asyncio.run(main(parser.parse_args())))

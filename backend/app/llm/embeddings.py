@@ -8,6 +8,7 @@ import httpx
 
 from app.core.config import Settings
 from app.db.models import EMBEDDING_DIMENSIONS
+from app.llm import tracing
 
 # Qwen3-Embedding expects an instruction on queries only; documents are embedded as they are.
 QUERY_INSTRUCTION = (
@@ -66,18 +67,22 @@ class Embedder:
             "truncate": False,
             "options": {"num_ctx": self.num_ctx},
         }
-        try:
-            response = await self._http.post("/api/embed", json=payload)
-        except httpx.HTTPError as exc:
-            raise EmbeddingError(
-                f"Ollama is not reachable ({type(exc).__name__}); start it with `make ollama`"
-            ) from exc
-        if response.status_code != 200:
-            raise EmbeddingError(
-                f"Ollama returned HTTP {response.status_code}: {response.text[:200]}"
-            )
-        vectors = response.json().get("embeddings") or []
-        if len(vectors) != len(inputs) or any(len(v) != EMBEDDING_DIMENSIONS for v in vectors):
-            expected = f"{len(inputs)} vectors of {EMBEDDING_DIMENSIONS} dimensions"
-            raise EmbeddingError(f"expected {expected} from {self.model}")
-        return vectors
+        with tracing.embedding(self.model, len(inputs)) as span:
+            try:
+                response = await self._http.post("/api/embed", json=payload)
+            except httpx.HTTPError as exc:
+                raise EmbeddingError(
+                    f"Ollama is not reachable ({type(exc).__name__}); start it with `make ollama`"
+                ) from exc
+            if response.status_code != 200:
+                raise EmbeddingError(
+                    f"Ollama returned HTTP {response.status_code}: {response.text[:200]}"
+                )
+            body = response.json()
+            if isinstance(tokens := body.get("prompt_eval_count"), int):
+                span.set_attribute("gen_ai.usage.input_tokens", tokens)
+            vectors = body.get("embeddings") or []
+            if len(vectors) != len(inputs) or any(len(v) != EMBEDDING_DIMENSIONS for v in vectors):
+                expected = f"{len(inputs)} vectors of {EMBEDDING_DIMENSIONS} dimensions"
+                raise EmbeddingError(f"expected {expected} from {self.model}")
+            return vectors

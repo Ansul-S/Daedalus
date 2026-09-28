@@ -87,7 +87,9 @@ class Validation:
 
 
 def checker(model: Model) -> Agent[None, AnswerCheck]:
-    return Agent(model, output_type=NativeOutput(AnswerCheck), instructions=INSTRUCTIONS)
+    return Agent(
+        model, name="checker", output_type=NativeOutput(AnswerCheck), instructions=INSTRUCTIONS
+    )
 
 
 def review(question: str, sources: list[Source]) -> str:
@@ -138,7 +140,9 @@ async def validate(
         failed.append("quotes")
 
     result = await checker(model).run(
-        review(question.question, sources), model_settings=helper_settings()
+        review(question.question, sources),
+        model_settings=helper_settings(),
+        metadata={"prompt_version": PROMPT_VERSION},
     )
     check = result.output
     report["checker_model"] = getattr(result.all_messages()[-1], "model_name", None)

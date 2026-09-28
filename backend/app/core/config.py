@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import SecretStr, ValidationInfo, field_validator
+from pydantic import AliasChoices, Field, SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -44,6 +44,21 @@ class Settings(BaseSettings):
     # Pinned rather than the "-latest" alias: the alias moved to 3.8 Flash, which answered
     # 2 of 13 trial requests and whose profile drops the thinking setting.
     gemini_model: str = "gemini-3.5-flash"
+
+    # Tracing every model call to Langfuse (optional, `app/llm/tracing.py`): on once both
+    # keys are set. Timings, tokens, models and prompt versions are sent; prompts, answers,
+    # the models' replies and the text of errors are not, unless LANGFUSE_CONTENT is on.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: SecretStr | None = None
+    # The project's region: https://cloud.langfuse.com (EU), https://us.cloud.langfuse.com
+    # (US), or a self-hosted address. LANGFUSE_HOST, the older name, is read too.
+    langfuse_base_url: str = Field(
+        "https://cloud.langfuse.com",
+        validation_alias=AliasChoices("langfuse_base_url", "langfuse_host"),
+    )
+    langfuse_content: bool = False
+    # Off while keeping the keys; the tests set it, so that they never send anything
+    langfuse_tracing_enabled: bool = True
 
     # Ingestion (local only). Uploads and downloaded papers are stored under data_dir.
     data_dir: Path = REPO_ROOT / "data"

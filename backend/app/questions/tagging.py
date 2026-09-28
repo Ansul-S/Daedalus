@@ -26,6 +26,7 @@ from app.db.models import Chunk, ChunkTags, Document
 from app.ingest.chunking import SECTION_LIST_SEPARATOR
 from app.llm.embeddings import Progress
 from app.llm.models import helper_settings
+from app.llm.tracing import traced
 
 log = logging.getLogger(__name__)
 
@@ -127,7 +128,9 @@ def context_only(chunk: Chunk) -> str | None:
 
 
 def tagger(model: Model) -> Agent[None, TagReading]:
-    return Agent(model, output_type=NativeOutput(TagReading), instructions=INSTRUCTIONS)
+    return Agent(
+        model, name="tagger", output_type=NativeOutput(TagReading), instructions=INSTRUCTIONS
+    )
 
 
 def passage(title: str, chunk: Chunk) -> str:
@@ -135,7 +138,11 @@ def passage(title: str, chunk: Chunk) -> str:
 
 
 async def read_chunk(agent: Agent[None, TagReading], title: str, chunk: Chunk) -> TaggedChunk:
-    result = await agent.run(passage(title, chunk), model_settings=helper_settings())
+    result = await agent.run(
+        passage(title, chunk),
+        model_settings=helper_settings(),
+        metadata={"prompt_version": PROMPT_VERSION},
+    )
     reading = result.output
     reason = context_only(chunk)
     return TaggedChunk(
@@ -215,7 +222,8 @@ async def tag_chunks(
     for number, (title, chunk) in enumerate(pending, start=1):
         if progress is not None:
             await progress(number, len(pending))
-        reading = await read_chunk(agent, title, chunk)
+        with traced("tag", version=PROMPT_VERSION, chunk=chunk.id, document=chunk.document_id):
+            reading = await read_chunk(agent, title, chunk)
         async with sessions() as session, session.begin():
             await store(session, reading, model.model_name)
         tagged.append(reading)

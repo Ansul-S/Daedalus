@@ -22,6 +22,7 @@ from app.ingest.arxiv import ArxivClient
 from app.ingest.pipeline import Ingestor
 from app.llm.embeddings import Embedder
 from app.llm.models import embedding_model, helper_model, paced_generation_model
+from app.llm.tracing import tracing
 from app.questions.batch import run_job, spent_today
 from app.questions.topics import run_topics_job
 from scripts.ingest import configure_logging, print_progress
@@ -113,6 +114,7 @@ if __name__ == "__main__":
     )
     configure_logging(parser.parse_args().verbose)
     try:
-        sys.exit(asyncio.run(main()))
+        with tracing(get_settings(), "worker"):
+            sys.exit(asyncio.run(main()))
     except KeyboardInterrupt:
         print("\nStopped.")

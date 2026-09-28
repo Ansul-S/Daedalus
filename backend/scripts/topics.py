@@ -19,6 +19,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import SessionFactory, engine
 from app.ingest import queue
 from app.llm.models import embedding_model, helper_model
+from app.llm.tracing import tracing
 from app.questions.tagging import TaggedChunk, apply_rules, tag_chunks
 from app.questions.topics import TopicDraft, build_topic_map, build_topics
 from scripts.ingest import configure_logging
@@ -150,4 +151,5 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     arguments = parse_args()
     configure_logging(arguments.verbose)
-    sys.exit(asyncio.run(main(arguments)))
+    with tracing(get_settings(), "topics"):
+        sys.exit(asyncio.run(main(arguments)))

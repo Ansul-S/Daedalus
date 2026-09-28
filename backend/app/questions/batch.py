@@ -26,7 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db.models import Chunk, ChunkTags, ChunkTopic, Document, Job, Question, QuestionSource
 from app.db.models import QuestionTask as Task
 from app.llm.pacing import QuotaExhausted
-from app.questions.generation import Source, generate_question, source_of
+from app.llm.tracing import traced
+from app.questions.generation import PROMPT_VERSION, Source, generate_question, source_of
 from app.questions.topics import topic_for
 from app.questions.validation import store_question, validate
 
@@ -306,18 +307,21 @@ async def run_task(
     if len(sources) != len(task.chunk_ids):
         raise LookupError(f"chunks {task.chunk_ids} are no longer all there")
 
-    generated = await generate_question(model, sources, task.style)
-    async with sessions() as session, session.begin():
-        checked = await validate(
-            session, generated, sources, model=checker, embedder=embedder, similarity=similarity
-        )
-        topic_id = await topic_for(session, task.chunk_ids)
-        question = await store_question(session, generated, checked, sources, topic_id=topic_id)
-        await session.execute(
-            update(Task)
-            .where(Task.id == task.id)
-            .values(status="done", question_id=question.id, error=None, finished_at=func.now())
-        )
+    with traced(
+        "generate", version=PROMPT_VERSION, job=task.job_id, task=task.id, style=task.style
+    ):
+        generated = await generate_question(model, sources, task.style)
+        async with sessions() as session, session.begin():
+            checked = await validate(
+                session, generated, sources, model=checker, embedder=embedder, similarity=similarity
+            )
+            topic_id = await topic_for(session, task.chunk_ids)
+            question = await store_question(session, generated, checked, sources, topic_id=topic_id)
+            await session.execute(
+                update(Task)
+                .where(Task.id == task.id)
+                .values(status="done", question_id=question.id, error=None, finished_at=func.now())
+            )
     return ("accepted" if checked.passed else "rejected"), generated.usage
 
 

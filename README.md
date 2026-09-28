@@ -285,7 +285,7 @@ no other model anything, and takes a few seconds.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /health`, `GET /health/deps` | The API is up; status of the database, the models and the API keys |
+| `GET /health`, `GET /health/deps` | The API is up; status of the database, the models, the API keys and tracing |
 | `POST /documents/upload` | Upload a `.pdf` or `.ipynb` as the multipart field `file`. Options as query parameters: `ocr`, `formulas`, `force` |
 | `POST /documents/arxiv` | Add a paper: `{"arxiv_id": "1706.03762"}`, optionally with `ocr`, `formulas` and `force` |
 | `GET /documents`, `GET /documents/{id}` | Documents with their status, details, chunk count, how many of those chunks the topic map has tagged, and latest job |
@@ -361,8 +361,8 @@ curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"qu
 | `make calibrate` | Grades hand-graded answers and measures how far the grader agrees (see [Checking the grader](#checking-the-grader-against-your-own-grades)) |
 | `make eval-retrieval` | Measures search against the questions' own passages and writes the retrieval report (see [Measuring search](#measuring-search)) |
 | `make eval-grader` | Checks the grader against hand-graded answers and fails when it no longer agrees (see [The grader's regression suite](#the-graders-regression-suite)) |
-| `make check` | Checks the database and its migrations, Ollama and its models, and API keys. `make check LIVE=1` also sends a one-word prompt to each model. |
-| `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`). |
+| `make check` | Checks the database and its migrations, Ollama and its models, API keys, and whether model calls are traced. `make check LIVE=1` also sends a one-word prompt to each model, traces them, and says whether Langfuse took the traces. |
+| `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`); in CI they fail instead. |
 | `make test-slow` | The PDF parsing test, which loads Docling's models |
 | `make e2e` | Walks through the app in a browser on stand-in models, in a database of its own: from the landing page through the library to a graded answer and its room on the dashboard. `make e2e ARGS=--headed` shows the browser. It needs Postgres (`make db-up`), ports 8000 and 3000 free, and Playwright's Chromium, downloaded once (see [frontend/README.md](frontend/README.md#the-end-to-end-test)) |
 | `make lint` | Ruff (backend) and ESLint (frontend) |
@@ -388,6 +388,10 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `TOPIC_SIMILARITY` | `0.8` | How close two concept tags have to be to share a topic. Higher keeps topics narrow; 0.7 merged RNN, LSTM, ReLU and dropout into one. |
 | `DUPLICATE_SIMILARITY` | `0.75` | Above this, two questions are the same question in other words. Short texts sit much closer together than passages do, so the line is far below the 0.9 it looks like it should be. |
 | `PRACTICE_TIMEZONE` | `UTC` | The time zone practice days are counted in, e.g. `Asia/Kolkata`. A day starts at 04:00 there, so a session past midnight still counts as one day. |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | empty | A Langfuse project's keys. With both set, every model call is traced (see [Tracing model calls](#tracing-model-calls)) |
+| `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | The Langfuse project's region: `https://us.cloud.langfuse.com` for the US, or a self-hosted address. `LANGFUSE_HOST`, the older name, is read too |
+| `LANGFUSE_CONTENT` | `false` | Sends prompts, passages, answers, the models' replies and the text of errors with the traces |
+| `LANGFUSE_TRACING_ENABLED` | `true` | `false` stops tracing and keeps the keys. The tests set it, so they never send a trace |
 | `FAKE_MODELS` | `false` | Stand-ins for every model, for testing (`backend/app/llm/fakes.py`): they answer at once, the same way every time, and send nothing anywhere. What they write is made up, so point `DATABASE_URL` at a throwaway database. `make e2e` runs the whole app on them in a database of its own. `make check` says when they are on, `make calibrate` refuses them, and so does `ENVIRONMENT=production`. |
 
 The frontend has three settings of its own, which it doesn't take from the repository's `.env`: set them in the environment it is built and run in, or in `frontend/.env.local`.
@@ -410,7 +414,8 @@ backend/          FastAPI app (uv)
                   grader's regression suite: its metrics and what a run has to meet
   app/grading/    grading an answer against its question's sources, and scoring it
   app/ingest/     parsers (PDF, arXiv, notebooks), chunking, file storage, job queue, pipeline
-  app/llm/        model routing, per-provider pacing, embeddings, and stand-ins for testing
+  app/llm/        model routing, per-provider pacing, embeddings, tracing, and stand-ins for
+                  testing
   app/questions/  concept tags, topics, generation, quote grounding, validation, batch runs
   app/retrieval/  hybrid search and rank fusion
   app/scheduling/ review schedule (FSRS), the next-question picker, mastery, XP and coins,
@@ -447,6 +452,34 @@ data/             Your material, uploads, downloads, calibration answers, evalua
 - With `FAKE_MODELS=true`, every task gets a deterministic stand-in instead, embeddings and the counting of chunk sizes included, and nothing is sent to a model. The writer quotes whole sentences of the passage, so its questions pass the checks; the grader labels key points and claims by the words an answer shares with them.
 
 In a batch and when grading, each cloud model also keeps its own pace: a sliding window of requests and tokens (and, for Qwen on Groq, of the tokens it writes), a daily allowance that comes back over 24 hours, and a wait when the provider says `retry-after`. A provider that is briefly full is waited out rather than abandoned, so a 429 doesn't spend the next provider's quota; one that says the day's allowance is spent is skipped until a request's worth has come back, and the next model takes over meanwhile.
+
+## Tracing model calls
+
+With a [Langfuse](https://langfuse.com) project's keys in `.env` (a project on Langfuse Cloud's
+free Hobby plan will do), every model call is traced: each agent run and each request to a
+model, with its provider, model, tokens in and out and how long it took, and each embedding
+request with its model and token count. The calls one piece of work makes form one trace, which
+carries the prompt version and the ids of what it was about:
+
+- a question written: the writer and any repair of its quotes, the checker, and the duplicate
+  check's embeddings;
+- an answer graded, in practice, by `make calibrate` or by `make eval-grader LIVE=1`;
+- a passage tagged, the topic map's tags embedded, a document's passages embedded, a search.
+
+What leaves the machine:
+
+- **By default, no text.** Prompts, passages, answers and what the models reply stay here. An
+  error keeps its type but not its message or stack trace, since from a provider it can quote
+  what the model wrote. `LANGFUSE_CONTENT=true` sends everything, for looking into a prompt.
+- **Nothing without both keys,** and nothing at all with `FAKE_MODELS`. The API, the worker,
+  `make ingest`, `make topics`, `make generate`, `make calibrate` and `make eval-grader LIVE=1`
+  trace their calls; `make eval-retrieval` and replays don't.
+- **Plain OpenTelemetry,** sent to Langfuse's OTLP endpoint (`backend/app/llm/tracing.py`):
+  Pydantic AI's own spans, one span per piece of work and one per embedding request. Nothing
+  else in the app is instrumented.
+
+`make check` says whether tracing is on and what a trace holds, and `make check LIVE=1` says
+whether Langfuse took the traces of its test prompts.
 
 ## Dependency safety
 

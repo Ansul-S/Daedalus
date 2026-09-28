@@ -8,19 +8,22 @@ from fastapi.routing import APIRoute
 from app.api import documents, grading, health, practice, questions, ratings, search
 from app.core.config import get_settings
 from app.llm.models import embedding_model
+from app.llm.tracing import tracing
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
-    # Query embeddings need Ollama, which only runs locally; production search is keyword-only.
-    if settings.environment == "local":
-        async with embedding_model(settings) as embedder:
-            app.state.embedder = embedder
+    with tracing(settings, "api"):
+        # Query embeddings need Ollama, which only runs locally; production search is
+        # keyword-only.
+        if settings.environment == "local":
+            async with embedding_model(settings) as embedder:
+                app.state.embedder = embedder
+                yield
+        else:
+            app.state.embedder = None
             yield
-    else:
-        app.state.embedder = None
-        yield
 
 
 def operation_id(route: APIRoute) -> str:

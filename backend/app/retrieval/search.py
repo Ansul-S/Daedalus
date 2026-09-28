@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chunk, Document
 from app.llm.embeddings import Embedder, EmbeddingError
+from app.llm.tracing import traced
 from app.retrieval.fusion import reciprocal_rank_fusion
 
 SearchMode = Literal["hybrid", "vector", "keyword"]
@@ -112,9 +113,9 @@ async def search(
         try:
             if embedder is None:
                 raise EmbeddingError("semantic search needs the local embedding model")
-            vector_ids = await vector_ranking(
-                session, await embedder.embed_query(query), CANDIDATES
-            )
+            with traced("search", mode=mode):
+                vector = await embedder.embed_query(query)
+            vector_ids = await vector_ranking(session, vector, CANDIDATES)
         except EmbeddingError as exc:
             if mode == "vector":
                 raise

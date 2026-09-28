@@ -24,6 +24,7 @@ from app.ingest.arxiv import ArxivClient, parse_arxiv_id
 from app.ingest.pipeline import Ingestor
 from app.ingest.storage import SOURCE_TYPES, save_file
 from app.llm.models import embedding_model
+from app.llm.tracing import tracing
 
 # Loggers that report every table cell they could not place
 _NOISY_LOGGERS = ("MatchingPostProcessor", "TFPredictor")
@@ -205,4 +206,5 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     arguments = parse_args()
     configure_logging(arguments.verbose)
-    sys.exit(asyncio.run(main(arguments)))
+    with tracing(get_settings(), "ingest"):
+        sys.exit(asyncio.run(main(arguments)))

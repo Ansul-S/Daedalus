@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import Chunk, ChunkTags, ChunkTopic, Job, Question, Topic
 from app.llm.embeddings import Embedder
+from app.llm.tracing import traced
 from app.questions.tagging import TaggedChunk, tag_chunks
 
 log = logging.getLogger(__name__)
@@ -158,7 +159,8 @@ async def build_topics(
     # Alphabetical, so that the same tags always cluster the same way
     counts = Counter(dict(sorted(counts.items())))
     say(f"embedding {len(counts)} tags from {len(tagged)} chunks")
-    vectors = await embedder.embed_documents(list(counts))
+    with traced("topics", tags=len(counts)):
+        vectors = await embedder.embed_documents(list(counts))
     drafts = group_tags(counts, vectors, similarity)
 
     async with sessions() as session, session.begin():

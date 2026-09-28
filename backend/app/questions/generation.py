@@ -165,6 +165,7 @@ def generation_settings() -> ModelSettings:
 def question_agent(model: Model) -> Agent[None, GeneratedQuestion]:
     return Agent(
         model,
+        name="writer",
         output_type=NativeOutput(GeneratedQuestion, strict=True),
         instructions=INSTRUCTIONS,
     )
@@ -216,7 +217,10 @@ async def generate_question(
     usage: dict[str, int] = {}
     for attempt in count(1):
         result = await agent.run(
-            prompt, message_history=history, model_settings=generation_settings()
+            prompt,
+            message_history=history,
+            model_settings=generation_settings(),
+            metadata={"prompt_version": PROMPT_VERSION},
         )
         usage = add_usage(usage, result)
         quotes = ground(result.output, sources)

@@ -17,6 +17,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import engine
 from app.llm import models
 from app.llm.embeddings import Embedder, EmbeddingError
+from app.llm.tracing import Tracing, tracing
 
 ICONS = {"ok": "✓", "warn": "!", "fail": "✗"}
 
@@ -33,7 +34,7 @@ async def ping_chat_model(model: Model) -> Check:
     name = f"reply from {model.system}:{model.model_name}"
     start = time.perf_counter()
     try:
-        result = await Agent(model).run("Reply with exactly one word: ok")
+        result = await Agent(model, name="check").run("Reply with exactly one word: ok")
     except ModelHTTPError as exc:
         if exc.status_code in BUSY_STATUS_CODES:
             detail = f"HTTP {exc.status_code}: provider busy or rate-limited, try again later"
@@ -54,6 +55,19 @@ async def ping_embedding_model(settings: Settings) -> Check:
     except EmbeddingError as exc:
         return Check(name=name, status="fail", detail=str(exc)[:200])
     return Check(name=name, status="ok", detail=f"{len(vector)} dimensions")
+
+
+def check_traces_sent(traced_to: Tracing) -> Check:
+    """Whether Langfuse took the traces of the test prompts."""
+    name = "traces taken by Langfuse"
+    flushed = traced_to.flush()
+    results = traced_to.sender.results
+    if results["refused"] or not flushed:
+        detail = "refused or out of reach: the message above says why (the keys? the region?)"
+        return Check(name=name, status="fail", detail=detail)
+    if not results["sent"]:
+        return Check(name=name, status="warn", detail="no test prompt went out to trace")
+    return Check(name=name, status="ok", detail=f"{results['sent']} batch(es) sent")
 
 
 async def main(live: bool) -> int:
@@ -80,15 +94,20 @@ async def main(live: bool) -> int:
             models.groq(settings, settings.groq_grading_model),
             models.gemini(settings),
         ]
-        for model in chat_models:
-            if model is not None:
-                result = await ping_chat_model(model)
+        with tracing(settings, "check") as traced_to:
+            for model in chat_models:
+                if model is not None:
+                    result = await ping_chat_model(model)
+                    show([result])
+                    checks.append(result)
+            if settings.embedding_model in installed:
+                result = await ping_embedding_model(settings)
                 show([result])
                 checks.append(result)
-        if settings.embedding_model in installed:
-            result = await ping_embedding_model(settings)
-            show([result])
-            checks.append(result)
+            if traced_to is not None:
+                result = check_traces_sent(traced_to)
+                show([result])
+                checks.append(result)
 
     failed = sum(check.status == "fail" for check in checks)
     print(f"\n{failed} problem(s) found." if failed else "\nAll required checks passed.")

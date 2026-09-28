@@ -24,6 +24,7 @@ from app.ingest.queue import claim_next_job
 from app.ingest.tokens import token_counter
 from app.llm import fakes
 from app.llm.embeddings import Embedder
+from app.llm.tracing import traced
 
 log = logging.getLogger(__name__)
 
@@ -87,9 +88,10 @@ class Ingestor:
             async def embedding_progress(done: int, total: int) -> None:
                 await self._progress(job, document, f"embedding {done}/{total} chunks")
 
-            vectors = await self.embedder.embed_documents(
-                [embedding_input(parsed.title, chunk) for chunk in chunks], embedding_progress
-            )
+            with traced("ingest", document=document.id, job=job.id):
+                vectors = await self.embedder.embed_documents(
+                    [embedding_input(parsed.title, chunk) for chunk in chunks], embedding_progress
+                )
             timings["embed_seconds"] = time.perf_counter() - started
 
             details = {
