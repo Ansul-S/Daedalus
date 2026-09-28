@@ -1,0 +1,41 @@
+# The grader's stand-in suite graded by the real grader, by hand only: about 20K tokens of the
+# free Groq allowance per run. It needs a GROQ_API_KEY repository secret, and says so without
+# one. The calibration answers are personal practice data and never leave the machine.
+name: Grader, live
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-live
+  cancel-in-progress: false
+
+jobs:
+  stand-ins:
+    name: Stand-ins, graded live
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.11.29"
+          working-directory: backend
+          enable-cache: true
+
+      - run: uv sync --locked --group eval
+
+      - name: Grade the stand-ins with the Groq grader
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: uv run --no-sync python -m scripts.evaluate_grader --set stand-ins --live | tee -a "$GITHUB_STEP_SUMMARY"

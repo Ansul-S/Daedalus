@@ -2,11 +2,13 @@
 
 Database tests use their own database, `daedalus_test`, on the Postgres server from
 `make db-up`. It is created and migrated once per test run and dropped afterwards, so the
-development database is never touched. Without a running server those tests are skipped.
+development database is never touched. Without a running server those tests are skipped, except
+in CI, where they fail: a check that quietly skipped them would pass on half the suite.
 """
 
 import asyncio
 import math
+import os
 import re
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -109,6 +111,8 @@ def database_url() -> Iterator[str]:
     try:
         admin = psycopg.connect(admin_url, autocommit=True, connect_timeout=3)
     except psycopg.OperationalError:
+        if os.environ.get("CI"):
+            pytest.fail("Postgres is not reachable, and CI runs every database test")
         pytest.skip("Postgres is not running; start it with `make db-up`")
     with admin:
         admin.execute(f"DROP DATABASE IF EXISTS {TEST_DATABASE} WITH (FORCE)")
