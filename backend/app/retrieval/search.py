@@ -19,8 +19,15 @@ from app.retrieval.fusion import reciprocal_rank_fusion
 
 SearchMode = Literal["hybrid", "vector", "keyword"]
 
-# Candidates taken from each retriever before fusion
+# Candidates taken from each retriever
 CANDIDATES = 50
+# In hybrid search, only the full-text ranking's top ten join the fusion, at half the vector
+# ranking's weight. The OR query matches nearly every passage, so at full share a passage in
+# the middle of both lists outranked one high in the vector list alone: a question whose answer
+# was 7th by vector and missing from full-text came 41st. Chosen on 27 questions and judged
+# once on 45 others (make eval-retrieval): MRR@5 on the asked questions 0.870 -> 0.893.
+KEYWORD_CANDIDATES = 10
+KEYWORD_WEIGHT = 0.5
 
 # Questions are long, and requiring every word (AND) would match almost nothing, so the
 # stemmed words are ORed. ts_rank_cd adds up the matches, with section words weighing more
@@ -54,6 +61,22 @@ class SearchResult:
     mode: SearchMode
     hits: list[Hit]
     warning: str | None = None
+
+
+def fuse_rankings(
+    vector_ids: list[int],
+    keyword_ids: list[int],
+    keyword_candidates: int = KEYWORD_CANDIDATES,
+    keyword_weight: float = KEYWORD_WEIGHT,
+) -> list[tuple[int, float]]:
+    """Hybrid ranking. With one of the two rankings empty, the other is kept whole."""
+    if not vector_ids:
+        return reciprocal_rank_fusion([keyword_ids] if keyword_ids else [])
+    if not keyword_ids:
+        return reciprocal_rank_fusion([vector_ids])
+    return reciprocal_rank_fusion(
+        [vector_ids, keyword_ids[:keyword_candidates]], weights=[1.0, keyword_weight]
+    )
 
 
 async def vector_ranking(session: AsyncSession, vector: list[float], limit: int) -> list[int]:
@@ -100,8 +123,7 @@ async def search(
     if mode != "vector":
         keyword_ids = await keyword_ranking(session, query, CANDIDATES)
 
-    fused = reciprocal_rank_fusion([ranking for ranking in (vector_ids, keyword_ids) if ranking])
-    fused = fused[:limit]
+    fused = fuse_rankings(vector_ids, keyword_ids)[:limit]
     rows = await session.execute(
         select(Chunk, Document)
         .join(Document, Chunk.document_id == Document.id)

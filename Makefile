@@ -1,4 +1,4 @@
-.PHONY: help ollama db-up db-down migrate api web client glyphs worker ingest topics generate calibrate check test test-slow e2e lint
+.PHONY: help ollama db-up db-down migrate api web client glyphs worker ingest topics generate calibrate eval-retrieval check test test-slow e2e lint
 
 help: ## List commands
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
@@ -43,6 +43,9 @@ generate: ## Write questions from the topic map: make generate N=20
 
 calibrate: ## Grade hand-graded answers and measure agreement: make calibrate [ARGS=template|report]
 	cd backend && uv run --group eval python -m scripts.calibrate $(ARGS)
+
+eval-retrieval: ## Measure search against the questions' own passages and write the retrieval report
+	cd backend && uv run python -m scripts.evaluate_retrieval $(ARGS)
 
 check: ## Check database, Ollama and API keys (LIVE=1 also sends a test prompt to each model)
 	cd backend && uv run python -m scripts.check_setup $(if $(LIVE),--live,)

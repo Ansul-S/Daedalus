@@ -117,7 +117,8 @@ def test_hybrid_search_fuses_both_rankings(sessions, embedder, corpus) -> None:
     assert ids(result)[:2] == [corpus.vanishing, corpus.scaling]
     top, _, third = result.hits
     assert (top.vector_rank, top.keyword_rank, top.document.title) == (1, 1, "RNN Intuition")
-    assert top.score == pytest.approx(2 / 61)
+    # Full-text counts at half weight in the fusion
+    assert top.score == pytest.approx(1 / 61 + 0.5 / 61)
     # Found by the vectors only
     assert (third.vector_rank, third.keyword_rank) == (3, None)
 

@@ -64,7 +64,7 @@ make ingest SRC="data/notes.pdf data/notebooks 1706.03762"
    - A new section or subsection starts a new chunk.
    - Each chunk is labeled with every section it covers, for example `3 Model Architecture > 3.3 Position-wise Feed-Forward Networks · 3.4 Embeddings and Softmax · 3.5 Positional Encoding`.
 4. **Embed and store.** Each chunk is embedded with `qwen3-embedding`, together with the document title and its section label, and stored with a full-text index. A document's chunks are replaced in one transaction, so a failed re-ingestion keeps the previous ones.
-5. **Search.** `GET /search` takes the top 50 chunks from vector similarity and the top 50 from full-text search, and merges the two lists with Reciprocal Rank Fusion.
+5. **Search.** `GET /search` takes the top 50 chunks from vector similarity and merges them, with Reciprocal Rank Fusion, with the top 10 from full-text search at half weight (see [Measuring search](#measuring-search)).
 
 Downloads and uploads are kept under `data/` (gitignored; `DATA_DIR` moves it):
 
@@ -73,8 +73,11 @@ data/
 ├── uploads/<sha256>.pdf, .ipynb   each file stored once, named by its content hash
 ├── arxiv/<id>/                    metadata.json, and v<N>.html (ar5iv.html from the fallback
 │                                  site) or v<N>.pdf; v<N>.no-html records a version without HTML
-└── calibration/                   answers.toml, your hand-graded answers, and grades.jsonl,
-                                   the grader's grades of them (see make calibrate)
+├── calibration/                   answers.toml, your hand-graded answers, and grades.jsonl,
+│                                  the grader's grades of them (see make calibrate)
+├── eval/                          hand-questions.toml and also-answers.toml, the labels
+│                                  the retrieval report adds (see make eval-retrieval)
+└── reports/                       retrieval-<date>.md, the retrieval reports
 ```
 
 ## Generating questions
@@ -223,6 +226,26 @@ make calibrate ARGS=report     # report on the grades already made, without grad
   second run grades only what is new. Both files are personal practice data and stay out of
   the repository.
 
+## Measuring search
+
+`make eval-retrieval` searches for every question with saved passages and scores how near the
+top those passages come: hit@1, hit@5, Recall@5 and MRR@5, in vector, full-text and hybrid
+mode. It needs the local embedding model (`make ollama`) for the vector and hybrid modes, asks
+no other model anything, and takes a few seconds.
+
+- **Three sets, scored apart:** the questions practice serves; those plus the questions turned
+  down for reasons that leave them about their passage; and hand-written questions with
+  passages labelled by hand, from `data/eval/hand-questions.toml`.
+- **Strict and lenient.** A question's own passages are its answers. Another passage often
+  answers it too; those confirmed by hand in `data/eval/also-answers.toml` (`verdict = "yes"`)
+  count in the lenient score.
+- **Fusion variants.** The report also tries how much of the full-text ranking hybrid search
+  should use, tuned on the turned-down questions and judged on the others, and says whether the
+  current setting should change.
+- **The report** is printed and saved to `data/reports/retrieval-<date>.md`. Labels that point
+  to passages a re-ingestion has replaced are listed, since those questions score lower until
+  they are labelled again.
+
 ## API
 
 | Endpoint | Purpose |
@@ -301,6 +324,7 @@ curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"qu
 | `make generate N=20` | Writes questions from the topic map (see [Generating questions](#generating-questions)) |
 | `make worker` | Processes jobs queued through the API: ingestion first, then the topic map, then question batches |
 | `make calibrate` | Grades hand-graded answers and measures how far the grader agrees (see [Checking the grader](#checking-the-grader-against-your-own-grades)) |
+| `make eval-retrieval` | Measures search against the questions' own passages and writes the retrieval report (see [Measuring search](#measuring-search)) |
 | `make check` | Checks the database and its migrations, Ollama and its models, and API keys. `make check LIVE=1` also sends a one-word prompt to each model. |
 | `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`). |
 | `make test-slow` | The PDF parsing test, which loads Docling's models |
@@ -346,6 +370,7 @@ backend/          FastAPI app (uv)
                   topics, attempts and grades, practice, ratings
   app/core/       settings, setup checks
   app/db/         tables (SQLAlchemy) and Alembic migrations
+  app/evaluation/ retrieval evaluation: question sets, labels, scores, fusion variants
   app/grading/    grading an answer against its question's sources, and scoring it
   app/ingest/     parsers (PDF, arXiv, notebooks), chunking, file storage, job queue, pipeline
   app/llm/        model routing, per-provider pacing, embeddings, and stand-ins for testing
@@ -353,9 +378,9 @@ backend/          FastAPI app (uv)
   app/retrieval/  hybrid search and rank fusion
   app/scheduling/ review schedule (FSRS), the next-question picker, mastery, XP and coins,
                   the labyrinth map
-  scripts/        setup check, ingest, worker, topics, generate and calibrate commands, the
-                  API schema the frontend client is generated from, the glyph pictures, and
-                  make e2e, which runs the end-to-end test in a database of its own
+  scripts/        setup check, ingest, worker, topics, generate, calibrate and eval-retrieval
+                  commands, the API schema the frontend client is generated from, the glyph
+                  pictures, and make e2e, which runs the end-to-end test in a database of its own
   tests/
 frontend/         Next.js (App Router, TypeScript, Tailwind)
   src/app/        pages: the landing page, practice, the question bank, the library, the
@@ -369,7 +394,8 @@ frontend/         Next.js (App Router, TypeScript, Tailwind)
   e2e/            the end-to-end test: a walk through the app in the browser on stand-in models
 db/init/          SQL that runs when the database is first created (enables pgvector)
 docs/             Design, decisions, measurements and roadmap
-data/             Your material, uploads, downloads and calibration answers (not committed)
+data/             Your material, uploads, downloads, calibration answers, evaluation labels and
+                  reports (not committed)
 ```
 
 ## Model routing
