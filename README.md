@@ -1,10 +1,12 @@
 # Daedalus
 
+[![CI](https://github.com/Ansul-S/Daedalus/actions/workflows/ci.yml/badge.svg)](https://github.com/Ansul-S/Daedalus/actions/workflows/ci.yml)
+
 AI/ML interview practice built on your own study material. Daedalus generates conceptual interview questions from your PDFs, Jupyter notebooks and arXiv papers, then grades your answers against those same sources, with citations.
 
 Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work and fast grading.
 
-**Status:** Phases 1–4 are built: ingestion and retrieval, question generation, grading, and the practice app. PDFs, notebooks and arXiv papers are split into passages, searchable with page, cell or section citations; a topic map is built over them, and questions are written from the passages and checked against them. In the browser you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the question comes back on a review schedule (FSRS). On 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.95). Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank corrects, retires and rates questions, and the library adds material and writes questions, all from the browser. An end-to-end test (`make e2e`) walks through the whole app on stand-in models. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**Status:** Phases 1–5 are built: ingestion and retrieval, question generation, grading, the practice app, and its evaluation. PDFs, notebooks and arXiv papers are split into passages, searchable with page, cell or section citations; a topic map is built over them, and questions are written from the passages and checked against them. In the browser you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the question comes back on a review schedule (FSRS). On 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.95). Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank corrects, retires and rates questions, and the library adds material and writes questions, all from the browser. An end-to-end test (`make e2e`) walks through the whole app on stand-in models. Search and the grader are measured by commands in the repository (`make eval-retrieval`, `make eval-grader`), CI runs the tests, the grader's stand-in suite and the end-to-end test on every push, and every model call can be traced to Langfuse without its text. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
 
 ## Prerequisites (macOS)
 
@@ -405,6 +407,7 @@ The frontend has three settings of its own, which it doesn't take from the repos
 ## Layout
 
 ```
+.github/          CI on every push, the live grader run by hand, Dependabot
 backend/          FastAPI app (uv)
   app/api/        HTTP routes: health, documents, jobs and the worker, search, questions and
                   topics, attempts and grades, practice, ratings
@@ -480,6 +483,24 @@ What leaves the machine:
 
 `make check` says whether tracing is on and what a trace holds, and `make check LIVE=1` says
 whether Langfuse took the traces of its test prompts.
+
+## Continuous integration
+
+GitHub Actions (`.github/workflows/`) checks every push and every pull request to `main`, in
+about two minutes, with no secrets and nothing sent to a model provider:
+
+- **Backend:** Ruff, then the tests against a Postgres service, then the grader's stand-in
+  suite, whose report goes into the job summary. Every dependency group is installed except
+  torch and the CUDA packages, which no test needs.
+- **Frontend:** ESLint and `pnpm build`.
+- **End-to-end:** `make e2e` in headless Chromium, on stand-in models. A failed walk uploads
+  Playwright's trace.
+
+**Grader, live** runs only when started by hand from the Actions tab. It grades the stand-ins
+with the real grader (about 20K Groq tokens) and needs a `GROQ_API_KEY` repository secret.
+Without one, it says so. Dependabot proposes updates to `backend/uv.lock` and to the actions
+weekly. The frontend's packages are updated by hand (`pnpm update`), since pnpm's 7-day rule
+refuses the way Dependabot installs them.
 
 ## Dependency safety
 
