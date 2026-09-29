@@ -19,7 +19,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import insert, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -33,7 +33,7 @@ from sqlalchemy.pool import NullPool
 from app import evaluation  # noqa: F401
 from app.api.search import get_embedder
 from app.core.config import Settings, get_settings
-from app.db.models import EMBEDDING_DIMENSIONS, Base, Chunk, Document
+from app.db.models import EMBEDDING_DIMENSIONS, LOCAL_USER, Base, Chunk, Document, User
 from app.db.session import get_session
 from app.llm.embeddings import EmbeddingError, Progress
 from app.main import app
@@ -140,8 +140,9 @@ def database_url() -> Iterator[str]:
 
 @pytest.fixture
 def engine(database_url: str) -> Iterator[AsyncEngine]:
-    """An engine on the emptied test database. Tests drive it with `asyncio.run`; without a
-    connection pool, every event loop opens its own connections."""
+    """An engine on the test database, emptied the way a fresh migration leaves it: nothing in
+    it but the built-in user. Tests drive it with `asyncio.run`; without a connection pool,
+    every event loop opens its own connections."""
     engine = create_async_engine(database_url, poolclass=NullPool)
     asyncio.run(_empty_tables(engine))
     yield engine
@@ -153,6 +154,8 @@ async def _empty_tables(engine: AsyncEngine) -> None:
     tables = ", ".join(table.name for table in Base.metadata.sorted_tables)
     async with engine.begin() as connection:
         await connection.execute(text(f"TRUNCATE {tables} RESTART IDENTITY"))
+        provider, subject = LOCAL_USER
+        await connection.execute(insert(User).values(provider=provider, subject=subject))
 
 
 @pytest.fixture

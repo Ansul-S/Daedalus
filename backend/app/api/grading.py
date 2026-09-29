@@ -11,6 +11,8 @@ decides the practice day the question comes back (`app.scheduling`). Only an att
 successful grade does this, so grading an answer again never counts it twice. What that grade
 earned (XP, the level it reached and any coins) comes with the attempt from then on.
 
+Attempts are their user's own: another user's attempt is not found, however it is asked for.
+
 Grading runs on cloud models first, so unlike writing questions it also works in production.
 The grading model is built once per process: its pacer has to remember the minute's requests
 across answers. It starts from what the day has already spent, and the day's allowance
@@ -30,6 +32,7 @@ from sqlalchemy.orm import selectinload
 from app.api.practice import EarnedOut, earned_out
 from app.api.ratings import RatingOut, grade_ratings
 from app.api.search import citation, source_link
+from app.api.users import UserDep
 from app.core.config import Settings, get_settings
 from app.db.models import Attempt, Chunk, Document, Grade, Question, Review
 from app.db.session import get_session
@@ -229,14 +232,17 @@ def _review_out(review: Review | None) -> ReviewOut | None:
     )
 
 
-async def _attempts_out(session: AsyncSession, attempts: list[Attempt]) -> list[AttemptOut]:
+async def _attempts_out(
+    session: AsyncSession, user_id: int, attempts: list[Attempt]
+) -> list[AttemptOut]:
+    """The user's attempts as they are shown."""
     grades = [grade for attempt in attempts for grade in attempt.grades]
     cited = await _cited(session, grades)
-    ratings = await grade_ratings(session, [grade.id for grade in grades])
+    ratings = await grade_ratings(session, user_id, [grade.id for grade in grades])
     # What an answer earned depends on every answer before it: the history is walked through.
     steps = {}
     if any(attempt.review for attempt in attempts):
-        steps = {step.answer.review_id: step for step in walk(*await load(session)).steps}
+        steps = {step.answer.review_id: step for step in walk(*await load(session, user_id)).steps}
     return [
         AttemptOut(
             id=attempt.id,
@@ -265,11 +271,12 @@ ATTEMPT_PARTS = (
 )
 
 
-async def _attempt(session: AsyncSession, attempt_id: int) -> Attempt:
+async def _attempt(session: AsyncSession, user_id: int, attempt_id: int) -> Attempt:
+    """One of the user's attempts; anyone else's is not found."""
     attempt = await session.scalar(
         select(Attempt)
         .options(*ATTEMPT_PARTS)
-        .where(Attempt.id == attempt_id)
+        .where(Attempt.id == attempt_id, Attempt.user_id == user_id)
         .execution_options(populate_existing=True)
     )
     if attempt is None:
@@ -277,11 +284,18 @@ async def _attempt(session: AsyncSession, attempt_id: int) -> Attempt:
     return attempt
 
 
+async def _attempt_out(session: AsyncSession, user_id: int, attempt_id: int) -> AttemptOut:
+    """One of the user's attempts as it is shown, read afresh."""
+    attempt = await _attempt(session, user_id, attempt_id)
+    return (await _attempts_out(session, user_id, [attempt]))[0]
+
+
 @router.post("/questions/{question_id}/attempts", status_code=status.HTTP_201_CREATED)
 async def answer_question(
     question_id: int,
     body: AnswerIn,
     session: SessionDep,
+    user_id: UserDep,
     grader: GraderDep,
     settings: SettingsDep,
 ) -> AttemptOut:
@@ -291,6 +305,7 @@ async def answer_question(
     if question is None or question.status != "accepted":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "question not found")
     attempt = Attempt(
+        user_id=user_id,
         question_id=question_id,
         answer=body.answer,
         seconds=body.seconds,
@@ -302,44 +317,49 @@ async def answer_question(
     grade = await grade_attempt(session, grader, attempt)
     await record_review(session, grade, settings.practice_zone)
     await session.commit()
-    return (await _attempts_out(session, [await _attempt(session, attempt.id)]))[0]
+    return await _attempt_out(session, user_id, attempt.id)
 
 
 @router.post("/attempts/{attempt_id}/grades", status_code=status.HTTP_201_CREATED)
 async def grade_again(
-    attempt_id: int, session: SessionDep, grader: GraderDep, settings: SettingsDep
+    attempt_id: int,
+    session: SessionDep,
+    user_id: UserDep,
+    grader: GraderDep,
+    settings: SettingsDep,
 ) -> AttemptOut:
     """Grade an attempt again, after a failed grade or with a changed grader. Every earlier
     grade is kept. The first successful grade reschedules the question; later ones don't."""
-    attempt = await _attempt(session, attempt_id)
+    attempt = await _attempt(session, user_id, attempt_id)
     grade = await grade_attempt(session, grader, attempt)
     await record_review(session, grade, settings.practice_zone)
     await session.commit()
-    return (await _attempts_out(session, [await _attempt(session, attempt_id)]))[0]
+    return await _attempt_out(session, user_id, attempt_id)
 
 
 @router.get("/attempts/{attempt_id}")
-async def get_attempt(attempt_id: int, session: SessionDep) -> AttemptOut:
-    """One attempt with every grade it was given."""
-    return (await _attempts_out(session, [await _attempt(session, attempt_id)]))[0]
+async def get_attempt(attempt_id: int, session: SessionDep, user_id: UserDep) -> AttemptOut:
+    """One of your attempts with every grade it was given."""
+    return await _attempt_out(session, user_id, attempt_id)
 
 
 @router.get("/questions/{question_id}/attempts")
 async def list_attempts(
     question_id: int,
     session: SessionDep,
+    user_id: UserDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[AttemptOut]:
-    """The answers given to a question, newest first."""
+    """Your answers to a question, newest first."""
     if await session.get(Question, question_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "question not found")
     attempts = await session.scalars(
         select(Attempt)
         .options(*ATTEMPT_PARTS)
-        .where(Attempt.question_id == question_id)
+        .where(Attempt.user_id == user_id, Attempt.question_id == question_id)
         .order_by(Attempt.created_at.desc(), Attempt.id.desc())
         .limit(limit)
         .offset(offset)
     )
-    return await _attempts_out(session, list(attempts))
+    return await _attempts_out(session, user_id, list(attempts))

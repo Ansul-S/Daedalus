@@ -12,6 +12,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.profiles import ModelProfile
 
 from app.api.grading import MAX_ANSWER_CHARS, get_grader
+from app.api.users import local_user
 from app.core.config import Settings
 from app.db.models import Attempt, Grade, Question, QuestionSource
 from app.main import app
@@ -285,7 +286,9 @@ def test_the_grader_is_built_once_from_what_the_day_has_spent(sessions, corpus) 
             question = await session.get_one(Question, question_id)
             question.generator_model = "gemini-3.5-flash"
             question.usage = {"requests": 1, "input_tokens": 1500, "output_tokens": 800}
-            attempt = Attempt(question_id=question_id, answer=ANSWER)
+            attempt = Attempt(
+                user_id=await local_user(session), question_id=question_id, answer=ANSWER
+            )
             session.add(attempt)
             await session.flush()
             for model, output in (("qwen/qwen3.8-27b", 600), ("gemini-3.5-flash", 700)):

@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import func, select, update
 from test_grading_api import ANSWER, add_question, grading, refusing, use_grader
 
+from app.api.users import local_user
 from app.db.models import Card, Question, Review, Topic
 from app.scheduling.schedule import practice_day
 
@@ -26,9 +27,11 @@ def reviews(sessions) -> int:
 
 
 def card_due(sessions, question_id: int):
+    """When the question is due in the built-in user's schedule."""
+
     async def due():
         async with sessions() as session:
-            card = await session.get(Card, question_id)
+            card = await session.get(Card, (await local_user(session), question_id))
             return card.due if card else None
 
     return asyncio.run(due())

@@ -173,7 +173,7 @@ export const buildTopicMap = <ThrowOnError extends boolean = false>(options?: Op
 /**
  * List Attempts
  *
- * The answers given to a question, newest first.
+ * Your answers to a question, newest first.
  */
 export const listAttempts = <ThrowOnError extends boolean = false>(options: Options<ListAttemptsData, ThrowOnError>): RequestResult<ListAttemptsResponses, ListAttemptsErrors, ThrowOnError> => (options.client ?? client).get<ListAttemptsResponses, ListAttemptsErrors, ThrowOnError>({ url: '/questions/{question_id}/attempts', ...options });
 
@@ -203,7 +203,7 @@ export const gradeAgain = <ThrowOnError extends boolean = false>(options: Option
 /**
  * Get Attempt
  *
- * One attempt with every grade it was given.
+ * One of your attempts with every grade it was given.
  */
 export const getAttempt = <ThrowOnError extends boolean = false>(options: Options<GetAttemptData, ThrowOnError>): RequestResult<GetAttemptResponses, GetAttemptErrors, ThrowOnError> => (options.client ?? client).get<GetAttemptResponses, GetAttemptErrors, ThrowOnError>({ url: '/attempts/{attempt_id}', ...options });
 
@@ -244,8 +244,8 @@ export const practiceStats = <ThrowOnError extends boolean = false>(options?: Op
  *
  * A rating never replaces an earlier one; the latest is the one that stands. Any question
  * can be rated, whatever its status: a rejected question rated good is a check that turned
- * down too much. A grade can be rated once it has graded the answer: a failed grade has no
- * verdict to judge.
+ * down too much. A grade of one of your answers can be rated once it has graded the answer:
+ * a failed grade has no verdict to judge.
  */
 export const addRating = <ThrowOnError extends boolean = false>(options: Options<AddRatingData, ThrowOnError>): RequestResult<AddRatingResponses, AddRatingErrors, ThrowOnError> => (options.client ?? client).post<AddRatingResponses, AddRatingErrors, ThrowOnError>({
     url: '/ratings',

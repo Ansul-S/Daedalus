@@ -1,7 +1,7 @@
 """What practice earns: XP, a level, the streak and the coins.
 
-Nothing here is stored. It is all worked out from the review history whenever it is asked
-for, so a rule can change without touching the data. Each answer is judged on what had
+Nothing here is stored. It is all worked out from a user's review history whenever it is
+asked for, so a rule can change without touching the data. Each answer is judged on what had
 happened by then, so later practice never changes what an earlier answer earned.
 
 - **XP.** An answer earns ten times its score and five for answering. That is half as much
@@ -407,9 +407,9 @@ def progress(ledger: Ledger, today: date) -> Progress:
     return Progress(ledger.total, level_for(ledger.total), streak, len(ledger.steps), coins)
 
 
-async def load(session: AsyncSession) -> tuple[list[Answer], list[LibraryQuestion]]:
-    """Every graded answer in the order it was recorded, and the questions in the library or
-    retired from it."""
+async def load(session: AsyncSession, user_id: int) -> tuple[list[Answer], list[LibraryQuestion]]:
+    """Every graded answer of the user's in the order it was recorded, and the questions in
+    the library or retired from it."""
     rows = await session.execute(
         select(
             Review.id.label("review_id"),
@@ -426,6 +426,7 @@ async def load(session: AsyncSession) -> tuple[list[Answer], list[LibraryQuestio
         )
         .join(Attempt, Attempt.id == Review.attempt_id)
         .join(Grade, Grade.id == Review.grade_id)
+        .where(Review.user_id == user_id)
         .order_by(Review.id)
     )
     # Only a successful grade is reviewed, and it always counts its contradicted claims.

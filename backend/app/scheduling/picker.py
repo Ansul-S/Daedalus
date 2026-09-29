@@ -1,4 +1,4 @@
-"""Which question to practise next.
+"""Which question a user practises next.
 
 1. **Due:** the question most overdue for review, when any is due that day or earlier.
 2. **New:** otherwise a question never practised, from the weakest topic: the lowest mastery,
@@ -36,9 +36,10 @@ class Pick:
     new_count: int
 
 
-async def next_question(session: AsyncSession, day: date) -> Pick | None:
-    """The question to practise next on `day`, or None when the library is empty."""
-    return choose(await standings(session, day), day)
+async def next_question(session: AsyncSession, user_id: int, day: date) -> Pick | None:
+    """The question for the user to practise next on `day`, or None when the library is
+    empty."""
+    return choose(await standings(session, user_id, day), day)
 
 
 def choose(questions: list[Standing], day: date) -> Pick | None:

@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import fsrs
 import pytest
 
+from app.api.users import local_user
 from app.db.models import Attempt, Card, Grade, Question, Review
 from app.scheduling.mastery import Standing, standings, topic_mastery
 from app.scheduling.picker import choose, next_question
@@ -219,11 +220,19 @@ async def add_question(sessions, status: str = "accepted", topic_id: int | None 
 
 
 async def answer(
-    sessions, question_id: int, score: float, on: date, *, contradicted: int = 0
+    sessions,
+    question_id: int,
+    score: float,
+    on: date,
+    *,
+    contradicted: int = 0,
+    user_id: int | None = None,
 ) -> Review | None:
-    """An answer given at noon on a practice day, graded, and recorded in the schedule."""
+    """An answer given at noon on a practice day, graded, and recorded in the schedule; by the
+    built-in user unless another is given."""
     async with sessions() as session, session.begin():
         attempt = Attempt(
+            user_id=user_id or await local_user(session),
             question_id=question_id,
             answer="Because large dot products flatten the gradients.",
             created_at=datetime.combine(on, time(12), tzinfo=UTC),
@@ -254,7 +263,7 @@ def test_the_library_stands_on_each_question_s_latest_answer(sessions) -> None:
         second = await answer(sessions, practised, 1.0, DAY + timedelta(days=1))
         await answer(sessions, retired, 1.0, DAY)
         async with sessions() as session:
-            found = await standings(session, DAY + timedelta(days=1))
+            found = await standings(session, await local_user(session), DAY + timedelta(days=1))
         return practised, new, first, second, found
 
     practised, new, first, second, found = asyncio.run(scenario())
@@ -277,7 +286,8 @@ def test_an_answer_counts_once_and_only_when_graded(sessions) -> None:
     async def scenario():
         question_id = await add_question(sessions)
         async with sessions() as session, session.begin():
-            attempt = Attempt(question_id=question_id, answer="Something.")
+            user_id = await local_user(session)
+            attempt = Attempt(user_id=user_id, question_id=question_id, answer="Something.")
             session.add(attempt)
             await session.flush()
             failed = Grade(
@@ -300,7 +310,7 @@ def test_an_answer_counts_once_and_only_when_graded(sessions) -> None:
             await session.flush()
             return [
                 await record_review(session, grade, UTC) for grade in (failed, *graded)
-            ], await session.get(Card, question_id)
+            ], await session.get(Card, (user_id, question_id))
 
     (after_failed, after_first, after_second), card = asyncio.run(scenario())
 
@@ -335,7 +345,7 @@ def test_a_retired_question_is_never_picked(sessions) -> None:
         await answer(sessions, retired, 0.0, DAY - timedelta(days=5))
         kept = await add_question(sessions)
         async with sessions() as session:
-            pick = await next_question(session, DAY)
+            pick = await next_question(session, await local_user(session), DAY)
         return kept, pick
 
     kept, pick = asyncio.run(scenario())

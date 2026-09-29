@@ -1,4 +1,4 @@
-"""How well each question and each topic is known on a given practice day.
+"""How well each question and each topic is known to a user on a given practice day.
 
 A question's mastery is its latest score times the chance of recalling it that day, so it
 fades while the question goes unpractised, the way the memory model says recall fades. A
@@ -42,10 +42,12 @@ class Standing:
         return (self.score or 0.0) * self.retrievability
 
 
-async def standings(session: AsyncSession, day: date) -> list[Standing]:
-    """Every question in the library, practised or not, as it stands on `day`."""
+async def standings(session: AsyncSession, user_id: int, day: date) -> list[Standing]:
+    """Every question in the library, practised by the user or not, as it stands for them on
+    `day`."""
     latest = (
         select(Review.question_id, Review.score)
+        .where(Review.user_id == user_id)
         .distinct(Review.question_id)
         .order_by(Review.question_id, Review.id.desc())
         .subquery()
@@ -59,7 +61,7 @@ async def standings(session: AsyncSession, day: date) -> list[Standing]:
             Card.state,
             Card.due,
         )
-        .outerjoin(Card, Card.question_id == Question.id)
+        .outerjoin(Card, (Card.user_id == user_id) & (Card.question_id == Question.id))
         .outerjoin(latest, latest.c.question_id == Question.id)
         .where(Question.status == "accepted")
         .order_by(Question.id)

@@ -97,20 +97,25 @@ def retrievability(state: dict[str, Any], day: date) -> float:
 
 
 async def record_review(session: AsyncSession, grade: Grade, zone: tzinfo) -> Review | None:
-    """Reschedule the question a grade is for. Only a successful grade reschedules, and only
-    the first one an attempt gets: grading an answer again doesn't make it count twice.
-    Returns the review, or None when there is none to make."""
+    """Reschedule the question a grade is for, in the schedule of the user who answered it.
+    Only a successful grade reschedules, and only the first one an attempt gets: grading an
+    answer again doesn't make it count twice. Returns the review, or None when there is none
+    to make."""
     if grade.status != "graded" or grade.score is None or grade.contradicted is None:
         return None
     if await session.scalar(select(Review.id).where(Review.attempt_id == grade.attempt_id)):
         return None
-    question_id, answered_at = (
+    user_id, question_id, answered_at = (
         await session.execute(
-            select(Attempt.question_id, Attempt.created_at).where(Attempt.id == grade.attempt_id)
+            select(Attempt.user_id, Attempt.question_id, Attempt.created_at).where(
+                Attempt.id == grade.attempt_id
+            )
         )
     ).one()
     stored = await session.scalar(
-        select(Card).where(Card.question_id == question_id).with_for_update()
+        select(Card)
+        .where(Card.user_id == user_id, Card.question_id == question_id)
+        .with_for_update()
     )
     card = fsrs.Card.from_dict(stored.state) if stored else fsrs.Card(card_id=question_id)
     # The answer counts for the day it was given. One graded late, after a newer answer was
@@ -122,10 +127,11 @@ async def record_review(session: AsyncSession, grade: Grade, zone: tzinfo) -> Re
     card = review(card, rating, day)
     due = card.due.date()
     if stored is None:
-        session.add(Card(question_id=question_id, state=card.to_dict(), due=due))
+        session.add(Card(user_id=user_id, question_id=question_id, state=card.to_dict(), due=due))
     else:
         stored.state, stored.due = card.to_dict(), due
     reviewed = Review(
+        user_id=user_id,
         question_id=question_id,
         attempt_id=grade.attempt_id,
         grade_id=grade.id,

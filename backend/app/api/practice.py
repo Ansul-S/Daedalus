@@ -7,6 +7,9 @@ which grades the answer and reschedules the question.
 
 What practice has earned (XP, a level, the streak and coins), the labyrinth on the dashboard
 and its charts are all worked out from the review history when they are asked for.
+
+All of it is the user's own (`app.api.users`): the schedule, the history and what it earned
+are theirs, and nobody else's answers count.
 """
 
 from datetime import UTC, date, datetime, timedelta
@@ -19,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.questions import QuestionOut, _question_out, _sources
 from app.api.ratings import question_ratings
+from app.api.users import UserDep
 from app.core.config import Settings, get_settings
 from app.db.models import Question, Review, Topic, source_updated
 from app.db.session import get_session
@@ -76,10 +80,12 @@ def plural(count: int, noun: str) -> str:
 
 
 @router.get("/practice/next")
-async def practice_next(session: SessionDep, settings: SettingsDep) -> PracticeOut:
+async def practice_next(
+    session: SessionDep, settings: SettingsDep, user_id: UserDep
+) -> PracticeOut:
     """The question to practise next, without its answer, and why it was picked."""
     today = practice_day(datetime.now(UTC), settings.practice_zone)
-    pick = await next_question(session, today)
+    pick = await next_question(session, user_id, today)
     if pick is None:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "no questions to practise yet; generate some first"
@@ -92,7 +98,7 @@ async def practice_next(session: SessionDep, settings: SettingsDep) -> PracticeO
         )
     ).one()
     sources = (await _sources(session, [question.id])).get(question.id, [])
-    rating = (await question_ratings(session, [question.id])).get(question.id)
+    rating = (await question_ratings(session, user_id, [question.id])).get(question.id)
     return PracticeOut(
         question=_question_out(question, topic, updated, sources, rating),
         reason=pick.reason,
@@ -226,10 +232,12 @@ def _progress_out(found: Progress) -> ProgressOut:
 
 
 @router.get("/practice/progress")
-async def practice_progress(session: SessionDep, settings: SettingsDep) -> ProgressOut:
+async def practice_progress(
+    session: SessionDep, settings: SettingsDep, user_id: UserDep
+) -> ProgressOut:
     """XP, level, streak and coins, worked out from every graded answer."""
     today = practice_day(datetime.now(UTC), settings.practice_zone)
-    return _progress_out(progress(walk(*await load(session)), today))
+    return _progress_out(progress(walk(*await load(session, user_id)), today))
 
 
 class RoomOut(BaseModel):
@@ -260,12 +268,12 @@ class MapOut(BaseModel):
 
 
 @router.get("/practice/map")
-async def practice_map(session: SessionDep, settings: SettingsDep) -> MapOut:
+async def practice_map(session: SessionDep, settings: SettingsDep, user_id: UserDep) -> MapOut:
     """The labyrinth on the dashboard: a room for each topic with questions in the library,
     how well it is known and what is due in it, the passages between the rooms, today's
     thread through them, and the Minotaur's room, the weakest."""
     today = practice_day(datetime.now(UTC), settings.practice_zone)
-    questions = await standings(session, today)
+    questions = await standings(session, user_id, today)
     rooms = labyrinth.topic_rooms(questions, today)
     maze = labyrinth.carve(len(rooms))
     if maze is None:
@@ -285,7 +293,9 @@ async def practice_map(session: SessionDep, settings: SettingsDep) -> MapOut:
     names = {topic_id: name for topic_id, name in topics.tuples()}
     topic_of = {question.question_id: question.topic_id for question in questions}
     answered = await session.scalars(
-        select(Review.question_id).where(Review.day == today).order_by(Review.id)
+        select(Review.question_id)
+        .where(Review.user_id == user_id, Review.day == today)
+        .order_by(Review.id)
     )
     visits = labyrinth.visited((topic_of.get(question_id) for question_id in answered), rooms)
     return MapOut(
@@ -340,12 +350,13 @@ class StatsOut(BaseModel):
 
 
 @router.get("/practice/stats")
-async def practice_stats(session: SessionDep, settings: SettingsDep) -> StatsOut:
+async def practice_stats(session: SessionDep, settings: SettingsDep, user_id: UserDep) -> StatsOut:
     """The dashboard's charts: the latest scores, the days practised, and what comes due."""
     today = practice_day(datetime.now(UTC), settings.practice_zone)
     latest = (
         await session.execute(
             select(Review.attempt_id, Review.question_id, Review.day, Review.score)
+            .where(Review.user_id == user_id)
             .order_by(Review.id.desc())
             .limit(SCORES_SHOWN)
         )
@@ -353,12 +364,12 @@ async def practice_stats(session: SessionDep, settings: SettingsDep) -> StatsOut
     first = today - timedelta(days=DAYS_SHOWN - 1)
     answered = await session.execute(
         select(Review.day, func.count())
-        .where(Review.day >= first, Review.day <= today)
+        .where(Review.user_id == user_id, Review.day >= first, Review.day <= today)
         .group_by(Review.day)
     )
     counts = {day: count for day, count in answered.tuples()}
     days = [first + timedelta(days=offset) for offset in range(DAYS_SHOWN)]
-    dues = [question.due for question in await standings(session, today) if question.due]
+    dues = [question.due for question in await standings(session, user_id, today) if question.due]
     ahead = [today + timedelta(days=offset) for offset in range(DAYS_AHEAD)]
     return StatsOut(
         today=today,

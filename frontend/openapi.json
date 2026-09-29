@@ -927,7 +927,7 @@
           "grading"
         ],
         "summary": "List Attempts",
-        "description": "The answers given to a question, newest first.",
+        "description": "Your answers to a question, newest first.",
         "operationId": "list_attempts",
         "parameters": [
           {
@@ -1040,7 +1040,7 @@
           "grading"
         ],
         "summary": "Get Attempt",
-        "description": "One attempt with every grade it was given.",
+        "description": "One of your attempts with every grade it was given.",
         "operationId": "get_attempt",
         "parameters": [
           {
@@ -1171,7 +1171,7 @@
           "ratings"
         ],
         "summary": "Add Rating",
-        "description": "Rate a question good or poor, or a grade fair or unfair, with an optional note on why.\n\nA rating never replaces an earlier one; the latest is the one that stands. Any question\ncan be rated, whatever its status: a rejected question rated good is a check that turned\ndown too much. A grade can be rated once it has graded the answer: a failed grade has no\nverdict to judge.",
+        "description": "Rate a question good or poor, or a grade fair or unfair, with an optional note on why.\n\nA rating never replaces an earlier one; the latest is the one that stands. Any question\ncan be rated, whatever its status: a rejected question rated good is a check that turned\ndown too much. A grade of one of your answers can be rated once it has graded the answer:\na failed grade has no verdict to judge.",
         "operationId": "add_rating",
         "requestBody": {
           "content": {

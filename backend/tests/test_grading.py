@@ -14,6 +14,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
+from app.api.users import local_user
 from app.db.models import Attempt, Grade, Question, QuestionSource
 from app.grading.grader import (
     CLOSE,
@@ -86,7 +87,7 @@ def a_grade(attempt_id: int, **overrides) -> Grade:
 
 async def add_attempt(sessions, question_id: int, answer: str = ANSWER) -> int:
     async with sessions() as session, session.begin():
-        attempt = Attempt(question_id=question_id, answer=answer)
+        attempt = Attempt(user_id=await local_user(session), question_id=question_id, answer=answer)
         session.add(attempt)
         await session.flush()
         return attempt.id

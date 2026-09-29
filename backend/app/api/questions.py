@@ -36,6 +36,7 @@ from app.api.ratings import (
     question_ratings,
 )
 from app.api.search import citation, get_embedder, source_link
+from app.api.users import MaybeUserDep
 from app.core.config import Settings, get_settings
 from app.db.models import (
     QUESTION_STATUSES,
@@ -224,8 +225,10 @@ def _filters(
     document_id: int | None,
     updated: bool | None,
     rating: RatingFilter | None,
+    user_id: int | None,
 ) -> list[ColumnElement[bool]]:
-    """The conditions behind a listing, shared by the page and its total."""
+    """The conditions behind a listing, shared by the page and its total. A rating is the
+    user's own."""
     conditions: list[ColumnElement[bool]] = []
     if status is not None:
         conditions.append(Question.status == status)
@@ -246,9 +249,9 @@ def _filters(
     if updated is not None:
         conditions.append(source_updated() if updated else ~source_updated())
     if rating == "unrated":
-        conditions.append(latest_rating().is_(None))
+        conditions.append(latest_rating(user_id).is_(None))
     elif rating is not None:
-        conditions.append(latest_rating() == RATING_VALUES[rating])
+        conditions.append(latest_rating(user_id) == RATING_VALUES[rating])
     return conditions
 
 
@@ -341,6 +344,7 @@ async def generate_questions(
 @router.get("/questions")
 async def list_questions(
     session: SessionDep,
+    user_id: MaybeUserDep,
     status: Annotated[Status | None, Query(description="Only questions in this state")] = None,
     topic_id: Annotated[int | None, Query(description="Only questions under this topic")] = None,
     style: Annotated[Style | None, Query(description="Only questions of this shape")] = None,
@@ -361,7 +365,9 @@ async def list_questions(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> QuestionsOut:
     """The questions in the library, newest first. Every filter is optional."""
-    conditions = _filters(status, topic_id, style, difficulty, document_id, updated, rating)
+    conditions = _filters(
+        status, topic_id, style, difficulty, document_id, updated, rating, user_id
+    )
     total = await session.scalar(select(func.count()).select_from(Question).where(*conditions))
     rows = await session.execute(
         select(Question, Topic.name, source_updated().label("updated"))
@@ -374,7 +380,7 @@ async def list_questions(
     found = rows.all()
     question_ids = [question.id for question, _, _ in found]
     sources = await _sources(session, question_ids)
-    ratings = await question_ratings(session, question_ids)
+    ratings = await question_ratings(session, user_id, question_ids)
     return QuestionsOut(
         total=total or 0,
         limit=limit,
@@ -389,14 +395,20 @@ async def list_questions(
 
 
 @router.get("/questions/{question_id}")
-async def get_question(question_id: int, session: SessionDep) -> QuestionDetailOut:
+async def get_question(
+    question_id: int, session: SessionDep, user_id: MaybeUserDep
+) -> QuestionDetailOut:
     """One question with its sources, key points and validation report."""
-    return await _detail(session, question_id)
+    return await _detail(session, user_id, question_id)
 
 
 @router.patch("/questions/{question_id}")
 async def edit_question(
-    question_id: int, body: QuestionEditIn, session: SessionDep, embedder: EmbedderDep
+    question_id: int,
+    body: QuestionEditIn,
+    session: SessionDep,
+    embedder: EmbedderDep,
+    user_id: MaybeUserDep,
 ) -> QuestionDetailOut:
     """Correct a question, or retire it from the library and put it back.
 
@@ -465,7 +477,7 @@ async def edit_question(
             "edits": [*question.validation.get("edits", []), edit]
         }
     await session.commit()
-    return await _detail(session, question_id)
+    return await _detail(session, user_id, question_id)
 
 
 async def _ground(
@@ -510,7 +522,10 @@ async def _embed(embedder: Embedder | None, text: str) -> list[float] | None:
     return vector
 
 
-async def _detail(session: AsyncSession, question_id: int) -> QuestionDetailOut:
+async def _detail(
+    session: AsyncSession, user_id: int | None, question_id: int
+) -> QuestionDetailOut:
+    """A question as it is shown, with the user's latest rating of it."""
     row = (
         await session.execute(
             select(Question, Topic.name, source_updated().label("updated"))
@@ -523,7 +538,7 @@ async def _detail(session: AsyncSession, question_id: int) -> QuestionDetailOut:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "question not found")
     question, topic, updated = row
     sources = (await _sources(session, [question_id])).get(question_id, [])
-    rating = (await question_ratings(session, [question_id])).get(question_id)
+    rating = (await question_ratings(session, user_id, [question_id])).get(question_id)
     return QuestionDetailOut(
         **_question_out(question, topic, updated, sources, rating).model_dump(),
         reference_answer=question.reference_answer,

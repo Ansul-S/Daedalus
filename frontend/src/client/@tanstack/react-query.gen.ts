@@ -463,7 +463,7 @@ export const listAttemptsQueryKey = (options: Options<ListAttemptsData>) => crea
 /**
  * List Attempts
  *
- * The answers given to a question, newest first.
+ * Your answers to a question, newest first.
  */
 export const listAttemptsOptions = (options: Options<ListAttemptsData>) => queryOptions<ListAttemptsResponse, ListAttemptsError, ListAttemptsResponse, ReturnType<typeof listAttemptsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -483,7 +483,7 @@ export const listAttemptsInfiniteQueryKey = (options: Options<ListAttemptsData>)
 /**
  * List Attempts
  *
- * The answers given to a question, newest first.
+ * Your answers to a question, newest first.
  */
 export const listAttemptsInfiniteOptions = (options: Options<ListAttemptsData>) => {
     const opts = infiniteQueryOptions<ListAttemptsResponse, ListAttemptsError, InfiniteData<ListAttemptsResponse>, QueryKey<Options<ListAttemptsData>>, number | Pick<QueryKey<Options<ListAttemptsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
@@ -555,7 +555,7 @@ export const getAttemptQueryKey = (options: Options<GetAttemptData>) => createQu
 /**
  * Get Attempt
  *
- * One attempt with every grade it was given.
+ * One of your attempts with every grade it was given.
  */
 export const getAttemptOptions = (options: Options<GetAttemptData>) => queryOptions<GetAttemptResponse, GetAttemptError, GetAttemptResponse, ReturnType<typeof getAttemptQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -659,8 +659,8 @@ export const practiceStatsOptions = (options?: Options<PracticeStatsData>) => qu
  *
  * A rating never replaces an earlier one; the latest is the one that stands. Any question
  * can be rated, whatever its status: a rejected question rated good is a check that turned
- * down too much. A grade can be rated once it has graded the answer: a failed grade has no
- * verdict to judge.
+ * down too much. A grade of one of your answers can be rated once it has graded the answer:
+ * a failed grade has no verdict to judge.
  */
 export const addRatingMutation = (options?: Partial<Options<AddRatingData>>): UseMutationOptions<AddRatingResponse, AddRatingError, Options<AddRatingData>> => {
     const mutationOptions: UseMutationOptions<AddRatingResponse, AddRatingError, Options<AddRatingData>> = {

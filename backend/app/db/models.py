@@ -1,7 +1,11 @@
 """Database tables: source documents, their searchable chunks and ingestion jobs, the topic
-map built over the chunks, the generated questions, the answers given to them with their
-grades, the review schedule those grades drive, and your own ratings of the questions and
-grades."""
+map built over the chunks, the generated questions, the users who practise on them, the
+answers each user gives with their grades, the review schedule those grades drive, and each
+user's own ratings of the questions and grades.
+
+The library (documents, chunks, topics and questions) is shared. Practice belongs to a user:
+attempts, the review schedule and ratings carry a `user_id`, and grades follow their attempt.
+"""
 
 from datetime import date, datetime
 from typing import Any
@@ -34,6 +38,9 @@ JOB_STATUSES = ("queued", "running", "done", "failed")
 JOB_KINDS = ("ingest", "generate", "topics")
 TASK_STATUSES = ("queued", "running", "done", "failed")
 CONTENT_TYPES = ("text", "code", "formula", "table")
+# The built-in user's provider and subject. Locally nobody signs in, and this user owns every
+# answer; the migration that brought users in gave it the practice that came before.
+LOCAL_USER = ("local", "local")
 QUESTION_STATUSES = ("accepted", "rejected", "retired")
 GRADE_STATUSES = ("graded", "failed")
 # The shapes a question can take, from the design notes: an intuition check, a why or how
@@ -372,12 +379,31 @@ class QuestionTask(Base):
     )
 
 
+class User(Base):
+    """Someone who practises: the built-in user locally, or a visitor who signed in."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Who vouches for the user, and the user's id there: `LOCAL_USER` for the built-in user,
+    # or the issuer and subject of a signed-in user's token
+    provider: Mapped[str] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(Text)
+    # The name to show, when the provider gives one
+    name: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("provider", "subject"),)
+
+
 class Attempt(Base):
     """One answer given to a question, kept whatever became of its grading."""
 
     __tablename__ = "attempts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Whose answer it is. Removing a user removes their practice.
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     question_id: Mapped[int] = mapped_column(
         ForeignKey("questions.id", ondelete="CASCADE"), index=True
     )
@@ -458,27 +484,32 @@ class Grade(Base):
 
 
 class Card(Base):
-    """A practised question's place in the review schedule: the memory model's state after
-    its last review, and the practice day the question is due again.
+    """A practised question's place in one user's review schedule: the memory model's state
+    after their last review of it, and the practice day it is due again.
 
-    Only a question that has been answered and graded has a card; the others are new. A card
-    outlives its question's retirement, so a question put back in the library picks up where
-    it left off.
+    Only a question the user has answered and had graded has a card; the others are new to
+    them. A card outlives its question's retirement, so a question put back in the library
+    picks up where it left off.
     """
 
     __tablename__ = "cards"
 
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
     question_id: Mapped[int] = mapped_column(
-        ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True, index=True
     )
     # The FSRS card as py-fsrs writes it out: stability, difficulty, state and dates
     state: Mapped[dict[str, Any]] = mapped_column(JSONB)
     # The practice day the question is due again. It is in `state` too, but only a column
     # can be indexed.
-    due: Mapped[date] = mapped_column(Date, index=True)
+    due: Mapped[date] = mapped_column(Date)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    __table_args__ = (Index("ix_cards_user_id_due", "user_id", "due"),)
 
 
 class Review(Base):
@@ -489,6 +520,9 @@ class Review(Base):
     __tablename__ = "reviews"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # The user who answered: the attempt's, kept here too so that a user's history is read
+    # without going through their attempts
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     question_id: Mapped[int] = mapped_column(
         ForeignKey("questions.id", ondelete="CASCADE"), index=True
     )
@@ -516,18 +550,19 @@ class Review(Base):
 
 
 class Rating(Base):
-    """Your own judgement of a question or of a grade: +1 for a good question or a fair grade,
-    -1 for a poor question or an unfair grade, with an optional note on why.
+    """A user's own judgement of a question or of a grade: +1 for a good question or a fair
+    grade, -1 for a poor question or an unfair grade, with an optional note on why.
 
     Ratings are kept as evaluation data, on the questions the generator wrote and on the grader
-    in real use. Changing your mind adds a rating rather than replacing one, and the latest
-    rating of a question or grade is the one that stands. It is not the FSRS rating a review
-    records, which a grade earns for the schedule.
+    in real use. Changing your mind adds a rating rather than replacing one, and your latest
+    rating of a question or grade is the one that stands for you. It is not the FSRS rating a
+    review records, which a grade earns for the schedule.
     """
 
     __tablename__ = "ratings"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     # What is rated: a question or a grade, never both
     question_id: Mapped[int | None] = mapped_column(
         ForeignKey("questions.id", ondelete="CASCADE"), index=True

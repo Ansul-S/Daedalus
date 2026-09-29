@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from test_scheduling import add_question
 
+from app.api.users import local_user
 from app.db.models import Attempt, Grade
 from app.scheduling.progress import (
     Answer,
@@ -334,7 +335,12 @@ def test_the_streak_counts_practice_days_that_start_at_four_in_the_morning(sessi
         for hour, minute in [(3, 30), (4, 30)]:
             async with sessions() as session, session.begin():
                 given = datetime(2026, 9, 25, hour, minute, tzinfo=kolkata)
-                attempt = Attempt(question_id=question_id, answer="…", created_at=given)
+                attempt = Attempt(
+                    user_id=await local_user(session),
+                    question_id=question_id,
+                    answer="…",
+                    created_at=given,
+                )
                 session.add(attempt)
                 await session.flush()
                 grade = Grade(
@@ -351,7 +357,7 @@ def test_the_streak_counts_practice_days_that_start_at_four_in_the_morning(sessi
                 await session.flush()
                 await record_review(session, grade, kolkata)
         async with sessions() as session:
-            answers, questions = await load(session)
+            answers, questions = await load(session, await local_user(session))
         steps = walk(answers, questions).steps
         assert [step.xp.streak for step in steps] == [1, 2]
         return [step.answer.day for step in steps]
