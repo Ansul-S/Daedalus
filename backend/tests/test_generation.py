@@ -179,7 +179,7 @@ def test_a_question_whose_quotes_hold_up_is_written_in_one_call() -> None:
     assert generated.question.question.startswith("Why are the dot products")
     assert generated.usage["requests"] == 1
     assert generated.model == "function:respond:"
-    assert generated.prompt_version == "generate-v4"
+    assert generated.prompt_version == "generate-v5"
     assert generated.compound is None
 
 
@@ -298,3 +298,27 @@ def test_a_question_that_still_asks_two_things_is_returned_as_it_is() -> None:
 
     assert generated.attempts == 2
     assert generated.compound == 'it joins a second question on with "and what"'
+
+
+def test_the_writer_is_shown_what_was_already_asked_from_its_sources() -> None:
+    asked = ["Why are the dot products scaled before the softmax?", "What does the\nscale undo?"]
+
+    plain = request(SOURCES, "why_how")
+    steered = request(SOURCES, "why_how", asked)
+
+    assert "Already asked" not in plain
+    assert steered.startswith(plain)
+    assert steered.endswith(
+        "Already asked from these sources, so ask about something else:\n"
+        "- Why are the dot products scaled before the softmax?\n"
+        "- What does the scale undo?\n"
+    )
+
+
+def test_what_was_already_asked_goes_to_the_model() -> None:
+    seen: list[list[ModelMessage]] = []
+    asked = ["Why is the softmax input scaled?"]
+
+    asyncio.run(generate_question(writer([GOOD_QUOTE], seen), SOURCES, "why_how", asked=asked))
+
+    assert "- Why is the softmax input scaled?" in str(seen[0][-1].parts[-1].content)

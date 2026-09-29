@@ -10,12 +10,23 @@ import pytest
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.profiles import ModelProfile
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 
-from app.db.models import Chunk, ChunkTags, ChunkTopic, Job, Question, QuestionTask, Topic
+from app.db.models import (
+    Chunk,
+    ChunkTags,
+    ChunkTopic,
+    Job,
+    Question,
+    QuestionSource,
+    QuestionTask,
+    Topic,
+)
 from app.llm.pacing import QuotaExhausted
+from app.questions import batch
 from app.questions.batch import (
     TaskPlan,
+    already_asked,
     candidates,
     failure_passages,
     is_about_failure,
@@ -483,3 +494,58 @@ def test_a_task_that_fails_is_recorded_and_the_rest_carry_on(sessions, embedder,
     assert [task.status for task in tasks] == ["failed", "done", "done"]
     assert tasks[0].error.startswith("RuntimeError: the provider fell over")
     assert job.status == "done"
+
+
+def test_the_writer_is_shown_the_questions_already_accepted_near_its_passages(
+    sessions, embedder, corpus, library, monkeypatch
+) -> None:
+    """Asked from the passage next door, the model asks the same question again: each task is
+    shown what was accepted from the same documents or under the same topic."""
+    prompts: list[str] = []
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        prompts.append(str(messages[-1].parts[-1].content))
+        return a_question(messages)
+
+    writer = FunctionModel(respond, profile=ModelProfile(supports_json_schema_output=True))
+
+    async def scenario():
+        async with sessions() as session:
+            job, _ = await start_run(session, 2)
+            await session.commit()
+        await go(sessions, embedder, job.id, writer=writer)
+        async with sessions() as session:
+            first, second = await session.scalars(select(Question).order_by(Question.id))
+            sources = await session.execute(
+                select(QuestionSource.question_id, Chunk.id)
+                .join(Chunk, Chunk.id == QuestionSource.chunk_id)
+                .order_by(QuestionSource.question_id)
+            )
+            used = [chunk for _, chunk in sources.tuples()]
+            nearby = await already_asked(session, [corpus.softmax])
+            elsewhere = await already_asked(session, [corpus.retriever])
+            # Out of the topic map, the paper's other passage is still next to its questions.
+            await session.execute(delete(ChunkTopic).where(ChunkTopic.chunk_id == corpus.softmax))
+            same_document = await already_asked(session, [corpus.softmax])
+            # Only so many are shown, the newest
+            monkeypatch.setattr(batch, "ASKED_SHOWN", 1)
+            capped = await already_asked(session, [corpus.vanishing])
+            monkeypatch.undo()
+            first.status = "rejected"
+            await session.flush()
+            after = await already_asked(session, [corpus.vanishing])
+        return first.text, second.text, used, nearby, elsewhere, same_document, capped, after
+
+    first, second, used, nearby, elsewhere, same_document, capped, after = asyncio.run(scenario())
+
+    # One question from the paper, one from the lecture notes, both under "attention"
+    assert used == [corpus.scaling, corpus.vanishing]
+    assert "Already asked" not in prompts[0]
+    assert f"- {first}" in prompts[1]
+    # Newest first; the notebook shares neither a document nor a topic with them.
+    assert nearby == [second, first]
+    assert elsewhere == []
+    assert same_document == [first]
+    assert capped == [second]
+    # Only what the library kept counts as asked.
+    assert after == [second]

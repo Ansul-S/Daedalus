@@ -109,6 +109,11 @@ def test_grading_again_counts_like_any_grade(client, sessions, corpus, settings)
     assert len(client.get(f"/attempts/{attempt['id']}").json()["grades"]) == 2
 
 
+async def oldest_slot(sessions) -> datetime:
+    async with sessions() as session:
+        return await session.scalar(select(func.min(GradeRequest.created_at)))
+
+
 def test_everyone_together_has_so_many_over_a_day(client, sessions, corpus, settings) -> None:
     limited(settings, per_user=5, in_all=2)
     question_id = asyncio.run(add_question(sessions, corpus.scaling))
@@ -123,10 +128,10 @@ def test_everyone_together_has_so_many_over_a_day(client, sessions, corpus, sett
     assert (first.status_code, second.status_code, third.status_code) == (201, 201, 429)
     limit = third.json()["limit"]
     assert (limit["scope"], limit["allowed"], limit["used"], limit["left"]) == ("in_all", 2, 2, 0)
-    # The next grade is free once the first leaves the last 24 hours.
-    made = datetime.fromisoformat(first.json()["grades"][0]["created_at"])
-    again = datetime.fromisoformat(limit["again_at"])
-    assert abs((again - made - timedelta(days=1)).total_seconds()) < 5
+    # The next grade is free once the first leaves the last 24 hours: counted by the API's own
+    # clock, which the slot was taken by, not the database server's.
+    first_slot = asyncio.run(oldest_slot(sessions))
+    assert datetime.fromisoformat(limit["again_at"]) == first_slot + timedelta(days=1)
     assert third.json()["detail"].startswith("All 2 grades the last 24 hours allow have been used")
     # Their own day is untouched: the others' grades were the others'.
     assert client.get("/practice/allowance").json()["per_user"]["used"] == 0

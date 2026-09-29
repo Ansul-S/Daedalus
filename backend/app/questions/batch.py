@@ -8,7 +8,9 @@ Chunks are picked a source and a topic at a time, so twenty questions do not all
 one corner of the library, and the style rotates so they are not all "why does this work".
 A style only goes to a passage it can be asked of: a comparison to one with a second passage
 to hand, failure modes to one about something going wrong. A chunk that an accepted question
-already covers is left out, which makes a second run break new ground.
+already covers is left out, which makes a second run break new ground, and the writer is shown
+what has already been asked from the same sources and topic, so that it doesn't ask it again
+from the passage next door.
 """
 
 import logging
@@ -20,7 +22,7 @@ from datetime import timedelta
 from typing import Any
 
 from pydantic_ai.models import Model
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import Chunk, ChunkTags, ChunkTopic, Document, Job, Question, QuestionSource
@@ -50,6 +52,9 @@ PAIRED = {"compare", "connection"}
 # passages FAILURE does not match, three of four were turned away as unanswerable.
 ABOUT_FAILURE = {"failure_modes"}
 FALLBACK_STYLE = "why_how"
+# Accepted questions shown to the writer as already asked, newest first: a document of the demo
+# library ends with about six, at some 25 tokens each.
+ASKED_SHOWN = 12
 # Matched against the tagger's summary of what a chunk explains and the tags it gave it. Seven
 # chunks of the library match and every one is about a failure; the same words in the text
 # itself also match a notebook that uses "What are the limitations mentioned?" as sample input.
@@ -292,6 +297,29 @@ def out_of_budget(exc: BaseException, seen: set[int] | None = None) -> bool:
     return any(out_of_budget(cause, seen) for cause in (exc.__cause__, exc.__context__) if cause)
 
 
+async def already_asked(session: AsyncSession, chunk_ids: list[int]) -> list[str]:
+    """Accepted questions written from the same documents as these chunks, or filed under the
+    topic a question from them would be: the ones a new question could repeat."""
+    documents = select(Chunk.document_id).where(Chunk.id.in_(chunk_ids))
+    from_documents = (
+        select(QuestionSource.question_id)
+        .join(Chunk, Chunk.id == QuestionSource.chunk_id)
+        .where(Chunk.document_id.in_(documents))
+    )
+    near = [Question.id.in_(from_documents)]
+    topic_id = await topic_for(session, chunk_ids)
+    if topic_id is not None:
+        near.append(Question.topic_id == topic_id)
+    return list(
+        await session.scalars(
+            select(Question.text)
+            .where(Question.status == "accepted", or_(*near))
+            .order_by(Question.id.desc())
+            .limit(ASKED_SHOWN)
+        )
+    )
+
+
 async def run_task(
     sessions: async_sessionmaker[AsyncSession],
     task: Task,
@@ -304,13 +332,14 @@ async def run_task(
     """Write one question and file it. Returns how it ended and what it cost."""
     async with sessions() as session:
         sources = await sources_for(session, task.chunk_ids)
+        asked = await already_asked(session, task.chunk_ids)
     if len(sources) != len(task.chunk_ids):
         raise LookupError(f"chunks {task.chunk_ids} are no longer all there")
 
     with traced(
         "generate", version=PROMPT_VERSION, job=task.job_id, task=task.id, style=task.style
     ):
-        generated = await generate_question(model, sources, task.style)
+        generated = await generate_question(model, sources, task.style, asked=asked)
         async with sessions() as session, session.begin():
             checked = await validate(
                 session, generated, sources, model=checker, embedder=embedder, similarity=similarity

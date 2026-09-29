@@ -12,12 +12,17 @@ question, the model still joined a second on to 16 of the 25 questions Phase 2 a
 ("…, and how does it decide which answer spans are better?"), and most of the questions turned
 down as duplicates repeated one half of such a pair.
 
+The model is also shown the questions already accepted from the same sources, to ask something
+else. Without them, a second batch over the demo library asked again what the first had just
+asked from the neighbouring passage: ten of its nineteen questions were turned down as repeats.
+
 Structured output goes through a strict JSON schema. The same trial had Groq's own validator
 reject a tool call once, while every schema-constrained request came back valid.
 """
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import count
 from typing import Literal
@@ -34,7 +39,7 @@ from app.questions.grounding import QuoteCheck, check_quote
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "generate-v4"
+PROMPT_VERSION = "generate-v5"
 # Enough for a question with its answer and reasoning; a runaway answer would otherwise eat
 # a whole minute of the token budget.
 MAX_TOKENS = 3000
@@ -98,7 +103,11 @@ REQUEST = """\
 Write one question in this style: {brief}.
 
 Sources:
-{sources}
+{sources}{asked}"""
+
+ASKED = """
+Already asked from these sources, so ask about something else:
+{questions}
 """
 
 SOURCE = """\
@@ -212,12 +221,17 @@ def question_agent(model: Model) -> Agent[None, GeneratedQuestion]:
     )
 
 
-def request(sources: list[Source], style: str) -> str:
+def request(sources: list[Source], style: str, asked: Sequence[str] = ()) -> str:
     passages = "\n".join(
         SOURCE.format(chunk_id=source.chunk_id, citation=source.citation, text=source.text)
         for source in sources
     )
-    return REQUEST.format(brief=STYLE_BRIEFS[style], sources=passages)
+    listed = "\n".join(f"- {' '.join(question.split())}" for question in asked)
+    return REQUEST.format(
+        brief=STYLE_BRIEFS[style],
+        sources=passages,
+        asked=ASKED.format(questions=listed) if asked else "",
+    )
 
 
 def compound(question: str) -> str | None:
@@ -261,16 +275,22 @@ def add_usage(total: dict[str, int], result: AgentRunResult[GeneratedQuestion]) 
 
 
 async def generate_question(
-    model: Model, sources: list[Source], style: str, *, repairs: int = 1
+    model: Model,
+    sources: list[Source],
+    style: str,
+    *,
+    repairs: int = 1,
+    asked: Sequence[str] = (),
 ) -> Generated:
     """Write one question, repairing quotes that are not in the sources and a question that
-    asks two things, up to `repairs` times.
+    asks two things, up to `repairs` times. `asked` are questions already accepted from the
+    same sources, for the model to steer clear of.
 
     The result is returned whether or not the repairs came good: the caller records why a
     question was turned down as readily as why it was kept.
     """
     agent = question_agent(model)
-    prompt = request(sources, style)
+    prompt = request(sources, style, asked)
     history = None
     usage: dict[str, int] = {}
     for attempt in count(1):
