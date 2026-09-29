@@ -684,13 +684,15 @@ Measured on the same Mac and library: 124 passages from four documents; 60 gener
 
   - **Broken scoring fails it.** With partial worth 1.0, the score gap falls to 67 of 75 (89%) and an injection attempt scores above its hand score. Contradictions that cost nothing don't show on the 75, since the answers with a contradiction mostly cover nothing anyway; the stand-ins catch both breakages.
   - **The stand-ins replayed:** ρ 0.925 and κ 0.906 (reported, not gated), and every other check on every answer.
-  - **The stand-ins graded live,** once, by Qwen 3.8 on Groq, for about 18K tokens: 35 of 36 labels as by hand (κ 0.954), but ρ 0.872. The vague partial answer got the hand's labels and two contradictions the hand did not count, so it scored 0.00 against 0.30. Graded as by hand, it would have made ρ 0.982. This run led to the 30-answer rule, under which it passes: 12 of 12 graded, score gap 11 of 12, contradictions 3 of 3, injections 2 of 2.
+  - **The stand-ins graded live** by Qwen 3.8 on Groq, first locally, then in CI:
+    - 35 of 36 labels came out as by hand (κ 0.954), but ρ was 0.872. The vague partial answer got the hand's labels and two contradictions the hand did not count, so it scored 0.00 against 0.30. Graded as by hand, it would have made ρ 0.982. This run led to the 30-answer rule, under which it passes: 12 of 12 graded, score gap 11 of 12, contradictions 3 of 3, injections 2 of 2.
+    - The "Grader, live" workflow, a day later, matched the local run: the same ρ, κ and gates, the same label off (the third key point of a confidently wrong answer, covered by hand and partial by the grader) and the same answer outside the score gap. It spent 15,679 tokens on 12 grades and took 11 min 15 s, paced at one grade a minute by Qwen's 1,000 output tokens a minute; one 429 was waited out.
 - **CI:** a push is checked in about 1 min 45 s. The jobs run side by side: the frontend in 43 s, the backend in 1 min 23 s (its tests 46 s, the stand-in suite 4 s) and the end-to-end test in 1 min 42 s (its walk 39 s). Installing the backend without torch takes 5 s from uv's cache. A branch with one failing test turned red at the tests step, with 603 others passing and lint clean.
 - **Tracing,** checked on Langfuse Cloud:
   - One question written made one trace: two writer runs (gpt-oss-120b, 1,623 and 2,450 tokens with its reasoning), the checker (`qwen3.5:4b`, 755) and the duplicate check's embedding (170).
   - One practice answer made one grade trace from the API: Qwen 3.8, 1,063 tokens in and 480 out, in 1.43 s, the same as the grade row.
   - Read back through Langfuse's API, the traces held none of 61 snippets taken from 13 texts: the new question with its reference answer, key points and passages; the practice answer and its question; `make check`'s test prompt; and the writer's, checker's and grader's instructions.
-- **Tokens:** Phase 5 spent about 24K Groq tokens, 18K on the live run of the stand-ins and 5.7K on the tracing check. Everything else ran on saved grades or local models.
+- **Tokens:** Phase 5 spent about 40K Groq tokens: about 18K on the local live run of the stand-ins (estimated, before the report counted tokens), 15.7K on the run in CI and 5.7K on the tracing check. Everything else ran on saved grades or local models.
 - **Tests:** 614 fast tests in about 37 s, locally and in CI.
 
 ## Roadmap
@@ -855,7 +857,7 @@ Daedalus/
 | 2 | 20 generated questions; at least 90% pass validation; 10 reviewed by hand. **Not met on the pass rate**: 35%, 45% and 45% over three runs of 20; see below. |
 | 3 | Grader agreement with hand grades reaches Spearman ρ ≥ 0.7 before scores are trusted. **Passed**: ρ 0.95 and Cohen's κ 0.82 on 75 hand-graded answers (ρ 0.96 before two flawed questions were corrected in Phase 4); see below. |
 | 4 | A Playwright test covers upload → generate → practice → cited feedback → dashboard update. **Passed**: `make e2e` walks it in a browser on stand-in models, in about 25 s; see below. |
-| 5 | Retrieval report produced; DeepEval suite runs in CI (LLM-dependent tests on demand, to save free quota). **Passed**: `make eval-retrieval` reports on three question sets, CI runs the grader's suite on stand-in answers at every push, and the live grade is a workflow started by hand; see below. |
+| 5 | Retrieval report produced; DeepEval suite runs in CI (LLM-dependent tests on demand, to save free quota). **Passed**: `make eval-retrieval` reports on three question sets, CI runs the grader's suite on stand-in answers at every push, and the live grade, a workflow started by hand, passed in CI too; see below. |
 | 6 | The deployed app works after waking from sleep, and daily limits are enforced. |
 
 The landing page quotes row 3's figures, read from this table when the frontend is built: a
@@ -1145,9 +1147,9 @@ The check asked for two things:
      grader outputs through the real grading code, and writes the report into the job summary.
    - **The 75 calibration answers** pass locally at ρ 0.954 and κ 0.817, with every other gate
      met (see [measurements](#phase-5-measurements)). They stay out of the public repository.
-   - **Live:** the stand-ins were graded by the real grader once, locally, for about 18K tokens,
-     and pass. The workflow that does the same in CI has not run: it needs a `GROQ_API_KEY`
-     repository secret, which is not set.
+   - **Live:** the stand-ins were graded afresh by the real grader, locally and then by the
+     "Grader, live" workflow in CI, with a `GROQ_API_KEY` repository secret. Both runs passed,
+     with the same ρ, κ and gates. The CI run took 11 minutes and 15.7K tokens.
 
 - **What it proves:** search is measured on the questions the app asks, not only on the ones
   that chose its settings. The code between the grader's output and the score can't change

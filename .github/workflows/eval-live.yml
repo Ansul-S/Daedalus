@@ -1,4 +1,4 @@
-# The grader's stand-in suite graded by the real grader, by hand only: about 20K tokens of the
+# The grader's stand-in suite graded by the real grader, by hand only: about 16K tokens of the
 # free Groq allowance per run. It needs a GROQ_API_KEY repository secret, and says so without
 # one. The calibration answers are personal practice data and never leave the machine.
 name: Grader, live

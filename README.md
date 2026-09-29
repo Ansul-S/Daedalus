@@ -259,7 +259,7 @@ make eval-grader SET=stand-ins LIVE=1   # the stand-ins, graded afresh by the re
   repository, with their hand grades and the output the grader would send back for each.
   Replayed through the same code as a live grade, they check everything between the model and
   the score without anyone's practice data, and `make test` runs them. Live, the real grader
-  grades them afresh (about 20K tokens, which the report counts) and nothing is saved.
+  grades them afresh (about 16K tokens, which the report counts) and nothing is saved.
 - **The report** is printed, and saved to `data/reports/grader-<date>.md` for the calibration
   answers.
 
@@ -497,7 +497,7 @@ about two minutes, with no secrets and nothing sent to a model provider:
   Playwright's trace.
 
 **Grader, live** runs only when started by hand from the Actions tab. It grades the stand-ins
-with the real grader (about 20K Groq tokens) and needs a `GROQ_API_KEY` repository secret.
+with the real grader (about 16K Groq tokens, 11 minutes) and needs a `GROQ_API_KEY` repository secret.
 Without one, it says so. Dependabot proposes updates to `backend/uv.lock` and to the actions
 weekly. The frontend's packages are updated by hand (`pnpm update`), since pnpm's 7-day rule
 refuses the way Dependabot installs them.
