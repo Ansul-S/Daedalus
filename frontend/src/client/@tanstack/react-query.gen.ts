@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { addArxivPaper, addRating, answerQuestion, buildTopicMap, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listJobs, listQuestions, listTopics, type Options, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument, workerStatus } from '../sdk.gen';
-import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
+import { addArxivPaper, addRating, answerQuestion, buildTopicMap, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listJobs, listQuestions, listTopics, type Options, practiceAllowance, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument, workerStatus } from '../sdk.gen';
+import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeAllowanceData, PracticeAllowanceResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -515,6 +515,7 @@ export const listAttemptsInfiniteOptions = (options: Options<ListAttemptsData>) 
  *
  * Answer a question, have the answer graded, and reschedule the question. Only questions
  * in the library can be answered: one that was rejected or retired is not there to practise.
+ * Past a daily limit, nothing is written down and the answer is refused (429).
  */
 export const answerQuestionMutation = (options?: Partial<Options<AnswerQuestionData>>): UseMutationOptions<AnswerQuestionResponse, AnswerQuestionError, Options<AnswerQuestionData>> => {
     const mutationOptions: UseMutationOptions<AnswerQuestionResponse, AnswerQuestionError, Options<AnswerQuestionData>> = {
@@ -535,6 +536,7 @@ export const answerQuestionMutation = (options?: Partial<Options<AnswerQuestionD
  *
  * Grade an attempt again, after a failed grade or with a changed grader. Every earlier
  * grade is kept. The first successful grade reschedules the question; later ones don't.
+ * It counts against the daily limits like any other grade.
  */
 export const gradeAgainMutation = (options?: Partial<Options<GradeAgainData>>): UseMutationOptions<GradeAgainResponse, GradeAgainError, Options<GradeAgainData>> => {
     const mutationOptions: UseMutationOptions<GradeAgainResponse, GradeAgainError, Options<GradeAgainData>> = {
@@ -588,6 +590,27 @@ export const practiceNextOptions = (options?: Options<PracticeNextData>) => quer
         return data;
     },
     queryKey: practiceNextQueryKey(options)
+});
+
+export const practiceAllowanceQueryKey = (options?: Options<PracticeAllowanceData>) => createQueryKey('practiceAllowance', options);
+
+/**
+ * Practice Allowance
+ *
+ * What the daily limits on grading leave you: your own grades today, and everyone's
+ * over the last 24 hours.
+ */
+export const practiceAllowanceOptions = (options?: Options<PracticeAllowanceData>) => queryOptions<PracticeAllowanceResponse, DefaultError, PracticeAllowanceResponse, ReturnType<typeof practiceAllowanceQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await practiceAllowance({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: practiceAllowanceQueryKey(options)
 });
 
 export const practiceProgressQueryKey = (options?: Options<PracticeProgressData>) => createQueryKey('practiceProgress', options);

@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  practiceAllowanceOptions,
+  practiceAllowanceQueryKey,
   practiceMapOptions,
   practiceMapQueryKey,
   practiceNextOptions,
@@ -13,7 +15,7 @@ import {
   practiceStatsQueryKey,
 } from "@/client/@tanstack/react-query.gen";
 import { answerQuestion, gradeAgain } from "@/client/sdk.gen";
-import type { AttemptOut, KeyPointGradeOut, PracticeOut } from "@/client/types.gen";
+import type { AttemptOut, KeyPointGradeOut, LimitOut, PracticeOut } from "@/client/types.gen";
 import { SheetSection, TitleBlock } from "@/components/sheet";
 import { StepLabel, Thread, ThreadStep } from "@/components/thread";
 import { ApiError } from "@/lib/api-errors";
@@ -43,17 +45,20 @@ type Send =
 const NO_POINTS: KeyPointGradeOut[] = [];
 
 /** One question, from the first word of the answer to its verdict. `onReviewed` is told when
- * the answer's grade has rescheduled the question and earned its XP. */
+ * the answer's grade has rescheduled the question and earned its XP. `refusal` is the daily
+ * limit that allows no grade now, if one doesn't. */
 function Round({
   pick,
   fresh,
   interview,
+  refusal,
   onReviewed,
   onNext,
 }: {
   pick: PracticeOut;
   fresh: boolean;
   interview: boolean;
+  refusal: LimitOut | null;
   onReviewed: () => void;
   onNext: () => void;
 }) {
@@ -101,6 +106,10 @@ function Round({
       if (send.kind === "answer" && error instanceof ApiError && error.status === 404) {
         clearDraft(question.id);
       }
+    },
+    // Every grade asked for may have used one of the day's, and a refusal says the count moved.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: practiceAllowanceQueryKey() });
     },
   });
 
@@ -171,6 +180,7 @@ function Round({
         interview={interview}
         sent={sent}
         points={points}
+        refusal={refusal}
         onSubmit={submit}
       />
       {phase === "writing" && <VerdictAhead />}
@@ -233,6 +243,23 @@ export function PracticeSession({ children }: { children: React.ReactNode }) {
   const map = useQuery({ ...practiceMapOptions(), enabled: reviewed });
   const room = map.data?.rooms.find((candidate) => candidate.topic_id === pick?.question.topic_id);
   const found = progress.data;
+  // What the daily limits leave: nothing to show where there are none
+  const allowance = useQuery(practiceAllowanceOptions());
+  const left = allowance.data?.left ?? null;
+  const refusal = allowance.data?.refused_by ?? null;
+  const againAt = refusal?.again_at ?? null;
+
+  // Asked again once a used-up limit lets a grade through, so the answer can be sent then.
+  useEffect(() => {
+    if (againAt === null) return;
+    const wait = Math.max(0, Date.parse(againAt) - Date.now()) + 1000;
+    // Longer than a timer can wait: the page will have been opened again by then.
+    if (wait > 2 ** 31 - 1) return;
+    const timer = window.setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: practiceAllowanceQueryKey() });
+    }, wait);
+    return () => window.clearTimeout(timer);
+  }, [againAt, queryClient]);
 
   const moveOn = useCallback(() => {
     setMovedOn(true);
@@ -252,6 +279,7 @@ export function PracticeSession({ children }: { children: React.ReactNode }) {
               pick={pick}
               fresh={movedOn}
               interview={interview}
+              refusal={refusal}
               onReviewed={() => setReviewedRound(round)}
               onNext={moveOn}
             />
@@ -286,6 +314,7 @@ export function PracticeSession({ children }: { children: React.ReactNode }) {
           { label: "Thread", value: found ? days(found.streak.days) : "–" },
           { label: "Level", value: found ? `${found.level.number} · ${found.level.name}` : "–" },
           { label: "XP", value: found ? number(found.xp) : "–" },
+          ...(left === null ? [] : [{ label: "Grades left", value: left }]),
         ]}
       />
     </>

@@ -27,6 +27,8 @@ const backendEnv = {
   // The test's notebook has three short sections, which at the usual passage sizes would be
   // read as one passage
   CHUNK_MIN_TOKENS: "20",
+  // One grade a day: the walk's one answer uses it, and the next has to wait
+  DAILY_GRADES_PER_USER: "1",
   // Every real model out of reach, so that a call the stand-ins missed fails at once rather
   // than reaching Ollama or spending a key's quota. Set here, these beat the ones in `.env`.
   OLLAMA_BASE_URL: "http://127.0.0.1:9",

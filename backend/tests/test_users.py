@@ -183,6 +183,7 @@ def test_each_user_s_history_is_replayed_on_its_own(sessions) -> None:
         ("GET", "/practice/progress", None),
         ("GET", "/practice/map", None),
         ("GET", "/practice/stats", None),
+        ("GET", "/practice/allowance", None),
         ("POST", "/questions/1/attempts", {"answer": ANSWER}),
         ("POST", "/attempts/1/grades", None),
         ("GET", "/attempts/1", None),

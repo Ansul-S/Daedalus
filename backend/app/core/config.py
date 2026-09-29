@@ -7,6 +7,9 @@ from pydantic import AliasChoices, Field, SecretStr, ValidationInfo, field_valid
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+# The demo's daily limits on grading: Groq's free Qwen grades about 110 answers a day, and
+# these leave room below that for grading again and for the owner.
+DEMO_LIMITS = {"daily_grades_per_user": 10, "daily_grades": 80}
 
 
 class Settings(BaseSettings):
@@ -88,6 +91,12 @@ class Settings(BaseSettings):
     # still counts as one day.
     practice_timezone: str = "UTC"
 
+    # Daily limits on grading, so that visitors share the free tiers (`app/grading/limits.py`):
+    # grades per user in a practice day, and grades in all over the last 24 hours. Unset, there
+    # is no limit locally and the demo's in production; 0 switches grading off.
+    daily_grades_per_user: int | None = Field(None, ge=0, validate_default=True)
+    daily_grades: int | None = Field(None, ge=0, validate_default=True)
+
     # Stand-ins for every model (`app/llm/fakes.py`), for the end-to-end test: they answer at
     # once, the same way every time, and send nothing anywhere. What they write is made up, so
     # they run on a throwaway database, and never in production.
@@ -103,6 +112,13 @@ class Settings(BaseSettings):
                 "FAKE_MODELS is for testing: it is refused when ENVIRONMENT=production"
             )
         return fake
+
+    @field_validator("daily_grades_per_user", "daily_grades")
+    @classmethod
+    def demo_limits_in_production(cls, limit: int | None, info: ValidationInfo) -> int | None:
+        if limit is None and info.data.get("environment") == "production":
+            return DEMO_LIMITS[info.field_name or ""]
+        return limit
 
     @field_validator("practice_timezone")
     @classmethod

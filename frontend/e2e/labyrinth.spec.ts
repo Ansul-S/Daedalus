@@ -1,10 +1,10 @@
 import path from "node:path";
 
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 // The milestone, walked through in the browser on fake models (`make e2e`): a notebook goes
 // in, becomes a topic map and three questions, one is answered and graded against its passage,
-// and its room on the dashboard shows it practised.
+// using the day's one grade, and its room on the dashboard shows it practised.
 
 // Three short sections on training deep networks, written for this test
 const NOTEBOOK = path.join(__dirname, "fixtures", "training-notes.ipynb");
@@ -22,6 +22,11 @@ const ANSWER = [
 
 // A job the worker takes within two seconds, and finishes in about as long on fake models
 const WORKER = { timeout: 30_000 };
+
+// The practice sheet's count of the grades the daily limit leaves
+function gradesLeft(page: Page) {
+  return page.locator("dt", { hasText: "Grades left" }).locator("+ dd");
+}
 
 test("a notebook becomes questions, a cited grade and a room practised", async ({ page }) => {
   await test.step("enter the labyrinth from the landing page", async () => {
@@ -67,6 +72,7 @@ test("a notebook becomes questions, a cited grade and a room practised", async (
     await page.getByRole("link", { name: "Go to practice" }).click();
     await expect(page).toHaveURL(/\/practice$/);
     await expect(page.getByText(/^Why is it that /)).toBeVisible();
+    await expect(gradesLeft(page)).toHaveText("1");
     await page.getByLabel("Your answer").fill(ANSWER);
     await page.getByRole("button", { name: "Submit answer" }).click();
 
@@ -79,6 +85,15 @@ test("a notebook becomes questions, a cited grade and a room practised", async (
     await expect(earned).toBeVisible();
     xp = Number((await earned.textContent())?.match(/\d+/)?.[0]);
     expect(xp).toBeGreaterThan(0);
+  });
+
+  await test.step("run out of the day's grades", async () => {
+    await expect(gradesLeft(page)).toHaveText("0");
+    await page.getByRole("button", { name: "Next question" }).click();
+    await page.getByLabel("Your answer").fill(ANSWER);
+    // Written, and kept as a draft, but not sent until the limit allows a grade again
+    await expect(page.getByRole("button", { name: "Submit answer" })).toBeDisabled();
+    await expect(page.getByText(/^No grades left · more /)).toBeVisible();
   });
 
   await test.step("find its room practised on the dashboard", async () => {

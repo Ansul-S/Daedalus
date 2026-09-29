@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
+import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeAllowanceData, PracticeAllowanceResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -195,6 +195,7 @@ export const listAttempts = <ThrowOnError extends boolean = false>(options: Opti
  *
  * Answer a question, have the answer graded, and reschedule the question. Only questions
  * in the library can be answered: one that was rejected or retired is not there to practise.
+ * Past a daily limit, nothing is written down and the answer is refused (429).
  */
 export const answerQuestion = <ThrowOnError extends boolean = false>(options: Options<AnswerQuestionData, ThrowOnError>): RequestResult<AnswerQuestionResponses, AnswerQuestionErrors, ThrowOnError> => (options.client ?? client).post<AnswerQuestionResponses, AnswerQuestionErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -211,6 +212,7 @@ export const answerQuestion = <ThrowOnError extends boolean = false>(options: Op
  *
  * Grade an attempt again, after a failed grade or with a changed grader. Every earlier
  * grade is kept. The first successful grade reschedules the question; later ones don't.
+ * It counts against the daily limits like any other grade.
  */
 export const gradeAgain = <ThrowOnError extends boolean = false>(options: Options<GradeAgainData, ThrowOnError>): RequestResult<GradeAgainResponses, GradeAgainErrors, ThrowOnError> => (options.client ?? client).post<GradeAgainResponses, GradeAgainErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -237,6 +239,18 @@ export const getAttempt = <ThrowOnError extends boolean = false>(options: Option
 export const practiceNext = <ThrowOnError extends boolean = false>(options?: Options<PracticeNextData, ThrowOnError>): RequestResult<PracticeNextResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeNextResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/practice/next',
+    ...options
+});
+
+/**
+ * Practice Allowance
+ *
+ * What the daily limits on grading leave you: your own grades today, and everyone's
+ * over the last 24 hours.
+ */
+export const practiceAllowance = <ThrowOnError extends boolean = false>(options?: Options<PracticeAllowanceData, ThrowOnError>): RequestResult<PracticeAllowanceResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeAllowanceResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/practice/allowance',
     ...options
 });
 

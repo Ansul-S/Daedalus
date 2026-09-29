@@ -14,7 +14,7 @@ from pydantic_ai.profiles import ModelProfile
 from app.api.grading import MAX_ANSWER_CHARS, get_grader
 from app.api.users import local_user
 from app.core.config import Settings
-from app.db.models import Attempt, Grade, Question, QuestionSource
+from app.db.models import GradeRequest, Question, QuestionSource
 from app.main import app
 
 ANSWER = "The dot products grow with the key dimension, so they are scaled to keep gradients."
@@ -277,7 +277,8 @@ def test_attempts_are_listed_newest_first(client, sessions, corpus) -> None:
 
 
 def test_the_grader_is_built_once_from_what_the_day_has_spent(sessions, corpus) -> None:
-    """Gemini writes questions and grades answers out of one allowance, so both count."""
+    """Gemini writes questions and grades answers out of one allowance, so both count. Grades
+    are counted as the daily limits count them."""
     settings = Settings(_env_file=None, groq_api_key=SecretStr("k"), gemini_api_key=SecretStr("k"))
 
     async def scenario():
@@ -286,25 +287,19 @@ def test_the_grader_is_built_once_from_what_the_day_has_spent(sessions, corpus) 
             question = await session.get_one(Question, question_id)
             question.generator_model = "gemini-3.5-flash"
             question.usage = {"requests": 1, "input_tokens": 1500, "output_tokens": 800}
-            attempt = Attempt(
-                user_id=await local_user(session), question_id=question_id, answer=ANSWER
-            )
-            session.add(attempt)
-            await session.flush()
+            user_id = await local_user(session)
             for model, output in (("qwen/qwen3.8-27b", 600), ("gemini-3.5-flash", 700)):
                 session.add(
-                    Grade(
-                        attempt_id=attempt.id,
-                        status="graded",
-                        grader_model=model,
-                        prompt_version="grade-v1",
-                        clarity=4,
-                        coverage=1.0,
-                        contradicted=0,
-                        score=1.0,
-                        usage={"requests": 1, "input_tokens": 1100, "output_tokens": output},
+                    GradeRequest(
+                        user_id=user_id,
+                        model=model,
+                        requests=1,
+                        input_tokens=1100,
+                        output_tokens=output,
                     )
                 )
+            # Taken, but no model has replied yet
+            session.add(GradeRequest(user_id=user_id))
         request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
         async with sessions() as session:
             first = await get_grader(request, session, settings)

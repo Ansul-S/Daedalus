@@ -891,7 +891,7 @@
           "grading"
         ],
         "summary": "Answer Question",
-        "description": "Answer a question, have the answer graded, and reschedule the question. Only questions\nin the library can be answered: one that was rejected or retired is not there to practise.",
+        "description": "Answer a question, have the answer graded, and reschedule the question. Only questions\nin the library can be answered: one that was rejected or retired is not there to practise.\nPast a daily limit, nothing is written down and the answer is refused (429).",
         "operationId": "answer_question",
         "security": [
           {
@@ -926,6 +926,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AttemptOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "A daily limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusalOut"
                 }
               }
             }
@@ -1022,7 +1032,7 @@
           "grading"
         ],
         "summary": "Grade Again",
-        "description": "Grade an attempt again, after a failed grade or with a changed grader. Every earlier\ngrade is kept. The first successful grade reschedules the question; later ones don't.",
+        "description": "Grade an attempt again, after a failed grade or with a changed grader. Every earlier\ngrade is kept. The first successful grade reschedules the question; later ones don't.\nIt counts against the daily limits like any other grade.",
         "operationId": "grade_again",
         "security": [
           {
@@ -1047,6 +1057,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AttemptOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "A daily limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusalOut"
                 }
               }
             }
@@ -1127,6 +1147,33 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PracticeOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/practice/allowance": {
+      "get": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Practice Allowance",
+        "description": "What the daily limits on grading leave you: your own grades today, and everyone's\nover the last 24 hours.",
+        "operationId": "practice_allowance",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllowanceOut"
                 }
               }
             }
@@ -1270,6 +1317,59 @@
   },
   "components": {
     "schemas": {
+      "AllowanceOut": {
+        "properties": {
+          "per_user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "in_all": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left"
+          },
+          "refused_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "per_user",
+          "in_all",
+          "left",
+          "refused_by"
+        ],
+        "title": "AllowanceOut"
+      },
       "AnswerIn": {
         "properties": {
           "answer": {
@@ -2376,6 +2476,51 @@
         ],
         "title": "LevelOut"
       },
+      "LimitOut": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "per_user",
+              "in_all"
+            ],
+            "title": "Scope"
+          },
+          "allowed": {
+            "type": "integer",
+            "title": "Allowed"
+          },
+          "used": {
+            "type": "integer",
+            "title": "Used"
+          },
+          "left": {
+            "type": "integer",
+            "title": "Left"
+          },
+          "again_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Again At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "allowed",
+          "used",
+          "left",
+          "again_at"
+        ],
+        "title": "LimitOut"
+      },
       "MapOut": {
         "properties": {
           "columns": {
@@ -3023,6 +3168,23 @@
           "created_at"
         ],
         "title": "RatingOut"
+      },
+      "RefusalOut": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "limit": {
+            "$ref": "#/components/schemas/LimitOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "limit"
+        ],
+        "title": "RefusalOut"
       },
       "ReviewOut": {
         "properties": {

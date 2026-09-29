@@ -7,6 +7,7 @@ from fastapi.routing import APIRoute
 
 from app.api import documents, grading, health, practice, questions, ratings, search
 from app.core.config import get_settings
+from app.grading.limits import LimitReached
 from app.llm.models import embedding_model
 from app.llm.tracing import tracing
 
@@ -44,6 +45,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_exception_handler(LimitReached, grading.limit_reached)
 app.include_router(health.router)
 app.include_router(documents.router)
 app.include_router(search.router)

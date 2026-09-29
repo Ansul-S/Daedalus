@@ -127,6 +127,21 @@ def check_tracing(settings: Settings) -> Check:
     return Check(name="tracing", status="warn" if one_key else "ok", detail=f"off: {off}")
 
 
+def check_limits(settings: Settings) -> Check:
+    """The daily limits on grading. None is a choice locally; a limit of 0 stops grading."""
+    per_user, in_all = settings.daily_grades_per_user, settings.daily_grades
+    if per_user is None and in_all is None:
+        return Check(name="daily limits", status="ok", detail="none: grading is not limited")
+    parts = [
+        f"{per_user} grades a user a practice day" if per_user is not None else None,
+        f"{in_all} in all over 24 hours" if in_all is not None else None,
+    ]
+    detail = ", ".join(part for part in parts if part)
+    if 0 in (per_user, in_all):
+        return Check(name="daily limits", status="warn", detail=f"{detail}: grading is off")
+    return Check(name="daily limits", status="ok", detail=detail)
+
+
 async def run_checks(settings: Settings, engine: AsyncEngine) -> list[Check]:
     database = await check_database(engine)
     checks = [database]
@@ -136,9 +151,10 @@ async def run_checks(settings: Settings, engine: AsyncEngine) -> list[Check]:
         # Neither Ollama nor a cloud key is used, and every grade is made up: say so instead.
         detail = "stand-ins for testing (FAKE_MODELS): nothing is sent to a model"
         models = Check(name="models", status="warn", detail=detail)
-        return [*checks, models, check_tracing(settings)]
+        return [*checks, models, check_tracing(settings), check_limits(settings)]
     if settings.environment == "local":
         checks += await check_ollama(settings)
     checks += check_cloud_keys(settings)
     checks.append(check_tracing(settings))
+    checks.append(check_limits(settings))
     return checks

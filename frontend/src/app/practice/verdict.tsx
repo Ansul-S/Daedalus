@@ -22,6 +22,7 @@ import { StepLabel, ThreadStep } from "@/components/thread";
 import { Button } from "@/components/ui/button";
 import { API_URL } from "@/lib/api";
 import { ApiError } from "@/lib/api-errors";
+import { limitReason, refusalOf } from "@/lib/limits";
 import {
   comeBack,
   gradedBy,
@@ -362,15 +363,29 @@ export function RequestFailedStep({
   const status = error instanceof ApiError ? error.status : null;
   const gone = status === 404 && !answered;
   const again = answered ? "grade it again." : "submit again: your answer is kept above.";
+  // Past a daily limit nothing was written down: an answer not yet saved stays a draft.
+  const refusal = refusalOf(error);
+  const when = refusal?.again_at ? "then" : "later";
+  const meta = refusal
+    ? "daily limit"
+    : status === null
+      ? "API not reachable"
+      : `API error ${status}`;
 
   return (
     <ThreadStep end>
       <div ref={focusRef} tabIndex={-1} className={FOCUS}>
-        <StepLabel as="h2" meta={status === null ? "API not reachable" : `API error ${status}`}>
+        <StepLabel as="h2" meta={meta}>
           Verdict
         </StepLabel>
         <p className="mt-3 max-w-[62ch]">
-          {status === null ? (
+          {refusal ? (
+            `${limitReason(refusal)} ${
+              answered
+                ? `Your answer is saved, to grade again ${when}.`
+                : `Your answer is kept above as a draft, to submit ${when}.`
+            }`
+          ) : status === null ? (
             <>
               Can&apos;t reach the API at <code className="font-mono">{API_URL}</code>. Start it
               with <code className="font-mono">make api</code>, then {again}

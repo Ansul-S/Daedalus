@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { KeyPointGradeOut } from "@/client/types.gen";
+import type { KeyPointGradeOut, LimitOut } from "@/client/types.gen";
 import { DimensionMini, DimensionTimer } from "@/components/dimension-timer";
 import { Markdown } from "@/components/markdown";
 import { ThreadStep } from "@/components/thread";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/grades";
 import { INTERVIEW_LIMIT, setInterviewMode } from "@/lib/interview";
 import { isSubmitKey, useSubmitKeys } from "@/lib/keyboard";
+import { limitReason, limitShort } from "@/lib/limits";
 import { useStopwatch } from "@/lib/stopwatch";
 import { clock } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -76,13 +77,15 @@ function TracedAnswer({ answer, highlights }: { answer: string; highlights: High
 
 /** Your answer: written and previewed here, timed, and kept as a draft until it is graded.
  * In `interview` mode the clock counts down from three minutes and runs on into overtime.
- * Once `sent`, it stays as it went to the grader. */
+ * Once `sent`, it stays as it went to the grader. While a daily limit allows no grade
+ * (`refusal`), it can be written but not sent. */
 export function AnswerStep({
   questionId,
   passages,
   interview,
   sent,
   points,
+  refusal = null,
   onSubmit,
 }: {
   questionId: number;
@@ -91,6 +94,7 @@ export function AnswerStep({
   sent: Sent | null;
   /** The latest grade's key points, to trace the words that earned them. */
   points: KeyPointGradeOut[];
+  refusal?: LimitOut | null;
   onSubmit: (sent: { answer: string; seconds: number; timeLimit: number | null }) => void;
 }) {
   const [draft] = useState(() => loadDraft(questionId));
@@ -125,7 +129,7 @@ export function AnswerStep({
   }
 
   function submit() {
-    if (locked || !answer.trim()) return;
+    if (locked || !answer.trim() || refusal) return;
     onSubmit({
       answer,
       seconds: Math.min(Math.round(read()), MAX_SECONDS),
@@ -199,12 +203,24 @@ export function AnswerStep({
         )
       ) : (
         <div className="mt-3 flex max-w-[48rem] flex-wrap items-center gap-x-4 gap-y-2.5">
-          <Button size="sm" onClick={submit} disabled={!answer.trim()} aria-keyshortcuts={keys.aria}>
+          <Button
+            size="sm"
+            onClick={submit}
+            disabled={!answer.trim() || refusal !== null}
+            aria-keyshortcuts={keys.aria}
+            title={refusal ? `${limitReason(refusal)} Your answer is kept as a draft.` : undefined}
+          >
             Submit answer <kbd aria-hidden>{keys.label}</kbd>
           </Button>
-          <span className="font-mono text-[11px] leading-[1.3] tracking-[0.05em] text-fg-2">
-            Graded against the {passages === 1 ? "passage" : `${passages} passages`} above
-          </span>
+          {refusal ? (
+            <span className="font-mono text-[11px] leading-[1.3] tracking-[0.05em] text-thread">
+              {limitShort(refusal)}
+            </span>
+          ) : (
+            <span className="font-mono text-[11px] leading-[1.3] tracking-[0.05em] text-fg-2">
+              Graded against the {passages === 1 ? "passage" : `${passages} passages`} above
+            </span>
+          )}
           <span className="ml-auto font-mono text-[11px] leading-[1.3] tracking-[0.05em] text-fg-2 tabular-nums">
             {answer.length.toLocaleString("en")} / {MAX_ANSWER_CHARS.toLocaleString("en")}
           </span>

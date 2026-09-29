@@ -13,23 +13,30 @@ earned (XP, the level it reached and any coins) comes with the attempt from then
 
 Attempts are their user's own: another user's attempt is not found, however it is asked for.
 
+Grades are held to the daily limits (`app.grading.limits`). A grade past a limit is refused
+with 429 before anything is written, the answer included: it stays a draft in the browser,
+to be sent once the limit allows. The refusal says which limit, what it allows, how much of
+it is used, and when a grade is allowed again.
+
 Grading runs on cloud models first, so unlike writing questions it also works in production.
 The grading model is built once per process: its pacer has to remember the minute's requests
 across answers. It starts from what the day has already spent, and the day's allowance
 refills while the process runs, however long that is.
 """
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
+from math import ceil
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from pydantic_ai.models import Model
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.practice import EarnedOut, earned_out
+from app.api.practice import EarnedOut, LimitOut, earned_out, limit_out
 from app.api.ratings import RatingOut, grade_ratings
 from app.api.search import citation, source_link
 from app.api.users import UserDep
@@ -37,6 +44,7 @@ from app.core.config import Settings, get_settings
 from app.db.models import Attempt, Chunk, Document, Grade, Question, Review
 from app.db.session import get_session
 from app.grading.grader import grade_attempt, spent_today
+from app.grading.limits import LimitReached, take
 from app.llm.models import grading_model
 from app.scheduling.progress import load, walk
 from app.scheduling.schedule import rating_name, record_review
@@ -130,6 +138,28 @@ class ReviewOut(BaseModel):
     due: date
     # Days from the one to the other
     interval: int
+
+
+class RefusalOut(BaseModel):
+    detail: str
+    # The daily limit that refused the grade
+    limit: LimitOut
+
+
+def limit_reached(request: Request, exc: Exception) -> JSONResponse:
+    """A grade refused by a daily limit: 429, with the limit, and `Retry-After` when it allows
+    a grade again."""
+    assert isinstance(exc, LimitReached)
+    refusal = RefusalOut(detail=exc.message, limit=limit_out(exc.limit))
+    headers = {}
+    if exc.limit.again_at is not None:
+        wait = (exc.limit.again_at - datetime.now(UTC)).total_seconds()
+        headers["Retry-After"] = str(max(1, ceil(wait)))
+    return JSONResponse(refusal.model_dump(mode="json"), status.HTTP_429_TOO_MANY_REQUESTS, headers)
+
+
+# Documented on the routes that grade, for the generated client
+REFUSED = {status.HTTP_429_TOO_MANY_REQUESTS: {"model": RefusalOut, "description": "A daily limit"}}
 
 
 class AttemptOut(BaseModel):
@@ -290,7 +320,9 @@ async def _attempt_out(session: AsyncSession, user_id: int, attempt_id: int) -> 
     return (await _attempts_out(session, user_id, [attempt]))[0]
 
 
-@router.post("/questions/{question_id}/attempts", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/questions/{question_id}/attempts", status_code=status.HTTP_201_CREATED, responses=REFUSED
+)
 async def answer_question(
     question_id: int,
     body: AnswerIn,
@@ -300,10 +332,12 @@ async def answer_question(
     settings: SettingsDep,
 ) -> AttemptOut:
     """Answer a question, have the answer graded, and reschedule the question. Only questions
-    in the library can be answered: one that was rejected or retired is not there to practise."""
+    in the library can be answered: one that was rejected or retired is not there to practise.
+    Past a daily limit, nothing is written down and the answer is refused (429)."""
     question = await session.get(Question, question_id)
     if question is None or question.status != "accepted":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "question not found")
+    slot = await take(session, settings, user_id, datetime.now(UTC))
     attempt = Attempt(
         user_id=user_id,
         question_id=question_id,
@@ -312,15 +346,17 @@ async def answer_question(
         time_limit=body.time_limit,
     )
     session.add(attempt)
-    # The answer is kept whatever becomes of its grading.
+    # The answer is kept whatever becomes of its grading, and so is its slot.
     await session.commit()
-    grade = await grade_attempt(session, grader, attempt)
+    grade = await grade_attempt(session, grader, attempt, slot)
     await record_review(session, grade, settings.practice_zone)
     await session.commit()
     return await _attempt_out(session, user_id, attempt.id)
 
 
-@router.post("/attempts/{attempt_id}/grades", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/attempts/{attempt_id}/grades", status_code=status.HTTP_201_CREATED, responses=REFUSED
+)
 async def grade_again(
     attempt_id: int,
     session: SessionDep,
@@ -329,9 +365,12 @@ async def grade_again(
     settings: SettingsDep,
 ) -> AttemptOut:
     """Grade an attempt again, after a failed grade or with a changed grader. Every earlier
-    grade is kept. The first successful grade reschedules the question; later ones don't."""
+    grade is kept. The first successful grade reschedules the question; later ones don't.
+    It counts against the daily limits like any other grade."""
     attempt = await _attempt(session, user_id, attempt_id)
-    grade = await grade_attempt(session, grader, attempt)
+    slot = await take(session, settings, user_id, datetime.now(UTC))
+    await session.commit()
+    grade = await grade_attempt(session, grader, attempt, slot)
     await record_review(session, grade, settings.practice_zone)
     await session.commit()
     return await _attempt_out(session, user_id, attempt_id)

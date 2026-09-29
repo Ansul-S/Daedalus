@@ -1,7 +1,8 @@
 """Database tables: source documents, their searchable chunks and ingestion jobs, the topic
 map built over the chunks, the generated questions, the users who practise on them, the
 answers each user gives with their grades, the review schedule those grades drive, and each
-user's own ratings of the questions and grades.
+user's own ratings of the questions and grades, and the grades asked of a model, which the
+daily limits count.
 
 The library (documents, chunks, topics and questions) is shared. Practice belongs to a user:
 attempts, the review schedule and ratings carry a `user_id`, and grades follow their attempt.
@@ -435,7 +436,8 @@ class Grade(Base):
     answer supported, contradicted or unverified against the sources. The score is computed
     from those labels and the key points' weights, so the same labels always give the same
     score. An attempt can be graded more than once -- again after a failure, or by a second
-    model -- and each grade is kept. A failed grade records why and nothing else.
+    model -- and each grade is kept. A failed grade records why, and what any replies before
+    the failure cost.
     """
 
     __tablename__ = "grades"
@@ -483,6 +485,34 @@ class Grade(Base):
             "OR (status = 'failed' AND error IS NOT NULL AND score IS NULL)",
             name="graded_or_failed",
         ),
+    )
+
+
+class GradeRequest(Base):
+    """A grade asked of a model, as the daily limits count it (`app.grading.limits`): whose it
+    was, when, which model replied and what the replies cost. It holds nothing of the answer or
+    the grade.
+
+    The row is written before the model is asked, so that requests sent together can't all pass
+    the limits on one count, and it outlives its grade: deleting practice doesn't give back the
+    grades it used. Rows are kept for two days, as long as anything looks back.
+    """
+
+    __tablename__ = "grade_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    grade_id: Mapped[int | None] = mapped_column(ForeignKey("grades.id", ondelete="SET NULL"))
+    # The model that replied, e.g. "qwen/qwen3.8-27b"; null until one has
+    model: Mapped[str | None] = mapped_column(Text)
+    requests: Mapped[int] = mapped_column(server_default="0")
+    input_tokens: Mapped[int] = mapped_column(server_default="0")
+    output_tokens: Mapped[int] = mapped_column(server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_grade_requests_created_at", "created_at"),
+        Index("ix_grade_requests_user_id_created_at", "user_id", "created_at"),
     )
 
 

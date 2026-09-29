@@ -5,6 +5,19 @@ export type ClientOptions = {
 };
 
 /**
+ * AllowanceOut
+ */
+export type AllowanceOut = {
+    per_user: LimitOut | null;
+    in_all: LimitOut | null;
+    /**
+     * Left
+     */
+    left: number | null;
+    refused_by: LimitOut | null;
+};
+
+/**
  * AnswerIn
  */
 export type AnswerIn = {
@@ -600,6 +613,32 @@ export type LevelOut = {
 };
 
 /**
+ * LimitOut
+ */
+export type LimitOut = {
+    /**
+     * Scope
+     */
+    scope: 'per_user' | 'in_all';
+    /**
+     * Allowed
+     */
+    allowed: number;
+    /**
+     * Used
+     */
+    used: number;
+    /**
+     * Left
+     */
+    left: number;
+    /**
+     * Again At
+     */
+    again_at: string | null;
+};
+
+/**
  * MapOut
  */
 export type MapOut = {
@@ -943,6 +982,17 @@ export type RatingOut = {
      * Created At
      */
     created_at: string;
+};
+
+/**
+ * RefusalOut
+ */
+export type RefusalOut = {
+    /**
+     * Detail
+     */
+    detail: string;
+    limit: LimitOut;
 };
 
 /**
@@ -1848,6 +1898,10 @@ export type AnswerQuestionErrors = {
      * Validation Error
      */
     422: HttpValidationError;
+    /**
+     * A daily limit
+     */
+    429: RefusalOut;
 };
 
 export type AnswerQuestionError = AnswerQuestionErrors[keyof AnswerQuestionErrors];
@@ -1878,6 +1932,10 @@ export type GradeAgainErrors = {
      * Validation Error
      */
     422: HttpValidationError;
+    /**
+     * A daily limit
+     */
+    429: RefusalOut;
 };
 
 export type GradeAgainError = GradeAgainErrors[keyof GradeAgainErrors];
@@ -1936,6 +1994,22 @@ export type PracticeNextResponses = {
 };
 
 export type PracticeNextResponse = PracticeNextResponses[keyof PracticeNextResponses];
+
+export type PracticeAllowanceData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/practice/allowance';
+};
+
+export type PracticeAllowanceResponses = {
+    /**
+     * Successful Response
+     */
+    200: AllowanceOut;
+};
+
+export type PracticeAllowanceResponse = PracticeAllowanceResponses[keyof PracticeAllowanceResponses];
 
 export type PracticeProgressData = {
     body?: never;

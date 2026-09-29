@@ -6,14 +6,15 @@ practice ahead of the schedule. Answering it goes through `POST /questions/{id}/
 which grades the answer and reschedules the question.
 
 What practice has earned (XP, a level, the streak and coins), the labyrinth on the dashboard
-and its charts are all worked out from the review history when they are asked for.
+and its charts are all worked out from the review history when they are asked for. So is what
+the daily limits on grading leave (`app.grading.limits`).
 
 All of it is the user's own (`app.api.users`): the schedule, the history and what it earned
 are theirs, and nobody else's answers count.
 """
 
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -26,6 +27,7 @@ from app.api.users import UserDep
 from app.core.config import Settings, get_settings
 from app.db.models import Question, Review, Topic, source_updated
 from app.db.session import get_session
+from app.grading.limits import Limit, allowance
 from app.scheduling import labyrinth
 from app.scheduling.mastery import standings
 from app.scheduling.picker import Pick, Reason, next_question
@@ -228,6 +230,53 @@ def _progress_out(found: Progress) -> ProgressOut:
         streak=StreakOut(days=found.streak.days, today=found.streak.today, best=found.streak.best),
         answers=found.answers,
         coins=[_coin_out(state) for state in found.coins],
+    )
+
+
+class LimitOut(BaseModel):
+    # Whose grades it counts: yours in this practice day, or everyone's over the last 24 hours
+    scope: Literal["per_user", "in_all"]
+    allowed: int
+    used: int
+    left: int
+    # When a grade is allowed again while none is left; null while one is, and when grading
+    # is switched off (a limit of 0)
+    again_at: datetime | None
+
+
+class AllowanceOut(BaseModel):
+    # Each limit, or null where there is none
+    per_user: LimitOut | None
+    in_all: LimitOut | None
+    # Grades that can still be asked for now: the fewer the limits leave; null without limits
+    left: int | None
+    # The limit a grade would be refused by now; null while one is allowed
+    refused_by: LimitOut | None
+
+
+def limit_out(limit: Limit) -> LimitOut:
+    return LimitOut(
+        scope=limit.scope,
+        allowed=limit.allowed,
+        used=limit.used,
+        left=limit.left,
+        again_at=limit.again_at,
+    )
+
+
+@router.get("/practice/allowance")
+async def practice_allowance(
+    session: SessionDep, settings: SettingsDep, user_id: UserDep
+) -> AllowanceOut:
+    """What the daily limits on grading leave you: your own grades today, and everyone's
+    over the last 24 hours."""
+    found = await allowance(session, settings, user_id, datetime.now(UTC))
+    refused = found.refusal()
+    return AllowanceOut(
+        per_user=limit_out(found.per_user) if found.per_user else None,
+        in_all=limit_out(found.in_all) if found.in_all else None,
+        left=min((limit.left for limit in found.limits), default=None),
+        refused_by=limit_out(refused) if refused else None,
     )
 
 

@@ -57,5 +57,6 @@ def test_checks_report_fake_models_instead_of_ollama(engine) -> None:
         ("database schema", "ok"),
         ("models", "warn"),
         ("tracing", "ok"),
+        ("daily limits", "ok"),
     ]
-    assert checks[-1].detail == "off: the stand-in models (FAKE_MODELS) are not traced"
+    assert checks[-2].detail == "off: the stand-in models (FAKE_MODELS) are not traced"

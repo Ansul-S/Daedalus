@@ -22,15 +22,18 @@ from datetime import timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, ModelRetry, NativeOutput
+from pydantic_ai import Agent, ModelRetry, NativeOutput, capture_run_messages
 from pydantic_ai.exceptions import AgentRunError
+from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
+from pydantic_ai.usage import RunUsage
 from rapidfuzz import fuzz
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Attempt, Grade, Question, QuestionSource
+from app.db.models import Attempt, Grade, GradeRequest, Question, QuestionSource
+from app.grading import limits
 from app.grading.scoring import Score, score
 from app.llm.tracing import traced
 from app.questions import batch
@@ -276,13 +279,17 @@ async def grade_answer(
     key_points: Sequence[dict[str, Any]],
     sources: Sequence[Source],
     answer: str,
+    usage: RunUsage | None = None,
 ) -> Graded:
+    """Grade one answer. `usage`, when given, counts what the replies cost, and goes on
+    counting when the grading fails."""
     agent = grader(model, [source.chunk_id for source in sources], len(key_points))
     started = time.perf_counter()
     result = await agent.run(
         request(question, key_points, sources, answer),
         model_settings=grading_settings(),
         metadata={"prompt_version": PROMPT_VERSION},
+        usage=usage,
     )
     seconds = time.perf_counter() - started
     output = result.output
@@ -333,25 +340,45 @@ async def question_sources(session: AsyncSession, question_id: int) -> list[Sour
     return await batch.sources_for(session, chunk_ids)
 
 
-async def grade_attempt(session: AsyncSession, model: Model, attempt: Attempt) -> Grade:
+def replied(messages: Sequence[ModelMessage]) -> str | None:
+    """The model that sent the last reply, if any did."""
+    for message in reversed(messages):
+        if isinstance(message, ModelResponse) and message.model_name:
+            return message.model_name
+    return None
+
+
+async def grade_attempt(
+    session: AsyncSession, model: Model, attempt: Attempt, slot: GradeRequest | None = None
+) -> Grade:
     """Grade an attempt and write the grade down. When no model could grade it, the grade is
-    written down as failed with the reason, and the attempt can be graded again later."""
+    written down as failed with the reason, and the attempt can be graded again later.
+
+    What the grade cost is written down for the daily limits and the pacer (`limits.charge`),
+    in `slot` when one was taken for it."""
     question = await session.get_one(Question, attempt.question_id)
     sources = await question_sources(session, question.id)
+    spent = RunUsage()
     try:
-        with traced("grade", version=PROMPT_VERSION, question=question.id, attempt=attempt.id):
+        with (
+            capture_run_messages() as messages,
+            traced("grade", version=PROMPT_VERSION, question=question.id, attempt=attempt.id),
+        ):
             graded = await grade_answer(
-                model, question.text, question.key_points, sources, attempt.answer
+                model, question.text, question.key_points, sources, attempt.answer, spent
             )
     except (AgentRunError, ExceptionGroup) as exc:
         log.warning("attempt %d could not be graded: %s", attempt.id, exc)
+        answered_by = replied(messages)
         grade = Grade(
             attempt_id=attempt.id,
             status="failed",
             error=why_failed(exc)[:1000],
             prompt_version=PROMPT_VERSION,
+            usage=limits.usage_of(spent) if spent.requests else {},
         )
     else:
+        answered_by = graded.model
         grade = Grade(
             attempt_id=attempt.id,
             status="graded",
@@ -373,23 +400,27 @@ async def grade_attempt(session: AsyncSession, model: Model, attempt: Attempt) -
         )
     session.add(grade)
     await session.flush()
+    await limits.charge(session, slot, attempt.user_id, grade, answered_by, spent)
     return grade
 
 
 async def spent_today(session: AsyncSession) -> dict[str, tuple[int, int]]:
     """The requests and tokens each model has spent in the last day, by model name, counting
     the grades it gave and the questions it wrote together: a free tier's allowance belongs to
-    the model, whatever the work, and Gemini both writes and grades."""
+    the model, whatever the work, and Gemini both writes and grades. Grades are counted as the
+    daily limits count them: a failed one that got a reply too, and one since deleted."""
     spent = dict(await batch.spent_today(session))
-    usage = Grade.usage
     rows = await session.execute(
         select(
-            Grade.grader_model,
-            func.sum(usage["requests"].as_integer()),
-            func.sum(usage["input_tokens"].as_integer() + usage["output_tokens"].as_integer()),
+            GradeRequest.model,
+            func.sum(GradeRequest.requests),
+            func.sum(GradeRequest.input_tokens + GradeRequest.output_tokens),
         )
-        .where(Grade.created_at > func.now() - timedelta(days=1), Grade.grader_model.is_not(None))
-        .group_by(Grade.grader_model)
+        .where(
+            GradeRequest.created_at > func.now() - timedelta(days=1),
+            GradeRequest.model.is_not(None),
+        )
+        .group_by(GradeRequest.model)
     )
     for model, requests, tokens in rows.tuples():
         before = spent.get(model, (0, 0))
