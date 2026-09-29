@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { practiceProgressOptions } from "@/client/@tanstack/react-query.gen";
 import { LabyrinthMark } from "@/components/labyrinth-mark";
+import { Account } from "@/components/sign-in";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { number } from "@/lib/progress";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,7 @@ export function SiteHeader() {
         </nav>
         <div className="ml-auto flex items-center gap-x-6">
           <Standing />
+          <Account />
           <ThemeSwitch />
         </div>
       </div>

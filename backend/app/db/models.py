@@ -13,7 +13,9 @@ from typing import Any
 from pgvector.sqlalchemy import HALFVEC
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
+    Column,
     ColumnElement,
     Computed,
     Date,
@@ -21,6 +23,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     SmallInteger,
+    Table,
     Text,
     UniqueConstraint,
     func,
@@ -579,3 +582,96 @@ class Rating(Base):
         CheckConstraint("value IN (-1, 1)", name="value_valid"),
         CheckConstraint("(question_id IS NULL) <> (grade_id IS NULL)", name="question_or_grade"),
     )
+
+
+# Better Auth's tables. Sign-in runs in the frontend, whose Better Auth reads and writes them
+# (frontend/src/lib/auth.ts); the API never does, and knows a signed-in user only by the
+# subject of their token (`User.subject`). They are described here so that the migrations
+# create them and are checked against them: as Better Auth 1.7 lays them out for Postgres,
+# column names and all, with its table names prefixed `auth_`.
+
+
+def _stamp(name: str) -> Column[datetime]:
+    return Column(
+        name, DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=False
+    )
+
+
+def _owner() -> Column[str]:
+    return Column("userId", Text, ForeignKey("auth_user.id", ondelete="CASCADE"), nullable=False)
+
+
+AUTH_USER = Table(
+    "auth_user",
+    Base.metadata,
+    Column("id", Text, primary_key=True),
+    Column("name", Text, nullable=False),
+    # GitHub's no-reply address for the account: no real address is ever asked for
+    Column("email", Text, nullable=False, unique=True),
+    Column("emailVerified", Boolean, nullable=False),
+    Column("image", Text),
+    _stamp("createdAt"),
+    _stamp("updatedAt"),
+)
+
+AUTH_SESSION = Table(
+    "auth_session",
+    Base.metadata,
+    Column("id", Text, primary_key=True),
+    Column("expiresAt", DateTime(timezone=True), nullable=False),
+    Column("token", Text, nullable=False, unique=True),
+    _stamp("createdAt"),
+    Column("updatedAt", DateTime(timezone=True), nullable=False),
+    # Left empty: sessions' addresses are not kept
+    Column("ipAddress", Text),
+    Column("userAgent", Text),
+    _owner(),
+    Index("auth_session_userId_idx", "userId"),
+)
+
+AUTH_ACCOUNT = Table(
+    "auth_account",
+    Base.metadata,
+    Column("id", Text, primary_key=True),
+    # The GitHub account's id
+    Column("accountId", Text, nullable=False),
+    Column("providerId", Text, nullable=False),
+    _owner(),
+    # Left empty: GitHub's tokens are not kept
+    Column("accessToken", Text),
+    Column("refreshToken", Text),
+    Column("idToken", Text),
+    Column("accessTokenExpiresAt", DateTime(timezone=True)),
+    Column("refreshTokenExpiresAt", DateTime(timezone=True)),
+    Column("scope", Text),
+    Column("password", Text),
+    _stamp("createdAt"),
+    Column("updatedAt", DateTime(timezone=True), nullable=False),
+    Index("auth_account_userId_idx", "userId"),
+)
+
+AUTH_VERIFICATION = Table(
+    "auth_verification",
+    Base.metadata,
+    Column("id", Text, primary_key=True),
+    Column("identifier", Text, nullable=False),
+    Column("value", Text, nullable=False),
+    Column("expiresAt", DateTime(timezone=True), nullable=False),
+    _stamp("createdAt"),
+    _stamp("updatedAt"),
+    Index("auth_verification_identifier_idx", "identifier"),
+)
+
+# The key pairs that sign the API's tokens; the private halves are encrypted with
+# BETTER_AUTH_SECRET.
+AUTH_JWKS = Table(
+    "auth_jwks",
+    Base.metadata,
+    Column("id", Text, primary_key=True),
+    Column("publicKey", Text, nullable=False),
+    Column("privateKey", Text, nullable=False),
+    Column("createdAt", DateTime(timezone=True), nullable=False),
+    Column("expiresAt", DateTime(timezone=True)),
+    Column("alg", Text),
+    Column("crv", Text),
+)

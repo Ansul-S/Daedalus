@@ -96,6 +96,16 @@ def local_map_only(settings: SettingsDep) -> None:
         )
 
 
+def local_edits_only(settings: SettingsDep) -> None:
+    """Deployed, the library is shared by every visitor and read-only: it is corrected on the
+    machine it was written on."""
+    if settings.environment != "local":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Questions are corrected locally; edit them from your own machine",
+        )
+
+
 class GenerateIn(BaseModel):
     count: int = Field(10, ge=1, le=100, description="How many questions to write")
     document_id: int | None = Field(None, description="Ask about one document only")
@@ -402,7 +412,7 @@ async def get_question(
     return await _detail(session, user_id, question_id)
 
 
-@router.patch("/questions/{question_id}")
+@router.patch("/questions/{question_id}", dependencies=[Depends(local_edits_only)])
 async def edit_question(
     question_id: int,
     body: QuestionEditIn,

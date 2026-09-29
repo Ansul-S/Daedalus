@@ -1,10 +1,13 @@
+import { needsSignIn, SignInNeeded } from "@/components/sign-in";
 import { Button } from "@/components/ui/button";
 import { API_URL } from "@/lib/api";
 import { ApiError } from "@/lib/api-errors";
 
-/** A page's data didn't come: the API isn't running, or it answered with an error. The error
- * is an ApiError whatever the generated client's types say (src/lib/api-errors.ts). */
+/** A page's data didn't come: the API isn't running, it wants a signed-in visitor, or it
+ * answered with an error. The error is an ApiError whatever the generated client's types say
+ * (src/lib/api-errors.ts). */
 export function ApiProblem({ error, retry }: { error: unknown; retry: () => void }) {
+  if (needsSignIn(error)) return <SignInNeeded />;
   const status = error instanceof ApiError ? error.status : null;
   return (
     <div className="max-w-[62ch]">

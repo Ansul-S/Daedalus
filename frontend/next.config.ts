@@ -1,7 +1,29 @@
+import path from "node:path";
+
 import type { NextConfig } from "next";
 
+// One .env for the whole repository, at its root, the one the API reads. Variables already set
+// win, as they do for the API; a deployment has no such file and takes its settings from the
+// host.
+try {
+  process.loadEnvFile(path.join(__dirname, "..", ".env"));
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+}
+
+// Sign-in with GitHub (src/lib/auth.ts) is offered once everything it needs is set; without it
+// the app works as before, as the built-in user. Decided when the app is built.
+const SIGN_IN_SETTINGS = [
+  "BETTER_AUTH_URL",
+  "BETTER_AUTH_SECRET",
+  "GITHUB_CLIENT_ID",
+  "GITHUB_CLIENT_SECRET",
+];
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  env: {
+    NEXT_PUBLIC_SIGN_IN: SIGN_IN_SETTINGS.every((name) => process.env[name]) ? "on" : "",
+  },
 };
 
 export default nextConfig;

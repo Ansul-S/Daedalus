@@ -499,6 +499,11 @@
         "summary": "List Questions",
         "description": "The questions in the library, newest first. Every filter is optional.",
         "operationId": "list_questions",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "status",
@@ -701,6 +706,11 @@
         "summary": "Get Question",
         "description": "One question with its sources, key points and validation report.",
         "operationId": "get_question",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "question_id",
@@ -742,6 +752,11 @@
         "summary": "Edit Question",
         "description": "Correct a question, or retire it from the library and put it back.\n\nKey points are replaced as a whole, and every quote has to be in the passage it names, as\nin generation; one that is not is refused with 422 and nothing changes. A new question\ntext is embedded again for the duplicate check. While the local embedding model is away\nthe old embedding is cleared instead, so the check passes over the question rather than\ncompare against words it no longer has. Each change is kept in the question's report with\nwhat it replaced; a change to what the question already says is no change at all.",
         "operationId": "edit_question",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "question_id",
@@ -878,6 +893,11 @@
         "summary": "Answer Question",
         "description": "Answer a question, have the answer graded, and reschedule the question. Only questions\nin the library can be answered: one that was rejected or retired is not there to practise.",
         "operationId": "answer_question",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "question_id",
@@ -929,6 +949,11 @@
         "summary": "List Attempts",
         "description": "Your answers to a question, newest first.",
         "operationId": "list_attempts",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "question_id",
@@ -999,6 +1024,11 @@
         "summary": "Grade Again",
         "description": "Grade an attempt again, after a failed grade or with a changed grader. Every earlier\ngrade is kept. The first successful grade reschedules the question; later ones don't.",
         "operationId": "grade_again",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "attempt_id",
@@ -1042,6 +1072,11 @@
         "summary": "Get Attempt",
         "description": "One of your attempts with every grade it was given.",
         "operationId": "get_attempt",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "attempt_id",
@@ -1096,7 +1131,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/practice/progress": {
@@ -1118,7 +1158,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/practice/map": {
@@ -1140,7 +1185,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/practice/stats": {
@@ -1162,7 +1212,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/ratings": {
@@ -1204,7 +1259,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     }
   },
@@ -3542,6 +3602,13 @@
         ],
         "title": "XpOut",
         "description": "The XP an answer earned, part by part: ten times its score, five for answering, half\nas much again for a question that was due, five inside an interview limit, and, on the\nday's first answer, the streak's length that day, up to ten."
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "description": "The token Better Auth gives a signed-in visitor. Without it, the built-in user locally, and nobody in production.",
+        "scheme": "bearer"
       }
     }
   }

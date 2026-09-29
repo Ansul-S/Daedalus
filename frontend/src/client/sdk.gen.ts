@@ -122,14 +122,22 @@ export const generateQuestions = <ThrowOnError extends boolean = false>(options:
  *
  * The questions in the library, newest first. Every filter is optional.
  */
-export const listQuestions = <ThrowOnError extends boolean = false>(options?: Options<ListQuestionsData, ThrowOnError>): RequestResult<ListQuestionsResponses, ListQuestionsErrors, ThrowOnError> => (options?.client ?? client).get<ListQuestionsResponses, ListQuestionsErrors, ThrowOnError>({ url: '/questions', ...options });
+export const listQuestions = <ThrowOnError extends boolean = false>(options?: Options<ListQuestionsData, ThrowOnError>): RequestResult<ListQuestionsResponses, ListQuestionsErrors, ThrowOnError> => (options?.client ?? client).get<ListQuestionsResponses, ListQuestionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/questions',
+    ...options
+});
 
 /**
  * Get Question
  *
  * One question with its sources, key points and validation report.
  */
-export const getQuestion = <ThrowOnError extends boolean = false>(options: Options<GetQuestionData, ThrowOnError>): RequestResult<GetQuestionResponses, GetQuestionErrors, ThrowOnError> => (options.client ?? client).get<GetQuestionResponses, GetQuestionErrors, ThrowOnError>({ url: '/questions/{question_id}', ...options });
+export const getQuestion = <ThrowOnError extends boolean = false>(options: Options<GetQuestionData, ThrowOnError>): RequestResult<GetQuestionResponses, GetQuestionErrors, ThrowOnError> => (options.client ?? client).get<GetQuestionResponses, GetQuestionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/questions/{question_id}',
+    ...options
+});
 
 /**
  * Edit Question
@@ -144,6 +152,7 @@ export const getQuestion = <ThrowOnError extends boolean = false>(options: Optio
  * what it replaced; a change to what the question already says is no change at all.
  */
 export const editQuestion = <ThrowOnError extends boolean = false>(options: Options<EditQuestionData, ThrowOnError>): RequestResult<EditQuestionResponses, EditQuestionErrors, ThrowOnError> => (options.client ?? client).patch<EditQuestionResponses, EditQuestionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/questions/{question_id}',
     ...options,
     headers: {
@@ -175,7 +184,11 @@ export const buildTopicMap = <ThrowOnError extends boolean = false>(options?: Op
  *
  * Your answers to a question, newest first.
  */
-export const listAttempts = <ThrowOnError extends boolean = false>(options: Options<ListAttemptsData, ThrowOnError>): RequestResult<ListAttemptsResponses, ListAttemptsErrors, ThrowOnError> => (options.client ?? client).get<ListAttemptsResponses, ListAttemptsErrors, ThrowOnError>({ url: '/questions/{question_id}/attempts', ...options });
+export const listAttempts = <ThrowOnError extends boolean = false>(options: Options<ListAttemptsData, ThrowOnError>): RequestResult<ListAttemptsResponses, ListAttemptsErrors, ThrowOnError> => (options.client ?? client).get<ListAttemptsResponses, ListAttemptsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/questions/{question_id}/attempts',
+    ...options
+});
 
 /**
  * Answer Question
@@ -184,6 +197,7 @@ export const listAttempts = <ThrowOnError extends boolean = false>(options: Opti
  * in the library can be answered: one that was rejected or retired is not there to practise.
  */
 export const answerQuestion = <ThrowOnError extends boolean = false>(options: Options<AnswerQuestionData, ThrowOnError>): RequestResult<AnswerQuestionResponses, AnswerQuestionErrors, ThrowOnError> => (options.client ?? client).post<AnswerQuestionResponses, AnswerQuestionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/questions/{question_id}/attempts',
     ...options,
     headers: {
@@ -198,28 +212,44 @@ export const answerQuestion = <ThrowOnError extends boolean = false>(options: Op
  * Grade an attempt again, after a failed grade or with a changed grader. Every earlier
  * grade is kept. The first successful grade reschedules the question; later ones don't.
  */
-export const gradeAgain = <ThrowOnError extends boolean = false>(options: Options<GradeAgainData, ThrowOnError>): RequestResult<GradeAgainResponses, GradeAgainErrors, ThrowOnError> => (options.client ?? client).post<GradeAgainResponses, GradeAgainErrors, ThrowOnError>({ url: '/attempts/{attempt_id}/grades', ...options });
+export const gradeAgain = <ThrowOnError extends boolean = false>(options: Options<GradeAgainData, ThrowOnError>): RequestResult<GradeAgainResponses, GradeAgainErrors, ThrowOnError> => (options.client ?? client).post<GradeAgainResponses, GradeAgainErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/attempts/{attempt_id}/grades',
+    ...options
+});
 
 /**
  * Get Attempt
  *
  * One of your attempts with every grade it was given.
  */
-export const getAttempt = <ThrowOnError extends boolean = false>(options: Options<GetAttemptData, ThrowOnError>): RequestResult<GetAttemptResponses, GetAttemptErrors, ThrowOnError> => (options.client ?? client).get<GetAttemptResponses, GetAttemptErrors, ThrowOnError>({ url: '/attempts/{attempt_id}', ...options });
+export const getAttempt = <ThrowOnError extends boolean = false>(options: Options<GetAttemptData, ThrowOnError>): RequestResult<GetAttemptResponses, GetAttemptErrors, ThrowOnError> => (options.client ?? client).get<GetAttemptResponses, GetAttemptErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/attempts/{attempt_id}',
+    ...options
+});
 
 /**
  * Practice Next
  *
  * The question to practise next, without its answer, and why it was picked.
  */
-export const practiceNext = <ThrowOnError extends boolean = false>(options?: Options<PracticeNextData, ThrowOnError>): RequestResult<PracticeNextResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeNextResponses, unknown, ThrowOnError>({ url: '/practice/next', ...options });
+export const practiceNext = <ThrowOnError extends boolean = false>(options?: Options<PracticeNextData, ThrowOnError>): RequestResult<PracticeNextResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeNextResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/practice/next',
+    ...options
+});
 
 /**
  * Practice Progress
  *
  * XP, level, streak and coins, worked out from every graded answer.
  */
-export const practiceProgress = <ThrowOnError extends boolean = false>(options?: Options<PracticeProgressData, ThrowOnError>): RequestResult<PracticeProgressResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeProgressResponses, unknown, ThrowOnError>({ url: '/practice/progress', ...options });
+export const practiceProgress = <ThrowOnError extends boolean = false>(options?: Options<PracticeProgressData, ThrowOnError>): RequestResult<PracticeProgressResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeProgressResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/practice/progress',
+    ...options
+});
 
 /**
  * Practice Map
@@ -228,14 +258,22 @@ export const practiceProgress = <ThrowOnError extends boolean = false>(options?:
  * how well it is known and what is due in it, the passages between the rooms, today's
  * thread through them, and the Minotaur's room, the weakest.
  */
-export const practiceMap = <ThrowOnError extends boolean = false>(options?: Options<PracticeMapData, ThrowOnError>): RequestResult<PracticeMapResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeMapResponses, unknown, ThrowOnError>({ url: '/practice/map', ...options });
+export const practiceMap = <ThrowOnError extends boolean = false>(options?: Options<PracticeMapData, ThrowOnError>): RequestResult<PracticeMapResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeMapResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/practice/map',
+    ...options
+});
 
 /**
  * Practice Stats
  *
  * The dashboard's charts: the latest scores, the days practised, and what comes due.
  */
-export const practiceStats = <ThrowOnError extends boolean = false>(options?: Options<PracticeStatsData, ThrowOnError>): RequestResult<PracticeStatsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeStatsResponses, unknown, ThrowOnError>({ url: '/practice/stats', ...options });
+export const practiceStats = <ThrowOnError extends boolean = false>(options?: Options<PracticeStatsData, ThrowOnError>): RequestResult<PracticeStatsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeStatsResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/practice/stats',
+    ...options
+});
 
 /**
  * Add Rating
@@ -248,6 +286,7 @@ export const practiceStats = <ThrowOnError extends boolean = false>(options?: Op
  * a failed grade has no verdict to judge.
  */
 export const addRating = <ThrowOnError extends boolean = false>(options: Options<AddRatingData, ThrowOnError>): RequestResult<AddRatingResponses, AddRatingErrors, ThrowOnError> => (options.client ?? client).post<AddRatingResponses, AddRatingErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/ratings',
     ...options,
     headers: {

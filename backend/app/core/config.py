@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # "production" means a free cloud host: no Ollama, cloud models only.
     environment: Literal["local", "production"] = "local"
     cors_origins: list[str] = ["http://localhost:3000"]
+    # Sign-in (optional locally): the frontend's address, whose Better Auth issues the tokens
+    # the API accepts and publishes their keys at /auth/jwks. Unset, nobody can sign in.
+    better_auth_url: str | None = None
 
     database_url: str = "postgresql+psycopg://daedalus:daedalus@localhost:5433/daedalus"
 

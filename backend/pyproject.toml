@@ -15,6 +15,7 @@ dependencies = [
     "psycopg[binary]>=3.3.5",
     "pydantic-ai-slim[google,groq,openai]>=2.42.0",
     "pydantic-settings>=2.15.0",
+    "pyjwt>=2.14.0",
     "python-multipart>=0.0.32",
     "rapidfuzz>=3.14.6",
     "sqlalchemy[asyncio]>=2.0.52",

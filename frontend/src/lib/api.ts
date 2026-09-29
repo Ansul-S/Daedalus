@@ -10,4 +10,7 @@ export const SERVER_API_URL = process.env.API_URL ?? API_URL;
 export const createClientConfig: CreateClientConfig = (config) => ({
   ...config,
   baseUrl: API_URL,
+  // Sent with every request whose route says who is asking: the signed-in visitor's token,
+  // or none. Loaded when first needed, so that the server never loads the browser's sign-in.
+  auth: async () => (await import("@/lib/session")).apiToken(),
 });

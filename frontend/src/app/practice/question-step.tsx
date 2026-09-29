@@ -7,6 +7,7 @@ import type { PracticeOut } from "@/client/types.gen";
 import { Commands, FILL_THE_LABYRINTH } from "@/components/commands";
 import { Pips } from "@/components/hatching";
 import { Markdown } from "@/components/markdown";
+import { needsSignIn, SignInNeeded } from "@/components/sign-in";
 import { StepLabel, ThreadStep } from "@/components/thread";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,9 +78,22 @@ export function QuestionLoading() {
   );
 }
 
-/** No question to show: none written yet, or the API didn't answer. */
+/** No question to show: none written yet, nobody signed in, or the API didn't answer. */
 export function QuestionProblem({ error, retry }: { error: Error; retry: () => void }) {
   const status = error instanceof ApiError ? error.status : null;
+
+  if (needsSignIn(error)) {
+    return (
+      <ThreadStep>
+        <StepLabel as="h2" meta="signed out">
+          Question
+        </StepLabel>
+        <div className="mt-3">
+          <SignInNeeded titled={false} />
+        </div>
+      </ThreadStep>
+    );
+  }
 
   if (status === 404) {
     return (
