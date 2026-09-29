@@ -7,6 +7,7 @@ import { listQuestionsOptions } from "@/client/@tanstack/react-query.gen";
 import type { DocumentOut } from "@/client/types.gen";
 import { Commands } from "@/components/commands";
 import { Disclosure } from "@/components/disclosure";
+import { Licence } from "@/components/licence";
 import {
   authorsLine,
   isActive,
@@ -86,8 +87,11 @@ function DocumentRow({
           document.title
         )}
       </h3>
-      {document.authors && (
-        <p className="text-small text-fg-2 sm:col-span-2">{authorsLine(document.authors)}</p>
+      {(document.authors || document.license) && (
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-fg-2 sm:col-span-2">
+          {document.authors && <span>{authorsLine(document.authors)}</span>}
+          {document.license && <Licence url={document.license} />}
+        </p>
       )}
       <p className={cn(MONO, "text-fg-2 sm:col-span-2")}>
         {[sourceLength(document), plural(document.chunk_count ?? 0, "passage"), inTheMap(document)]

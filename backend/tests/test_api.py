@@ -3,6 +3,7 @@ import json
 
 import psycopg
 import pytest
+from conftest import CC_BY
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, select, update
 from sqlalchemy.engine import make_url
@@ -306,6 +307,8 @@ def test_search_results_carry_citations_and_links(client, corpus, query, citatio
     assert len(body["results"]) == 3
     top = body["results"][0]
     assert (top["citation"], top["link"]) == (citation, link)
+    # Only the paper has a licence recorded; the notes are the reader's own.
+    assert top["license"] == (CC_BY if link else None)
     assert (top["vector_rank"], top["keyword_rank"]) == (1, 1)
 
 

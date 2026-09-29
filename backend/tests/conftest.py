@@ -40,6 +40,8 @@ from app.main import app
 
 BACKEND = Path(__file__).resolve().parents[1]
 TEST_DATABASE = "daedalus_test"
+# As arXiv's OAI-PMH interface records it
+CC_BY = "http://creativecommons.org/licenses/by/4.0/"
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -182,6 +184,7 @@ def corpus(sessions: async_sessionmaker[AsyncSession], embedder: FakeEmbedder) -
         title="Attention Is All You Need",
         arxiv_id="1706.03762",
         url="https://arxiv.org/html/1706.03762v7",
+        license=CC_BY,
         status="ready",
     )
     notes = Document(

@@ -65,7 +65,7 @@ async def main(args: argparse.Namespace) -> int:
                 summary = await run_job(
                     SessionFactory,
                     job_id,
-                    model=paced_generation_model(settings, spent),
+                    model=paced_generation_model(settings, spent, groq_only=args.groq_only),
                     checker=helper_model(settings),
                     embedder=embedder,
                     similarity=settings.duplicate_similarity,
@@ -89,6 +89,12 @@ def parse_args() -> argparse.Namespace:
         "--count", type=int, default=10, metavar="N", help="how many questions to write"
     )
     parser.add_argument("--document", type=int, metavar="ID", help="ask about one document only")
+    parser.add_argument(
+        "--groq-only",
+        action="store_true",
+        help="write with Groq alone: once its day is spent the batch stops, rather than going "
+        "on with Gemini and then the local model",
+    )
     parser.add_argument(
         "--job", type=int, metavar="ID", help="carry on with a job that stopped early"
     )

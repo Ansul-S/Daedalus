@@ -166,6 +166,8 @@ class SourceOut(BaseModel):
     document_title: str
     citation: str
     link: str | None
+    # The licence its document is shared under, as a URL; null for notes of one's own
+    license: str | None
     section: str | None
     # Whether a later ingestion has replaced this passage
     superseded: bool
@@ -565,6 +567,7 @@ async def _detail(
                 document_title=document.title,
                 citation=citation(document, chunk),
                 link=source_link(document, chunk),
+                license=document.license,
                 section=chunk.section,
                 superseded=chunk.superseded_at is not None,
                 text=chunk.text,

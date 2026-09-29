@@ -143,6 +143,7 @@ def test_a_question_that_holds_up_passes_every_check(sessions, embedder, chunk_i
     validation = run_validate(sessions, embedder, chunk_id)
 
     assert (validation.passed, validation.failed) == (True, [])
+    assert validation.report["compound"] is None
     assert validation.report["kind"] == "explain"
     assert validation.report["answerable"] is True
     assert validation.report["missing"] == "nothing"
@@ -175,6 +176,16 @@ def test_a_quote_that_is_not_in_the_sources_fails_the_question(sessions, embedde
 
     assert (validation.passed, validation.failed) == (False, ["quotes"])
     assert validation.report["quotes"][1]["problem"].startswith("the quote is not in the chunk")
+
+
+def test_a_question_that_still_asks_two_things_is_turned_down(sessions, embedder, chunk_id):
+    generated = a_generated(chunk_id)
+    generated.compound = 'it joins a second question on with "and what"'
+
+    validation = run_validate(sessions, embedder, chunk_id, generated=generated)
+
+    assert (validation.passed, validation.failed) == (False, ["compound"])
+    assert validation.report["compound"] == 'it joins a second question on with "and what"'
 
 
 def test_a_question_already_asked_in_other_words_is_turned_down(sessions, embedder, chunk_id):

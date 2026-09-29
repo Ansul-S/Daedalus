@@ -13,7 +13,8 @@ export default function LibraryPage() {
         <SheetHead number="Sheet L-01" title="Library" sigil="θ">
           The material every question is written from: your PDFs, notebooks and arXiv papers. Add
           a source and the worker reads it into passages; the topic map sorts them by concept; then
-          questions are written from the passages nothing has asked about yet.
+          questions are written from the passages nothing has asked about yet. Passages are
+          excerpts of their source, reflowed as plain text, and keep its licence.
         </SheetHead>
       </Library>
     </Sheet>

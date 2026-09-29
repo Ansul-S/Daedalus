@@ -12,6 +12,7 @@ from app.db.models import Chunk
 from app.questions.generation import (
     GeneratedQuestion,
     Source,
+    compound,
     generate_question,
     request,
     source_of,
@@ -123,10 +124,14 @@ def test_a_stored_chunk_is_cited_by_its_title_and_section() -> None:
     assert source_of("Attention Is All You Need", chunk).citation == "Attention Is All You Need"
 
 
-def answer(quote: str) -> str:
+SINGLE = "Why are the dot products scaled before the softmax?"
+DOUBLE = "Why are the dot products scaled, and what happens to the softmax without it?"
+
+
+def answer(quote: str, question: str = SINGLE) -> str:
     return json.dumps(
         {
-            "question": "Why are the dot products scaled before the softmax?",
+            "question": question,
             "difficulty": 3,
             "reference_answer": "Their magnitude grows with the key dimension, and a large "
             "softmax input leaves almost no gradient.",
@@ -150,12 +155,17 @@ def answer(quote: str) -> str:
     )
 
 
-def writer(quotes: list[str], seen: list[list[ModelMessage]]) -> FunctionModel:
-    """Answers with the next quote in the list, recording the conversation it was sent."""
+def writer(
+    quotes: list[str], seen: list[list[ModelMessage]], questions: list[str] | None = None
+) -> FunctionModel:
+    """Answers with the next quote in the list, and the next question when a list of them is
+    given, recording the conversation it was sent."""
 
     def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         seen.append(messages)
-        return ModelResponse(parts=[TextPart(answer(quotes[len(seen) - 1]))])
+        turn = len(seen) - 1
+        question = questions[turn] if questions else SINGLE
+        return ModelResponse(parts=[TextPart(answer(quotes[turn], question))])
 
     return FunctionModel(respond, profile=ModelProfile(supports_json_schema_output=True))
 
@@ -169,7 +179,8 @@ def test_a_question_whose_quotes_hold_up_is_written_in_one_call() -> None:
     assert generated.question.question.startswith("Why are the dot products")
     assert generated.usage["requests"] == 1
     assert generated.model == "function:respond:"
-    assert generated.prompt_version == "generate-v3"
+    assert generated.prompt_version == "generate-v4"
+    assert generated.compound is None
 
 
 def test_a_question_is_filed_under_the_style_it_was_asked_for() -> None:
@@ -212,3 +223,78 @@ def test_a_quote_that_stays_wrong_is_returned_ungrounded() -> None:
     [failed] = [quote for quote in generated.quotes if not quote.grounded]
     assert failed.problem.startswith("the quote is not in chunk 248")
     assert failed.score < 95
+
+
+@pytest.mark.parametrize(
+    ("question", "problem"),
+    [
+        (SINGLE, None),
+        # From the development library: asking about two things is not asking two questions.
+        (
+            "What problems arise when the mechanisms for controlling what to remember and what to "
+            "forget are omitted?",
+            None,
+        ),
+        ("How do layer normalization and batch normalization differ at inference?", None),
+        ("When is dot-product attention the better choice?", None),
+        ("Compare batch normalization and layer normalization.", None),
+        (DOUBLE, 'it joins a second question on with "and what"'),
+        (
+            "What is the core intuition behind the Transformer and how does relying on attention "
+            "change the way it processes sequences?",
+            'it joins a second question on with "and how does"',
+        ),
+        ("Why is the scale needed? What breaks without it?", "it has more than one question mark"),
+        (
+            "Compare the two pipelines. How does the retrieval score change the ranking?",
+            "it gives an instruction and then asks a question",
+        ),
+    ],
+)
+def test_a_question_that_asks_two_things_is_found_out(question: str, problem: str | None) -> None:
+    assert compound(question) == problem
+
+
+def test_a_question_that_asks_two_things_is_sent_back_once() -> None:
+    seen: list[list[ModelMessage]] = []
+
+    generated = asyncio.run(
+        generate_question(
+            writer([GOOD_QUOTE, GOOD_QUOTE], seen, [DOUBLE, SINGLE]), SOURCES, "why_how"
+        )
+    )
+
+    assert (generated.attempts, generated.compound, generated.grounded) == (2, None, True)
+    assert generated.question.question == SINGLE
+    repair = str(seen[1][-1].parts[-1].content)
+    assert 'asks more than one thing: it joins a second question on with "and what"' in repair
+    # Nothing was wrong with the quotes, so the repair says nothing about them.
+    assert "evidence quotes are not in the sources" not in repair
+
+
+def test_one_repair_round_mends_two_things_at_once() -> None:
+    seen: list[list[ModelMessage]] = []
+    invented = "the model learns a separate scaling factor for every attention head"
+
+    generated = asyncio.run(
+        generate_question(
+            writer([invented, GOOD_QUOTE], seen, [DOUBLE, SINGLE]), SOURCES, "why_how"
+        )
+    )
+
+    assert (generated.attempts, generated.compound, generated.grounded) == (2, None, True)
+    repair = str(seen[1][-1].parts[-1].content)
+    assert "asks more than one thing" in repair and invented in repair
+
+
+def test_a_question_that_still_asks_two_things_is_returned_as_it_is() -> None:
+    seen: list[list[ModelMessage]] = []
+
+    generated = asyncio.run(
+        generate_question(
+            writer([GOOD_QUOTE, GOOD_QUOTE], seen, [DOUBLE, DOUBLE]), SOURCES, "why_how"
+        )
+    )
+
+    assert generated.attempts == 2
+    assert generated.compound == 'it joins a second question on with "and what"'

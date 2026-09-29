@@ -20,6 +20,8 @@ class SearchHitOut(BaseModel):
     source_type: str
     citation: str
     link: str | None
+    # The licence its document is shared under, as a URL; null for notes of one's own
+    license: str | None
     section: str | None
     page_start: int | None
     page_end: int | None
@@ -97,6 +99,7 @@ async def search_chunks(
                 source_type=hit.document.source_type,
                 citation=citation(hit.document, hit.chunk),
                 link=source_link(hit.document, hit.chunk),
+                license=hit.document.license,
                 section=hit.chunk.section,
                 page_start=hit.chunk.page_start,
                 page_end=hit.chunk.page_end,

@@ -33,6 +33,7 @@ const MARK: Record<Outcome, { mark: string; className: string }> = {
 
 const CHECK_NAME: Record<Check, string> = {
   quotes: "Quotes",
+  compound: "One question",
   answerable: "Answerable",
   trivia: "Not trivia",
   duplicate: "Not a duplicate",
@@ -40,6 +41,7 @@ const CHECK_NAME: Record<Check, string> = {
 
 function outcomeOf(check: Check, report: Report): Outcome {
   if (report.failed.includes(check)) return "failed";
+  if (check === "compound" && !report.compoundChecked) return "not checked";
   if (check === "answerable" && report.answerable === null) return "not checked";
   if (check === "trivia" && report.kind === null) return "not checked";
   if (check === "duplicate" && !report.duplicateChecked) return "not checked";
@@ -75,6 +77,13 @@ function Finding({ check, report, outcome }: { check: Check; report: Report; out
   switch (check) {
     case "quotes":
       return <QuoteFindings report={report} />;
+    case "compound":
+      if (!report.compoundChecked) return <>Not checked: it was written before this check.</>;
+      return report.compound === null ? (
+        <>It asks one thing.</>
+      ) : (
+        <>It asks more than one thing: {report.compound}.</>
+      );
     case "answerable":
       if (report.answerable === null) return <>Not checked.</>;
       if (report.answerable) return <>A second model answered it from the passages alone.</>;

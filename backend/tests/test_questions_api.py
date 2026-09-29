@@ -4,6 +4,7 @@ question, browsing the topic map and having it built."""
 import asyncio
 
 import pytest
+from conftest import CC_BY
 from sqlalchemy import func, select, update
 
 from app.api.questions import MAX_TEXT_CHARS
@@ -419,6 +420,8 @@ def test_a_question_comes_with_its_sources_key_points_and_report(client, corpus,
     assert (first["chunk_id"], second["chunk_id"]) == (corpus.scaling, corpus.softmax)
     assert first["citation"] == "Attention Is All You Need, § 3.2.1 Scaled Dot-Product Attention"
     assert first["link"] == "https://arxiv.org/html/1706.03762v7#S3.SS2.SSS1"
+    # Shown beside the passage, whose licence asks for it
+    assert first["license"] == CC_BY
     assert first["text"].startswith("We divide the dot products")
     assert first["section"].endswith("Scaled Dot-Product Attention")
     assert [source["superseded"] for source in body["sources"]] == [False, False]

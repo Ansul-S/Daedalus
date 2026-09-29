@@ -7,11 +7,17 @@ conversation goes back with the failures named and the model gets one chance to 
 repair round cost about 3.5K tokens in the trial against 2.3K for a question that came out
 right the first time, and it took quote grounding from 20 of 24 to 25 of 25.
 
+A question that asks two things goes back the same way. Told in so many words to write one
+question, the model still joined a second on to 16 of the 25 questions Phase 2 accepted
+("…, and how does it decide which answer spans are better?"), and most of the questions turned
+down as duplicates repeated one half of such a pair.
+
 Structured output goes through a strict JSON schema. The same trial had Groq's own validator
 reject a tool call once, while every schema-constrained request came back valid.
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from itertools import count
 from typing import Literal
@@ -28,7 +34,7 @@ from app.questions.grounding import QuoteCheck, check_quote
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "generate-v3"
+PROMPT_VERSION = "generate-v4"
 # Enough for a question with its answer and reasoning; a runaway answer would otherwise eat
 # a whole minute of the token budget.
 MAX_TOKENS = 3000
@@ -57,8 +63,13 @@ time, from the sources you are given and from nothing else.
 The question asks about an idea: why something is done, how it works, what it costs, how it
 fails, or how two ideas fit together. Never ask about the document itself -- its sections,
 its figures, its numbering or its authors. It has to be answerable from the sources alone by
-someone who has not read them, and it is one question, not two joined by "and". A number or
-a name is only worth asking about when the sources also say what is behind it.
+someone who has not read them. A number or a name is only worth asking about when the
+sources also say what is behind it.
+
+It is one question. Never join a second one on to it, with "and how", "and what", "and why"
+or a second question mark: "Why are the inputs scaled, and what happens without it?" is two
+questions. Ask the one the sources explain best, and let the reference answer cover what
+follows from it.
 
 Never build a question out of what a source reports rather than explains: an accuracy figure,
 a stage or component name, a claim about what some system achieves. If the answer is a
@@ -107,6 +118,34 @@ belongs to, character for character. Leave the question and the reference answer
 unless a key point has to change with its quote.
 """
 
+SPLIT = """\
+The question asks more than one thing: {problem}. Send the whole question again, asking only
+the one the sources explain best, with the reference answer and the key points to match it.
+Every evidence quote is still copied out of its chunk, character for character.
+"""
+
+SPLIT_QUOTES = """\
+Besides, these evidence quotes are not in the sources:
+
+{problems}
+
+Replace each of them with words copied out of the chunk it belongs to, character for character.
+"""
+
+# A second question joined on: ", and how …", "and why does …", a second question mark, or an
+# instruction ("Compare … .") with a question after it. On the 61 questions of the development
+# library, read one by one, it found all 27 that ask two things and none of the 34 that ask
+# one. A bare "and what" is not enough: "what to remember and what to forget" asks one thing.
+_ASKS = r"(?:how|why|what|which|when|where|who|whether)"
+_AUXILIARY = r"(?:is|are|was|were|does|do|did|can|could|should|would|will|has|have|might|must)"
+SECOND_QUESTION = re.compile(
+    rf",\s*and\s+{_ASKS}\b|\band\s+{_ASKS}\s+{_AUXILIARY}\b", re.IGNORECASE
+)
+INSTRUCTION_FIRST = re.compile(
+    r"^\s*(?:compare|contrast|explain|describe|discuss|outline|list|name)\b[^?]*?[.!]\s+\S",
+    re.IGNORECASE,
+)
+
 
 class KeyPoint(BaseModel):
     text: str = Field(description="One thing an answer has to contain")
@@ -144,8 +183,10 @@ class Generated:
     style: str
     prompt_version: str = PROMPT_VERSION
     usage: dict[str, int] = field(default_factory=dict)
-    # 1 when the quotes were right the first time, 2 after one repair round
+    # 1 when the question was right the first time, 2 after one repair round
     attempts: int = 1
+    # Why the question asks more than one thing; None when it asks one
+    compound: str | None = None
 
     @property
     def grounded(self) -> bool:
@@ -179,9 +220,25 @@ def request(sources: list[Source], style: str) -> str:
     return REQUEST.format(brief=STYLE_BRIEFS[style], sources=passages)
 
 
-def repair_request(failed: list[QuoteCheck]) -> str:
+def compound(question: str) -> str | None:
+    """Why a question asks more than one thing, or None when it asks one."""
+    if question.count("?") > 1:
+        return "it has more than one question mark"
+    if INSTRUCTION_FIRST.search(question):
+        return "it gives an instruction and then asks a question"
+    found = SECOND_QUESTION.search(question)
+    if found is not None:
+        joined = " ".join(found.group(0).lstrip(",").split())
+        return f'it joins a second question on with "{joined}"'
+    return None
+
+
+def repair_request(failed: list[QuoteCheck], split: str | None = None) -> str:
     problems = "\n".join(f'- "{quote.quote}": {quote.problem}' for quote in failed)
-    return REPAIR.format(problems=problems)
+    if split is None:
+        return REPAIR.format(problems=problems)
+    request = SPLIT.format(problem=split)
+    return request + "\n" + SPLIT_QUOTES.format(problems=problems) if failed else request
 
 
 def ground(question: GeneratedQuestion, sources: list[Source]) -> list[QuoteCheck]:
@@ -206,9 +263,10 @@ def add_usage(total: dict[str, int], result: AgentRunResult[GeneratedQuestion]) 
 async def generate_question(
     model: Model, sources: list[Source], style: str, *, repairs: int = 1
 ) -> Generated:
-    """Write one question, repairing quotes that are not in the sources up to `repairs` times.
+    """Write one question, repairing quotes that are not in the sources and a question that
+    asks two things, up to `repairs` times.
 
-    The result is returned whether or not the quotes came good: the caller records why a
+    The result is returned whether or not the repairs came good: the caller records why a
     question was turned down as readily as why it was kept.
     """
     agent = question_agent(model)
@@ -225,7 +283,8 @@ async def generate_question(
         usage = add_usage(usage, result)
         quotes = ground(result.output, sources)
         failed = [quote for quote in quotes if not quote.grounded]
-        if not failed or attempt > repairs:
+        split = compound(result.output.question)
+        if (not failed and split is None) or attempt > repairs:
             answered = result.all_messages()[-1]
             return Generated(
                 question=result.output,
@@ -234,8 +293,14 @@ async def generate_question(
                 style=style,
                 usage=usage,
                 attempts=attempt,
+                compound=split,
             )
-        log.info("repairing %d quote(s): %s", len(failed), [q.problem for q in failed])
+        log.info(
+            "repairing %d quote(s): %s; compound: %s",
+            len(failed),
+            [quote.problem for quote in failed],
+            split or "no",
+        )
         history = result.all_messages()
-        prompt = repair_request(failed)
+        prompt = repair_request(failed, split)
     raise AssertionError("unreachable")

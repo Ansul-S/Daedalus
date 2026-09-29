@@ -1102,6 +1102,10 @@ export type SearchHitOut = {
      */
     link: string | null;
     /**
+     * License
+     */
+    license: string | null;
+    /**
      * Section
      */
     section: string | null;
@@ -1189,6 +1193,10 @@ export type SourceOut = {
      * Link
      */
     link: string | null;
+    /**
+     * License
+     */
+    license: string | null;
     /**
      * Section
      */

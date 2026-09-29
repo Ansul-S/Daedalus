@@ -85,6 +85,17 @@ def test_a_paced_batch_starts_each_provider_from_its_spend_today() -> None:
     assert (groq.pacer.spent, gemini.pacer.spent) == ((12, 45_000), (0, 0))
 
 
+def test_a_batch_can_be_written_by_groq_alone() -> None:
+    settings = make_settings(groq_api_key=KEY, gemini_api_key=KEY)
+
+    writer = paced_generation_model(settings, {settings.groq_model: (3, 9_000)}, groq_only=True)
+
+    assert not isinstance(writer, FallbackModel)
+    assert (writer.system, writer.pacer.spent) == ("groq", (3, 9_000))
+    with pytest.raises(RuntimeError, match="GROQ_API_KEY"):
+        paced_generation_model(make_settings(gemini_api_key=KEY), groq_only=True)
+
+
 def test_production_never_uses_ollama() -> None:
     settings = make_settings(environment="production", groq_api_key=KEY, gemini_api_key=None)
     assert grading_model(settings).system == "groq"

@@ -28,6 +28,10 @@ export type Report = {
   /** The checks that turned the question down, in the order they ran */
   failed: string[];
   quotes: QuoteCheck[];
+  /** Why the question asks more than one thing; null when it asks one */
+  compound: string | null;
+  /** Whether it was checked for asking one thing: questions written before generate-v4 weren't */
+  compoundChecked: boolean;
   /** The checker, a second model reading only the passages */
   answerable: boolean | null;
   missing: string | null;
@@ -44,8 +48,8 @@ export type Report = {
   edits: Edit[];
 };
 
-// The four checks, in the order they run
-export const CHECKS = ["quotes", "answerable", "trivia", "duplicate"] as const;
+// The five checks, in the order they run
+export const CHECKS = ["quotes", "compound", "answerable", "trivia", "duplicate"] as const;
 export type Check = (typeof CHECKS)[number];
 
 type Json = Record<string, unknown>;
@@ -104,6 +108,8 @@ export function readReport(validation: Json): Report {
       ? validation.failed.filter((name) => typeof name === "string")
       : [],
     quotes: quotes(validation.quotes),
+    compound: text(validation.compound),
+    compoundChecked: "compound" in validation,
     answerable: typeof validation.answerable === "boolean" ? validation.answerable : null,
     missing: text(validation.missing),
     kind: text(validation.kind),

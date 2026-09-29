@@ -3327,6 +3327,17 @@
             ],
             "title": "Link"
           },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
           "section": {
             "anyOf": [
               {
@@ -3428,6 +3439,7 @@
           "source_type",
           "citation",
           "link",
+          "license",
           "section",
           "page_start",
           "page_end",
@@ -3513,6 +3525,17 @@
             ],
             "title": "Link"
           },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
           "section": {
             "anyOf": [
               {
@@ -3540,6 +3563,7 @@
           "document_title",
           "citation",
           "link",
+          "license",
           "section",
           "superseded",
           "text"

@@ -157,7 +157,10 @@ def groq_grader(
 
 
 def paced_generation_model(
-    settings: Settings, spent: Mapping[str, tuple[int, int]] | None = None
+    settings: Settings,
+    spent: Mapping[str, tuple[int, int]] | None = None,
+    *,
+    groq_only: bool = False,
 ) -> Model:
     """Question generation in bulk: Groq, then Gemini, then the local grader.
 
@@ -166,12 +169,20 @@ def paced_generation_model(
     attempts or out of the day's budget. `spent` is the requests and tokens each model has
     already used today, by model name, so that the day's budget is the day's and not the
     batch's.
+
+    `groq_only` leaves the others out, so that every question of a batch has the same writer:
+    once Groq's day is spent the batch stops, and carries on another day.
     """
     if settings.fake_models:
         return fakes.writer()
     spent = spent or {}
+    writer = _paced(groq(settings), "groq", GROQ_FREE, spent.get(settings.groq_model))
+    if groq_only:
+        if writer is None:
+            raise RuntimeError("Writing with Groq alone needs GROQ_API_KEY")
+        return writer
     return _chain(
-        _paced(groq(settings), "groq", GROQ_FREE, spent.get(settings.groq_model)),
+        writer,
         _paced(gemini(settings), "gemini", GEMINI_FREE, spent.get(settings.gemini_model)),
         ollama(settings, settings.grader_model),
     )

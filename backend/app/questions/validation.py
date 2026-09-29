@@ -1,8 +1,9 @@
 """Deciding whether a generated question is worth keeping, and writing it down.
 
-Four checks stand between a question and the library:
+Five checks stand between a question and the library:
 
 * its evidence quotes are in the sources, which generation already established;
+* it asks one thing, not two joined together, which generation established too;
 * a second model, reading only those sources, can answer it;
 * that model reads it as a question to explain rather than a fact to recall, which is how
   trivia is caught -- asking outright whether something is trivia caught none of it in the
@@ -138,6 +139,10 @@ async def validate(
     }
     if not generated.grounded:
         failed.append("quotes")
+    # Why it asks more than one thing; None when it asks one
+    report["compound"] = generated.compound
+    if generated.compound is not None:
+        failed.append("compound")
 
     result = await checker(model).run(
         review(question.question, sources),

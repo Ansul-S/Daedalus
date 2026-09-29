@@ -10,6 +10,7 @@ import type { QuestionDetailOut, SourceOut } from "@/client/types.gen";
 import { ApiProblem } from "@/components/api-problem";
 import { Disclosure } from "@/components/disclosure";
 import { Pips } from "@/components/hatching";
+import { Licence } from "@/components/licence";
 import { Markdown } from "@/components/markdown";
 import { Rate } from "@/components/rating";
 import { SheetHead, SheetSection, TitleBlock } from "@/components/sheet";
@@ -131,6 +132,7 @@ function Sources({ sources }: { sources: SourceOut[] }) {
               ) : (
                 source.citation
               )}
+              {source.license && <Licence url={source.license} />}
               {source.superseded && <Badge variant="thread">Replaced by a later ingestion</Badge>}
             </p>
             <Disclosure summary="Read the passage">
