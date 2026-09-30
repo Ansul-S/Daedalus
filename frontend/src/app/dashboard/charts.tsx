@@ -210,11 +210,17 @@ export function ScoreTrend({ scores, today }: { scores: ScoreOut[]; today: strin
   const narrow = width < 440;
   const height = 190;
   const left = 36;
-  const right = narrow ? 18 : 92;
+  const count = scores.length;
+  const newest = scores[count - 1];
+  const reading = newest
+    ? `${newest.score.toFixed(2)} · ${newest.day === today ? "today" : dayLabel(newest.day)}`
+    : "";
+  // Wide, the newest score's label sits to the right of the plot: 11 px out from the point,
+  // at 6.6 px a character (11 px JetBrains Mono), so a date fits as well as "today"
+  const right = narrow ? 18 : Math.max(92, 11 + Math.ceil(reading.length * 6.6) + 4);
   // Narrow, the newest score's label gets a band of its own above the plot
   const top = narrow ? 30 : 14;
   const bottom = 28;
-  const count = scores.length;
   const xOf = (index: number) =>
     count === 1
       ? left + (width - left - right) / 2
@@ -227,10 +233,8 @@ export function ScoreTrend({ scores, today }: { scores: ScoreOut[]; today: strin
   }
 
   const points = scores.map((score, index) => `${xOf(index).toFixed(1)},${yOf(score.score).toFixed(1)}`);
-  const newest = scores[count - 1];
   const lx = xOf(count - 1);
   const ly = yOf(newest.score);
-  const when = newest.day === today ? "today" : dayLabel(newest.day);
   // Beside the newest point, or over it in the band when there is no room to its right
   const label = narrow
     ? { x: lx + 5, y: 12, anchor: "end" as const }
@@ -284,7 +288,7 @@ export function ScoreTrend({ scores, today }: { scores: ScoreOut[]; today: strin
           ))}
           <circle cx={lx} cy={ly} r={at === count - 1 ? 7 : 5.5} className="fill-thread stroke-ground" strokeWidth={2} />
           <text x={label.x} y={label.y} textAnchor={label.anchor} className="fill-thread font-mono text-[11px] font-semibold">
-            {newest.score.toFixed(2)} · {when}
+            {reading}
           </text>
           <text x={xOf(0)} y={height - 8} textAnchor="middle" className={TICK}>
             1
