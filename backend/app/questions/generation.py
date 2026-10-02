@@ -25,7 +25,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import count
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, NativeOutput
@@ -263,7 +263,7 @@ def ground(question: GeneratedQuestion, sources: list[Source]) -> list[QuoteChec
     ]
 
 
-def add_usage(total: dict[str, int], result: AgentRunResult[GeneratedQuestion]) -> dict[str, int]:
+def add_usage(total: dict[str, int], result: AgentRunResult[Any]) -> dict[str, int]:
     used = result.usage
     counted = {
         "requests": used.requests,
