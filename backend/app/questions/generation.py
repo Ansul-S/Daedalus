@@ -32,6 +32,7 @@ from pydantic_ai import Agent, NativeOutput
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
+from pydantic_ai.usage import RunUsage
 
 from app.db.models import QUESTION_STYLES, Chunk
 from app.ingest.chunking import SECTION_SEPARATOR
@@ -263,15 +264,18 @@ def ground(question: GeneratedQuestion, sources: list[Source]) -> list[QuoteChec
     ]
 
 
-def add_usage(total: dict[str, int], result: AgentRunResult[Any]) -> dict[str, int]:
-    used = result.usage
-    counted = {
+def counted(used: RunUsage) -> dict[str, int]:
+    """What a run used, as a question records it."""
+    return {
         "requests": used.requests,
         "input_tokens": used.input_tokens,
         "output_tokens": used.output_tokens,
         "reasoning_tokens": int((used.details or {}).get("reasoning_tokens", 0) or 0),
     }
-    return {name: total.get(name, 0) + value for name, value in counted.items()}
+
+
+def add_usage(total: dict[str, int], result: AgentRunResult[Any]) -> dict[str, int]:
+    return {name: total.get(name, 0) + value for name, value in counted(result.usage).items()}
 
 
 async def generate_question(
