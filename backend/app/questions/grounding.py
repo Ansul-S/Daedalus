@@ -16,7 +16,7 @@ import re
 import string
 import unicodedata
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from rapidfuzz import fuzz
 
@@ -101,6 +101,18 @@ LAYOUT = frozenset("$`*#")
 ENDS = ".,:;!?\"'"
 # What stands around a formula in a sentence without being part of it
 AROUND = ",.;:!?\"'$"
+# What only sizes a bracket or breaks a line in typeset mathematics: `\big[` and `\bigg[` open
+# the same bracket. generate-v8 copied DPO's gradient equation with `\big` for `\bigg` and
+# without its line break, and the inventory dropped a `\bigl` from the KL-constrained objective.
+# Left out of the comparison, those three hold, and nothing else written up to 5 Oct changes
+# (the inventory's 74 sentences and the 219 of generate-v6 to v8). `\bigcup` and `\leftarrow`
+# are symbols, not sizes, and stay.
+SIZING = re.compile(r"\\(?:[bB]igg?[lrm]?|left|right|middle)(?![a-zA-Z])|\\\\")
+
+
+def unsized(text: str) -> str:
+    """Typeset mathematics without what only sizes its brackets or breaks its lines."""
+    return SIZING.sub("", text)
 
 
 def folded(text: str) -> str:
@@ -255,10 +267,16 @@ def check_evidence(quote: str, chunk_id: int, chunk_text: str | None) -> QuoteCh
     Mathematics is held to more than prose. A sentence that holds or touches a formula has to
     be an exact copy, the formula's case and all, and may not start or end inside one: a
     formula retyped -- `F=|V|/|S|` for `F=\\frac{|V|}{|S|}`, `y_w` for `y_{w}` -- says
-    something the source does not write, however close it scores.
+    something the source does not write, however close it scores. Only what sizes a bracket or
+    breaks a line is left out of both before they are compared (`unsized`).
     """
     if chunk_text is None:
         return check_quote(quote, chunk_id, None)
+    return replace(held(unsized(quote), chunk_id, unsized(chunk_text)), quote=quote)
+
+
+def held(quote: str, chunk_id: int, chunk_text: str) -> QuoteCheck:
+    """`check_evidence` on a copy and a chunk already without their sizing commands."""
 
     def failed(problem: str, score: float = 0.0) -> QuoteCheck:
         return QuoteCheck(quote=quote, chunk_id=chunk_id, score=score, problem=problem)

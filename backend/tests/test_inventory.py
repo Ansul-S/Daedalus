@@ -390,6 +390,54 @@ def test_mathematics_in_evidence_is_held_to_more_than_prose(
     assert check_evidence(quote, 7, EVIDENCE_CHUNK).problem == problem
 
 
+SIZED_CHUNK = (
+    "The gradient can be written as: $$\\nabla L =\\\\ -\\beta\\bigg[\\sigma(z)\\bigg]$$. "
+    "It is cheap to compute."
+)
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "The gradient can be written as: $$\\nabla L = -\\beta\\big[\\sigma(z)\\big]$$.",
+        "The gradient can be written as: $\\nabla L = -\\beta\\Bigl[\\sigma(z)\\Bigr]$.",
+        "The gradient can be written as: $\\nabla L = -\\beta\\left[\\sigma(z)\\right]$",
+        "The gradient can be written as: $\\nabla L = -\\beta[\\sigma(z)]$.",
+    ],
+)
+def test_sizing_a_bracket_or_breaking_a_line_writes_the_same_formula(quote: str) -> None:
+    check = check_evidence(quote, 3, SIZED_CHUNK)
+
+    # The copy is kept as it was written, though compared without its sizing.
+    assert (check.problem, check.quote) == (None, quote)
+
+
+@pytest.mark.parametrize(
+    ("chunk", "quote", "problem"),
+    [
+        # A symbol that begins like a size keeps all of it: "cup" and "arrow" are not copies.
+        (
+            "The union $\\bigcup_{i} A_{i}$ covers every set.",
+            "The union $cup_{i} A_{i}$ covers every set.",
+            "the quote is not in chunk 3 (closest match 90%)",
+        ),
+        (
+            "Every arrow $X\\leftarrow Y$ points back to its source.",
+            "Every arrow $Xarrow Y$ points back to its source.",
+            "the mathematics is not as chunk 3 writes it: Xarrow",
+        ),
+        (
+            "The gradient can be written as: $$\\nabla L = -\\beta\\bigg[\\sigma(z)\\bigg]$$.",
+            "The gradient can be written as: $$\\nabla L = \\beta\\big[\\sigma(z)\\big]$$.",
+            # The sign dropped inside a sized bracket still keeps it from being a copy.
+            "the quote holds mathematics but is not an exact copy of chunk 3",
+        ),
+    ],
+)
+def test_what_is_not_a_size_is_still_compared(chunk: str, quote: str, problem: str) -> None:
+    assert check_evidence(quote, 3, chunk).problem == problem
+
+
 def test_a_piece_found_twice_is_taken_where_the_shortening_holds() -> None:
     chunk = (
         "We scale the inputs first. Then the model trains for a while. "
