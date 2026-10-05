@@ -151,6 +151,7 @@ def show_plan(
     concepts: Mapping[str, Concept],
     styles: Mapping[str, str],
     by_key: Mapping[str, Entry],
+    passages: Mapping[str, list[str]],
 ) -> None:
     print(f"\n  {'idea':<6} {'style':<14} {'its passages support':<54} name")
     for key in keys:
@@ -158,7 +159,7 @@ def show_plan(
         state = "  (written)" if saved.written else ""
         if not saved.written and saved.error:
             state = f"  (failed before: {saved.error[:80]})"
-        supported = ", ".join(supported_styles(concepts[key]))
+        supported = ", ".join(supported_styles(concepts[key], passages[key]))
         print(f"  {key:<6} {styles[key]:<14} {supported:<54} {concepts[key].name}{state}")
     counts = Counter(styles[key] for key in keys)
     print(f"  Styles: {', '.join(f'{style} {n}' for style, n in counts.most_common())}")
@@ -378,14 +379,15 @@ async def run(
         print(f"The review leaves idea {', '.join(excluded)} out of planning.")
         return 1
     chosen = {key: concepts[key] for key in keys}
+    sources = {key: sources_of(concepts[key], documents) for key in [*by_key, *keys]}
+    passages = {key: [source.text for source in sources[key]] for key in keys}
     # A question already written keeps its style, so the spread around it holds from run to run.
     kept = {key: by_key[key].style for key in keys if key in by_key and by_key[key].written}
     try:
-        styles = assign_styles(chosen, kept | dict(args.style or []))
+        styles = assign_styles(chosen, kept | dict(args.style or []), passages)
     except ValueError as exc:
         print(f"No styles: {exc}.")
         return 1
-    sources = {key: sources_of(concepts[key], documents) for key in [*by_key, *keys]}
 
     for key in keys:
         planned = Entry(
@@ -424,7 +426,7 @@ async def run(
         return 0
 
     print(f"Questions on {len(keys)} idea(s) of {inventory_path}, saved to {path}")
-    show_plan(keys, concepts, styles, by_key)
+    show_plan(keys, concepts, styles, by_key, passages)
     to_write = [key for key in keys if not by_key[key].written]
     to_check = [key for key in keys if by_key[key].check is None]
     if to_write:

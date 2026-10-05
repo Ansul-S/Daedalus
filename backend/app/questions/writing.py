@@ -10,8 +10,9 @@ each rest on one of those sentences, and makes the reference answer of the key p
 It is not shown what was asked before: the plan asks each idea once.
 
 The code checks what it can (`check_answer`): every evidence sentence is in the passages
-(`check_evidence`), every key point rests on one that holds up, the question asks one thing
-(`compound`) and it stands without the document. The local model reads each answer against the
+(`check_evidence`), every key point rests on one that holds up and asks for more than the question
+already says (`off_question`), the question asks one thing (`compound`) and it stands without the
+document. The local model reads each answer against the
 passages as well (`check_question`): whether they answer it, and whether answering means
 explaining rather than recalling. What fails goes back once, with the problems named, a recall
 reading among them. Whether a key point says what its sentence says is left to a person: of
@@ -19,7 +20,8 @@ three checks measured on 422 key points labelled by hand, none caught enough of 
 ones without flagging too many of the rest.
 
 The style follows the evidence (`supported_styles`): a why or how question only when the passages
-give the reason, a comparison only when they draw one, a trade-off only when they name one.
+give the reason, a comparison only when they draw one, a trade-off only when they name one in
+their own words.
 Spread across the ideas planned together (`assign_styles`), no style takes over.
 """
 
@@ -43,13 +45,13 @@ from app.ingest.chunking import SECTION_SEPARATOR
 from app.llm.models import helper_settings
 from app.questions import validation
 from app.questions.generation import SOURCE, Source, compound, counted
-from app.questions.grounding import QuoteCheck, check_evidence
+from app.questions.grounding import FORMULA, QuoteCheck, check_evidence, folded
 from app.questions.inventory import Call, Concept, DocumentInventory, total_usage
 from app.questions.validation import AnswerCheck
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "generate-v7"
+PROMPT_VERSION = "generate-v8"
 # The passages an idea is written from, the best first, until the next would pass this many
 # tokens. A repair sends them again with the first answer, under the 8,000 tokens a minute of
 # Groq's free tier; the most any idea of the three demo papers takes is 4,183.
@@ -103,6 +105,44 @@ FRAMED = re.compile(
     re.IGNORECASE,
 )
 
+# A key point off the question (`off_question`). In five of generate-v7's eighteen that passed, the
+# question asked why while a key point graded what the question already said ("the normalization
+# term is the soft value function", asked why leaving that term out makes training unstable) or a
+# figure the passages report (CoT's 56%, 23% of errors, 3,000 examples): free marks for repeating
+# the question or reading off the page, which the local model cannot see, as it reads only the
+# question. Measured before it was built, the rule below found 4 of those 5 key points, and 9 of
+# the 187 in questions labelled good across generate-v6, generate-v7 and the 133 labelled by hand,
+# two of the nine a "1-to-1" spelled with a non-breaking hyphen, which it now folds.
+# Words with no content of their own, left out when a key point is set beside its question
+GRAMMAR_WORDS = """a an the and or but nor so yet for of in on at to from by with without within
+into onto over under about above below between among through during before after since until upon
+via per than then also only just even still both either neither each every all any some no not
+none more most less least many much few several such same other another own very too quite rather
+is are was were be been being am do does did doing done have has had having can could may might
+must shall should will would this that these those there here where when while why how what which
+who whom whose it its itself they them their theirs themselves we us our ours you your he him his
+she her i me my mine one ones as if because though although whether"""
+FUNCTION_WORDS = frozenset(GRAMMAR_WORDS.split())
+# Endings taken off before two words are compared, so that "scaling" meets "scaled"
+SUFFIXES = ("ations", "ation", "ings", "ing", "ions", "ion", "edly", "ed", "es", "s", "ly")
+# How much of a key point may be the question's own words before it says nothing more
+RESTATED = 0.8
+# A number standing on its own (56%, 3,000, 0.8), not the 4 of GPT-4 or the 540 of PaLM-540B
+NUMBER = re.compile(r"(?<![\w.-])\d+(?:[.,]\d+)*(?:\s*%)?(?![\w-])")
+ASKS_NUMBER = re.compile(
+    r"\bhow\s+(?:many|much|often)\b|\bwhat\s+(?:share|percentage|fraction|proportion)\b",
+    re.IGNORECASE,
+)
+
+# A trade-off named in the passages' own words. The inventory found one in passages that name
+# none, and the question written from them invented its cost; the two whose passages say
+# "trade-off", "tradeoff" or "balances" asked about the one they name.
+TRADE_OFF = re.compile(
+    r"\btrade[- ]?offs?\b|\bbalanc(?:e|es|ed|ing)\b|\bat\s+the\s+(?:cost|expense)\s+of\b"
+    r"|\bin\s+exchange\s+for\b|\bsacrific(?:e|es|ed|ing)\b",
+    re.IGNORECASE,
+)
+
 INSTRUCTIONS = """\
 You write one question for an AI and machine-learning engineering interview, about one idea,
 from the passages you are given and from nothing else. You write its parts in the order they rest
@@ -128,7 +168,9 @@ question on with "and how", "and what" or "and why", or with a second question m
 key_points: what an answer to the question has to contain, two to four of them. Each is part of
 the answer to what the question asks, says only what one evidence sentence says, gives the
 number of that sentence, counted from 1, and has a weight of 1, 2 or 3 for how much of the
-answer it carries.
+answer it carries. A key point is something the answer has to explain: never what the question
+already says, and never a figure the passages report -- a percentage, a rate, a count -- unless
+the question asks for it.
 
 reference_answer: what a strong candidate would say, in a few sentences, made of the key points
 and nothing else, however true it would be.
@@ -195,6 +237,8 @@ class Checks:
     compound: str | None
     # What ties the question to its document, if anything does
     framed: str | None
+    # Why each key point grades something the question does not ask; None for one that does not
+    asks: list[str | None] = field(default_factory=list)
 
     @property
     def failed(self) -> list[str]:
@@ -202,6 +246,7 @@ class Checks:
         failures = {
             "evidence": not self.evidence or not all(check.grounded for check in self.evidence),
             "key_points": self.count is not None or any(self.points),
+            "off_question": any(self.asks),
             "compound": self.compound is not None,
             "framed": self.framed is not None,
         }
@@ -257,18 +302,20 @@ class Entry:
         return bool(self.answers)
 
 
-def supported_styles(concept: Concept) -> list[str]:
+def supported_styles(concept: Concept, passages: Sequence[str] | None = None) -> list[str]:
     """The styles an idea's passages can carry, from what the inventory found they explain: a why
     or how question, and the intuition behind a mechanism or a definition, only when they give
-    the reason; a comparison only when they draw one; a trade-off only when they name one; and
-    failure modes only when they describe them."""
+    the reason; a comparison only when they draw one; a trade-off only when they name one, and,
+    given the passages, name it in their own words; and failure modes only when they describe
+    them."""
     kinds = set(concept.kinds)
     given = concept.reason == "given"
+    named = passages is None or any(TRADE_OFF.search(folded(text)) for text in passages)
     supported = {
         "why_how": given,
         "intuition": given and bool(kinds & {"mechanism", "definition"}),
         "compare": "comparison" in kinds,
-        "tradeoffs": "trade-off" in kinds,
+        "tradeoffs": "trade-off" in kinds and named,
         "failure_modes": "failure" in kinds,
     }
     return [style for style, ok in supported.items() if ok]
@@ -280,9 +327,12 @@ def key_order(key: str) -> tuple[int, ...]:
 
 
 def assign_styles(
-    concepts: dict[str, Concept], chosen: dict[str, str] | None = None
+    concepts: dict[str, Concept],
+    chosen: dict[str, str] | None = None,
+    passages: dict[str, list[str]] | None = None,
 ) -> dict[str, str]:
-    """A style for each idea, one its passages support, spread so that no style takes over.
+    """A style for each idea, one its passages support, spread so that no style takes over;
+    `passages`, each idea's texts, let a trade-off be asked only where they name one.
 
     The ideas take their turn in an order of their own, whatever order they come in: those with
     the fewest styles to choose from first, then by key. Each takes the style given least so
@@ -294,7 +344,10 @@ def assign_styles(
     do not support.
     """
     chosen = chosen or {}
-    supported = {key: supported_styles(concept) for key, concept in concepts.items()}
+    supported = {
+        key: supported_styles(concept, None if passages is None else passages.get(key))
+        for key, concept in concepts.items()
+    }
     for key, style in chosen.items():
         if key not in concepts:
             raise ValueError(f"a style is chosen for idea {key}, which is not planned")
@@ -366,6 +419,48 @@ def framed(question: str) -> str | None:
     return f'it mentions "{found.group(0)}"' if found is not None else None
 
 
+def plain(text: str) -> str:
+    """Text without its mathematics, in one kind of hyphen: what the key-point check reads."""
+    return FORMULA.sub(" ", folded(respelled(text)))
+
+
+def stem(word: str) -> str:
+    for suffix in SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    return word
+
+
+def content_words(text: str) -> list[str]:
+    """The words of a text that carry its content, their endings taken off."""
+    words = re.findall(r"[a-z]+", plain(text).lower())
+    return [stem(word) for word in words if word not in FUNCTION_WORDS and len(word) >= 2]
+
+
+def same_word(one: str, other: str) -> bool:
+    """Whether two stems are one word: equal, or one begins the other and is 4 letters or more."""
+    shorter = min(len(one), len(other))
+    return one == other or (shorter >= 4 and (one.startswith(other) or other.startswith(one)))
+
+
+def off_question(point: str, question: str) -> str | None:
+    """Why a key point grades something the question does not ask, or None when it does not: it
+    only says what the question already says, or it grades a figure the passages report that the
+    question does not ask for."""
+    words, asked = content_words(point), content_words(question)
+    repeated = sum(any(same_word(word, other) for other in asked) for word in words)
+    if len(words) >= 3 and repeated >= RESTATED * len(words):
+        return "it only says what the question already says: grade what the answer has to explain"
+    figure = NUMBER.search(plain(point))
+    numbers_asked = NUMBER.search(plain(question)) or ASKS_NUMBER.search(question)
+    if figure is not None and not numbers_asked:
+        return (
+            f'it grades a figure the passages report ("{figure.group(0)}"), which the question '
+            "does not ask for"
+        )
+    return None
+
+
 def respelled(sentence: str) -> str:
     """A sentence with its inline mathematics delimited as the passages delimit it: LaTeX's
     \\(...\\) written $...$. generate-v6 copied one formula exactly but in the other spelling."""
@@ -418,6 +513,7 @@ def check_answer(answer: IdeaQuestion, sources: Sequence[Source]) -> Checks:
         else f"{counted_points}, not two to four",
         compound=compound(answer.question),
         framed=framed(answer.question),
+        asks=[off_question(point.text, answer.question) for point in answer.key_points],
     )
 
 
@@ -433,6 +529,13 @@ def problems(answer: IdeaQuestion, checks: Checks) -> list[str]:
         f'key point {number} ("{point.text}"): {why}'
         for number, (point, why) in enumerate(
             zip(answer.key_points, checks.points, strict=True), start=1
+        )
+        if why is not None
+    ]
+    lines += [
+        f'key point {number} ("{point.text}"): {why}'
+        for number, (point, why) in enumerate(
+            zip(answer.key_points, checks.asks, strict=True), start=1
         )
         if why is not None
     ]
@@ -644,8 +747,10 @@ def entry_json(entry: Entry, sources: Sequence[Source]) -> dict[str, Any]:
             for check in checks.evidence
         ],
         "key_points": [
-            point | {"evidence": cited.evidence, "problem": why}
-            for point, cited, why in zip(points, answer.key_points, checks.points, strict=True)
+            point | {"evidence": cited.evidence, "problem": why or asked}
+            for point, cited, why, asked in zip(
+                points, answer.key_points, checks.points, checks.asks, strict=True
+            )
         ],
         "problems": problems(answer, checks),
         "failed": failed,

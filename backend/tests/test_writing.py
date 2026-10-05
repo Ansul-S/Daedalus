@@ -19,6 +19,7 @@ from app.questions.grounding import check_quote
 from app.questions.inventory import Call, Concept, DocumentInventory, Passage, Window
 from app.questions.validation import AnswerCheck
 from app.questions.writing import (
+    INSTRUCTIONS,
     MAX_TOKENS,
     PASSAGE_TOKENS,
     PROMPT_VERSION,
@@ -36,6 +37,7 @@ from app.questions.writing import (
     framed,
     library_key_points,
     misfit,
+    off_question,
     problems,
     read_entries,
     request,
@@ -157,6 +159,24 @@ def test_a_style_is_offered_only_where_the_passages_support_it(
     assert supported_styles(concept(kinds=kinds, reason=reason)) == styles
 
 
+@pytest.mark.parametrize(
+    ("passages", "styles"),
+    [
+        (None, ["tradeoffs"]),
+        # The inventory saw a trade-off here, but the passages name none.
+        (["The examples are weighed by how wrong the implicit reward is, scaled by beta."], []),
+        (["This is an expected trade-off between factuality and flexibility."], ["tradeoffs"]),
+        (["DPO\u2019s reward/KL trade\u2011off strictly dominates PPO."], ["tradeoffs"]),
+        (["The objective balances exploitation of reward against drift."], ["tradeoffs"]),
+        (["Higher reward comes at the cost of a larger KL divergence."], ["tradeoffs"]),
+    ],
+)
+def test_a_trade_off_is_asked_only_where_the_passages_name_one(
+    passages: list[str] | None, styles: list[str]
+) -> None:
+    assert supported_styles(concept(kinds=["trade-off"], reason="stated"), passages) == styles
+
+
 def ideas(*kinds: tuple[list[str], str]) -> dict[str, Concept]:
     return {
         f"1.{number}": concept(f"idea {number}", kinds=found, reason=reason)
@@ -276,6 +296,18 @@ def test_a_style_the_passages_cannot_carry_is_refused(
     assert str(refused.value).startswith(error)
 
 
+def test_the_spread_reads_the_passages_for_a_trade_off() -> None:
+    planned = ideas((["mechanism", "trade-off"], "given"), (["mechanism", "trade-off"], "given"))
+    passages = {
+        "1.1": ["The weight is scaled by beta, the strength of the KL constraint."],
+        "1.2": ["This is a trade-off between reward and drift from the reference."],
+    }
+
+    assert assign_styles(planned, passages=passages) == {"1.1": "why_how", "1.2": "tradeoffs"}
+    with pytest.raises(ValueError, match="idea 1.1's passages do not support tradeoffs"):
+        assign_styles(planned, {"1.1": "tradeoffs"}, passages)
+
+
 def test_the_request_shows_the_idea_its_style_and_every_passage() -> None:
     prompt = request(concept(), SOURCES, "failure_modes")
 
@@ -357,6 +389,84 @@ def test_an_idea_is_written_from_its_best_passages_as_far_as_they_fit() -> None:
 )
 def test_a_question_framed_on_its_document_is_found_out(question: str, problem: str | None) -> None:
     assert framed(question) == problem
+
+
+@pytest.mark.parametrize(
+    ("point", "question", "problem"),
+    [
+        (
+            "The normalization term is the soft value function.",
+            "Why does leaving out the normalization term that acts as a soft value function make "
+            "training unstable?",
+            "it only says what the question already says: grade what the answer has to explain",
+        ),
+        # Five of its six words are the question's: at the line, it says nothing more.
+        (
+            "The soft value function normalization term is learned.",
+            "Why does leaving out the normalization term that acts as a soft value function make "
+            "training unstable?",
+            "it only says what the question already says: grade what the answer has to explain",
+        ),
+        (
+            "Without it the policy gradient has high variance.",
+            "Why does leaving out the normalization term make training unstable?",
+            None,
+        ),
+        # Too few words to tell
+        ("It derails the reasoning.", "Why does an empty search derail the reasoning?", None),
+        (
+            "Non-informative search accounts for 23% of error cases.",
+            "Why does a non-informative search derail the reasoning?",
+            'it grades a figure the passages report ("23%"), which the question does not ask for',
+        ),
+        (
+            "Fine-tuning on 3,000 examples makes it the best method.",
+            "Why does fine-tuning help it more than prompting?",
+            'it grades a figure the passages report ("3,000"), which the question does not ask for',
+        ),
+        # Numbers inside mathematics, in names and in a non-breaking "1-to-1" are not figures.
+        ("Scaling by $\\frac{1}{\\sqrt{d_k}}$ keeps the softmax out of saturation.", SINGLE, None),
+        ("GPT-4 judges agree with humans about as often as humans agree.", SINGLE, None),
+        ("Back-off dictionaries assume a 1\u2011to\u20111 correspondence.", SINGLE, None),
+        # A question that asks for a number, or names one, may have it graded.
+        (
+            "Hallucination makes up 56% of the errors it makes.",
+            "How often does hallucination cause a failure with CoT?",
+            None,
+        ),
+        (
+            "Fine-tuning on 3,000 examples teaches the model to act, a skill that generalizes.",
+            "Why does fine-tuning on 3,000 examples beat prompting?",
+            None,
+        ),
+    ],
+)
+def test_a_key_point_off_the_question_is_found_out(
+    point: str, question: str, problem: str | None
+) -> None:
+    assert off_question(point, question) == problem
+
+
+def test_the_writer_is_told_what_a_key_point_must_not_grade() -> None:
+    assert "never what the question\nalready says" in INSTRUCTIONS
+    assert "never a figure the passages report" in INSTRUCTIONS
+
+
+def test_a_key_point_off_the_question_fails_the_answer_and_is_named() -> None:
+    repeated = "the dot products are scaled before the softmax"
+    answered = written(points=[("large dot products saturate the softmax", 3, 1), (repeated, 2, 2)])
+
+    checks = check_answer(answered, SOURCES)
+
+    assert checks.failed == ["off_question"]
+    assert checks.points == [None, None]
+    assert problems(answered, checks) == [
+        f'key point 2 ("{repeated}"): it only says what the question already says: grade what '
+        "the answer has to explain"
+    ]
+    [saved] = entries_json([entry(answers=[answered])], {"1.1": SOURCES})["questions"]
+    assert saved["failed"] == ["off_question"]
+    assert saved["key_points"][1]["problem"].startswith("it only says what the question")
 
 
 def test_every_evidence_sentence_and_key_point_is_checked() -> None:
@@ -492,6 +602,21 @@ def test_what_fails_goes_back_once_with_every_problem_named() -> None:
     assert '- the question leans on the document: it mentions "the authors"' in repair
     # The first answer goes back with the request to mend it.
     assert len(seen[1]) > len(seen[0])
+
+
+def test_a_key_point_off_the_question_goes_back_with_the_rest() -> None:
+    seen: list[list[ModelMessage]] = []
+    first = answer(points=[("large dot products saturate the softmax", 3, 1), ("8 heads", 2, 2)])
+
+    result = asyncio.run(
+        write_question(writer([first, answer()], seen), concept(), SOURCES, "why_how")
+    )
+
+    assert (len(result.answers), result.checks.failed) == (2, [])
+    assert (
+        '- key point 2 ("8 heads"): it grades a figure the passages report ("8"), which the '
+        "question does not ask for" in last_prompt(seen[1])
+    )
 
 
 def test_the_reasoning_is_left_out_of_the_conversation_sent_back() -> None:
@@ -833,7 +958,7 @@ def test_a_question_saved_for_another_plan_does_not_fit_this_one() -> None:
     assert misfit(saved, entry(chunk_ids=[5])) == (
         "idea 1.1 was written with passages [5, 6], and is planned with [5]"
     )
-    assert misfit(saved, entry(version="generate-v8")).endswith(
-        f"prompt {PROMPT_VERSION}, and is planned with generate-v8"
+    assert misfit(saved, entry(version="generate-v1")).endswith(
+        f"prompt {PROMPT_VERSION}, and is planned with generate-v1"
     )
     assert misfit(saved, entry(name="dot-product scaling")) is not None
