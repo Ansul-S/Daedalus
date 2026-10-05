@@ -8,9 +8,10 @@ given a style its passages support, spread across the ideas (--style 4.14=compar
 Every question is saved to data/inventory/<database>.questions.json as it is written, with the
 checks it passed and failed, so that a run that stops -- on Ctrl+C, or on Groq's day running
 out -- carries on where it stopped when started again; a question whose repair Groq turns down
-stands as its first answer left it. Groq alone writes. The local model checks
-each question, and each is compared with the questions already in the database, which is
-reported and not judged: both need Ollama.
+stands as its first answer left it. Groq alone writes. The local model reads every answer as it
+comes, and one it reads as recall goes back with the code's problems; each question is then
+compared with the questions already in the database, which is reported and not judged. Both need
+Ollama. --out keeps a run apart; the day's spend counts every question file beside the inventory.
 
 --dry-run calls no model: it shows the styles and what the run would cost.
 --show calls no model either: it works the checks out again from the saved answers, and saves
@@ -52,13 +53,14 @@ from app.questions.inventory import (
     load_document,
     resume,
 )
-from app.questions.validation import nearest_question
+from app.questions.validation import AnswerCheck, nearest_question
 from app.questions.writing import (
     INSTRUCTIONS,
     PROMPT_VERSION,
     STYLE_BRIEFS,
     Entry,
     IdeaQuestion,
+    ReadingFailed,
     assign_styles,
     check_question,
     entries_json,
@@ -72,15 +74,15 @@ from app.questions.writing import (
 from scripts.ingest import configure_logging
 from scripts.inventory import review_path, reviewed
 
-# What a dry run assumes the writer sends back, which only a real run can tell: generate-v5's
-# answers came to about 500 tokens in one call (610 at most), and this one copies its evidence
-# sentences before anything else. The prompts are counted as the pacer counts them, a token to
-# four characters.
+# What a dry run assumes the writer sends back, which only a real run can tell: generate-v6's
+# answers came to 450 to 950 tokens in one call. The prompts are counted as the pacer counts
+# them, a token to four characters.
 ANSWER = (600, 1_200)
 # What a repair adds to the conversation it sends back
 REPAIR_REQUEST = 200
-# generate-v5 sent 19 of its 34 questions back once.
-REPAIRED = 19 / 34
+# generate-v6 sent 6 of its 20 questions back for the code's problems, and the local model read
+# 6 as recall, one of them among the 6: 11 of 20 would have gone back with recall sent back too.
+REPAIRED = 11 / 20
 # Groq's free tier, which the run waits on
 TOKENS_PER_MINUTE = 8_000
 
@@ -127,8 +129,8 @@ def added(*spends: Mapping[str, tuple[int, int]]) -> dict[str, tuple[int, int]]:
 
 def estimate(plans: list[tuple[Concept, list[Source], str]]) -> tuple[int, int, int, int]:
     """The prompt tokens of the first requests still to send, and the tokens of the run in all:
-    with no question sent back, at generate-v5's rate of repairs, and with every question sent
-    back once."""
+    with no question sent back, at generate-v6's rate of repairs with recall sent back too, and
+    with every question sent back once."""
     prompts = [
         len(INSTRUCTIONS + request(concept, sources, style)) // 4
         for concept, sources, style in plans
@@ -202,6 +204,19 @@ def saved_entries(path: Path) -> list[Entry]:
     return read_entries(json.loads(path.read_text())) if path.exists() else []
 
 
+def recorded_elsewhere(inventory: Path, path: Path) -> list[Call]:
+    """The requests recorded in the other question files beside the inventory -- an earlier run,
+    or one kept apart with --out -- which the day's spend counts as well as this file's."""
+    files = sorted(inventory.parent.glob(f"{inventory.stem}.questions*.json"))
+    return [
+        call
+        for other in files
+        if other.resolve() != path.resolve()
+        for entry in saved_entries(other)
+        for call in entry.calls
+    ]
+
+
 def save(path: Path, entries: list[Entry], sources: Mapping[str, list[Source]]) -> dict[str, Any]:
     """Written whole to a temporary file and moved into place, so a stop mid-write never leaves
     half a file."""
@@ -223,28 +238,37 @@ async def needs_ollama(settings: Settings) -> list[str]:
     ]
 
 
-async def write(model: Model, entry: Entry, concept: Concept, sources: list[Source]) -> None:
-    """Write an entry's question, recording what it cost whether or not it is written.
+async def write(
+    model: Model, checker: Model, entry: Entry, concept: Concept, sources: list[Source]
+) -> None:
+    """Write an entry's question, the local model reading every answer, and record what it cost
+    whether or not it is written.
 
     A writing that fails after an answer -- its repair turned down -- keeps what it wrote, and
     the question stands as that answer left it. One the day's budget stops is written again by
-    the next run, which has the budget for its repair.
+    the next run, which has the budget for its repair, and so is one the local model could not
+    read.
     """
     used = RunUsage()
     answers: list[IdeaQuestion] = []
+
+    async def read(question: str) -> tuple[AnswerCheck, str]:
+        return await check_question(checker, question, sources)
+
     try:
         with traced("generate", version=PROMPT_VERSION, idea=entry.key, style=entry.style):
             written = await write_question(
-                model, concept, sources, entry.style, usage=used, answers=answers
+                model, concept, sources, entry.style, usage=used, answers=answers, read=read
             )
     except Exception as exc:
         entry.error = f"{type(exc).__name__}: {exc}"[:2000]
         if used.requests:
             entry.calls.append(call(model.model_name, counted(used)))
-        if not out_of_budget(exc):
+        if not out_of_budget(exc) and not isinstance(exc, ReadingFailed):
             entry.answers = answers
         raise
     entry.answers, entry.error = written.answers, None
+    entry.check, entry.checker_model = written.check, written.checker_model
     entry.calls.append(call(written.model, written.usage))
 
 
@@ -391,6 +415,7 @@ async def run(
         spent,
         recent([*inventory_calls, *compare_calls], now),
         recent([call for entry in entries for call in entry.calls], now),
+        recent(recorded_elsewhere(inventory_path, path), now),
     )
     if args.show:
         data = save(path, entries, sources)
@@ -409,8 +434,9 @@ async def run(
         print(
             f"\nStill to write: {len(to_write)} question(s), {prompts:,} prompt tokens to start "
             f"with.\nIn all about {low:,} tokens if none is sent back, {high:,} if every one "
-            f"is sent back once, and {expected:,} at generate-v5's rate (19 of 34 sent back): "
-            f"about {expected // TOKENS_PER_MINUTE} minutes at Groq's 8,000 tokens a minute."
+            f"is sent back once, and {expected:,} at generate-v6's rate with recall sent back "
+            f"(11 of 20): about {expected // TOKENS_PER_MINUTE} minutes at Groq's 8,000 tokens "
+            "a minute."
         )
     print(f"Still to check with {settings.helper_model}: {len(to_check)} question(s).")
     for name, (requests, tokens) in day.items():
@@ -434,17 +460,23 @@ async def run(
         if not entry.written:
             say(f"{number}/{len(keys)} idea {key}, {entry.style}: writing")
             try:
-                await write(model, entry, chosen[key], sources[key])
+                await write(model, checker, entry, chosen[key], sources[key])
             except Exception as exc:
                 save(path, entries, sources)
                 if out_of_budget(exc):
                     stopped = f"the day's budget is gone ({exc})"
                     break
+                if isinstance(exc, ReadingFailed):
+                    print(f"\nStopped: the local checker failed ({exc}).")
+                    return 1
                 say(f"  failed: {entry.error}")
                 if not entry.written:
                     continue
             save(path, entries, sources)
             say(f"  {len(entry.answers)} answer(s), {entry.calls[-1].usage}")
+        if entry.check is not None:
+            continue
+        # Kept from a writing that failed, or written before the local model read as it went
         try:
             entry.check, entry.checker_model = await check_question(
                 checker, entry.answers[-1].question, sources[key]

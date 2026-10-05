@@ -11,12 +11,12 @@ It is not shown what was asked before: the plan asks each idea once.
 
 The code checks what it can (`check_answer`): every evidence sentence is in the passages
 (`check_evidence`), every key point rests on one that holds up, the question asks one thing
-(`compound`) and it stands without the document. What fails goes back once, with the problems
-named. The local model then reads the question against the passages (`check_question`): whether
-they answer it, and whether answering means explaining rather than recalling. Whether a key
-point says what its sentence says is left to a person: of three checks measured on 422 key
-points labelled by hand, none caught enough of the unsupported ones without flagging too many of
-the rest.
+(`compound`) and it stands without the document. The local model reads each answer against the
+passages as well (`check_question`): whether they answer it, and whether answering means
+explaining rather than recalling. What fails goes back once, with the problems named, a recall
+reading among them. Whether a key point says what its sentence says is left to a person: of
+three checks measured on 422 key points labelled by hand, none caught enough of the unsupported
+ones without flagging too many of the rest.
 
 The style follows the evidence (`supported_styles`): a why or how question only when the passages
 give the reason, a comparison only when they draw one, a trade-off only when they name one.
@@ -26,7 +26,7 @@ Spread across the ideas planned together (`assign_styles`), no style takes over.
 import logging
 import re
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import count
 from typing import Any, Literal
@@ -49,7 +49,7 @@ from app.questions.validation import AnswerCheck
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "generate-v6"
+PROMPT_VERSION = "generate-v7"
 # The passages an idea is written from, the best first, until the next would pass this many
 # tokens. A repair sends them again with the first answer, under the 8,000 tokens a minute of
 # Groq's free tier; the most any idea of the three demo papers takes is 4,183.
@@ -63,13 +63,15 @@ MISCONCEPTIONS = 3
 MAX_TOKENS = 5_000
 
 # What a question in each style asks, as the writer is told. The paper style and the connection
-# between two passages are gone: the plan is one idea, not one passage or two.
+# between two passages are gone: the plan is one idea, not one passage or two. Failure modes and
+# comparisons ask why: asked how or when it goes wrong, or how it differs, generate-v6 asked for
+# what the passages report in 5 of its 7, all of them labelled recall.
 STYLE_BRIEFS: dict[str, str] = {
     "why_how": "ask why it is done this way, or how it works",
     "intuition": "ask for the intuition behind it: what it is really doing, in plain terms",
-    "compare": "ask how it differs from the alternative the passages compare it with",
+    "compare": "ask why it behaves differently from the alternative the passages compare it with",
     "tradeoffs": "ask about the trade-off the passages name: what it gains, and what it costs",
-    "failure_modes": "ask how or when it goes wrong, as the passages describe it",
+    "failure_modes": "ask why it goes wrong, as the passages explain it",
 }
 assert set(STYLE_BRIEFS) <= set(QUESTION_STYLES)
 
@@ -88,12 +90,16 @@ EXPLAINS = {
 # labelled by hand it finds 15 of the 24 framed on their document, and 6 of the other 109, each
 # of them about one document's own system ("Stage 2 (Vector Search Enhancement)", "the proposed
 # multi-candidate span selection method") or naming "the Transformer paper". What it cannot see
-# is a document's own names for its parts and data ("CCPairs"), which takes reading.
+# is a document's own names for its parts and data ("CCPairs"), which takes reading. "According
+# to the analysis" and "according to the passages", which three of generate-v6's twenty leaned
+# on, appear in none of the 133.
 FRAMED = re.compile(
     r"\b(?:the|these)\s+authors?\b|\bpapers?\b|\barticle\b|\bthis\s+(?:work|study|document)\b"
     r"|\bthe\s+proposed\b|\bas\s+described\b|\bappendix\b"
     r"|\b(?:table|figure|fig\.|section|sec\.|stage|eqn?\.?|equation|algorithm|theorem|lemma)"
-    r"\s*\(?(?:\d+|[ivx]+\b)",
+    r"\s*\(?(?:\d+|[ivx]+\b)"
+    r"|\baccording\s+to\s+the\s+(?:[\w\u2011-]+\s+){0,3}?"
+    r"(?:analysis|results?|findings|experiments?|passages?|text)\b",
     re.IGNORECASE,
 )
 
@@ -107,15 +113,17 @@ about the idea -- why it is done, how it works, what it costs, how it fails or h
 one to four of them, each with the chunk it is in. Copy each one whole, character for character,
 as it stands: never shorten a sentence or join two with "...", and copy mathematics symbol for
 symbol, every command and bracket of it. Where a sentence of words says what a formula says, take
-the sentence of words.
+the sentence of words. A label written under or inside a formula is part of the formula, not a
+sentence.
 
 question: one question, in the style you are given, that the evidence answers for someone who
 has not read the passages. Ask only what the evidence answers: never a reason, a trade-off or a
 failure it does not state. It asks about the idea, never about the document: not its sections,
-tables, figures, equations or stages, not "the paper" or "the authors". Its answer explains
-something; a number, a name or a fact read off the page is not a question. It asks one thing:
-never join a second question on with "and how", "and what" or "and why", or with a second
-question mark.
+tables, figures, equations or stages, not "the paper", "the authors" or "the analysis". Its answer
+explains something; a number, a name or a fact read off the page is not a question, and nor is a
+result the passages report -- when something happened, how often, which did better -- however
+it is worded: ask what the passages explain about why. It asks one thing: never join a second
+question on with "and how", "and what" or "and why", or with a second question mark.
 
 key_points: what an answer to the question has to contain, two to four of them. Each is part of
 the answer to what the question asks, says only what one evidence sentence says, gives the
@@ -212,6 +220,9 @@ class Written:
     model: str
     style: str
     usage: dict[str, int]
+    # The local model's reading of the last answer and the model that read it, if one read it
+    check: AnswerCheck | None = None
+    checker_model: str | None = None
     prompt_version: str = PROMPT_VERSION
 
     @property
@@ -355,7 +366,13 @@ def framed(question: str) -> str | None:
     return f'it mentions "{found.group(0)}"' if found is not None else None
 
 
-def place(sentence: str, chunk_id: int, texts: dict[int, str]) -> QuoteCheck:
+def respelled(sentence: str) -> str:
+    """A sentence with its inline mathematics delimited as the passages delimit it: LaTeX's
+    \\(...\\) written $...$. generate-v6 copied one formula exactly but in the other spelling."""
+    return sentence.replace("\\(", "$").replace("\\)", "$")
+
+
+def filed(sentence: str, chunk_id: int, texts: dict[int, str]) -> QuoteCheck:
     """An evidence sentence checked against the chunk it names, then against the idea's other
     passages: found in another, it is filed there. Found in none, the check against the chunk it
     names says why."""
@@ -366,6 +383,16 @@ def place(sentence: str, chunk_id: int, texts: dict[int, str]) -> QuoteCheck:
         check_evidence(sentence, other, text) for other, text in texts.items() if other != chunk_id
     )
     return next((check for check in others if check.grounded), named)
+
+
+def place(sentence: str, chunk_id: int, texts: dict[int, str]) -> QuoteCheck:
+    """An evidence sentence filed under the passage it is in, its inline mathematics read as the
+    passages write it if it does not hold as written; then it is kept in their spelling."""
+    written = filed(sentence, chunk_id, texts)
+    if written.grounded or (spelled := respelled(sentence)) == sentence:
+        return written
+    as_spelled = filed(spelled, chunk_id, texts)
+    return as_spelled if as_spelled.grounded else written
 
 
 def resting(point: CitedPoint, evidence: Sequence[QuoteCheck]) -> str | None:
@@ -424,8 +451,8 @@ def repair_request(lines: Sequence[str]) -> str:
 
 def library_key_points(answer: IdeaQuestion, checks: Checks) -> list[dict[str, Any]]:
     """The key points as the library keeps them, each with the evidence sentence it rests on as
-    its evidence quote, filed under the chunk the sentence was found in. One resting on no
-    sentence has neither."""
+    its evidence quote, as the passage spells it and filed under the chunk it was found in. One
+    resting on no sentence has neither."""
     points = []
     for point in answer.key_points:
         number = point.evidence
@@ -434,7 +461,7 @@ def library_key_points(answer: IdeaQuestion, checks: Checks) -> list[dict[str, A
             {
                 "text": point.text,
                 "weight": point.weight,
-                "evidence_quote": answer.evidence[number - 1].sentence if rests else "",
+                "evidence_quote": checks.evidence[number - 1].quote if rests else "",
                 "chunk_id": checks.evidence[number - 1].chunk_id if rests else None,
             }
         )
@@ -471,6 +498,29 @@ def writing_settings() -> ModelSettings:
     return ModelSettings(thinking="low", max_tokens=MAX_TOKENS)
 
 
+# What goes back when the local model reads a question as recall. The six of generate-v6's twenty
+# it read as recall were all labelled recall by hand.
+RECALL = (
+    "answering the question means recalling what the passages report, not explaining it: ask "
+    "why or how, as the evidence explains it"
+)
+
+# The local model reading a question against the idea's passages: its reading, and which model
+Reader = Callable[[str], Awaitable[tuple[AnswerCheck, str]]]
+
+
+class ReadingFailed(Exception):
+    """The local model could not read an answer. The writing stops, to be done again from the
+    start once it can, so that no question goes without the reading its repair rests on."""
+
+
+async def reading_of(read: Reader, question: str) -> tuple[AnswerCheck, str]:
+    try:
+        return await read(question)
+    except Exception as exc:
+        raise ReadingFailed(f"{type(exc).__name__}: {exc}") from exc
+
+
 async def write_question(
     model: Model,
     concept: Concept,
@@ -480,10 +530,13 @@ async def write_question(
     repairs: int = 1,
     usage: RunUsage | None = None,
     answers: list[IdeaQuestion] | None = None,
+    read: Reader | None = None,
 ) -> Written:
     """Write one question about an idea, sending back what the code finds wrong up to `repairs`
-    times. `usage` counts every request as it is made, and `answers` keeps every answer as it
-    comes, so a writing that fails part-way still says what it spent and what it wrote.
+    times, and, given `read`, what the local model reads as recall: it reads every answer before
+    anything goes back, so recall goes back in the same round as the code's problems. `usage`
+    counts every request as it is made, and `answers` keeps every answer as it comes, so a
+    writing that fails part-way still says what it spent and what it wrote.
 
     The result is returned whether or not the repairs came good: why a question is turned down
     is kept as readily as why it is kept.
@@ -503,7 +556,9 @@ async def write_question(
         )
         given.append(result.output)
         checks = check_answer(result.output, sources)
-        if not checks.failed or attempt > repairs:
+        reading = await reading_of(read, result.output.question) if read is not None else None
+        recalled = reading is not None and reading[0].kind == "recall"
+        if not (checks.failed or recalled) or attempt > repairs:
             answered = result.all_messages()[-1]
             return Written(
                 answers=list(given),
@@ -511,9 +566,11 @@ async def write_question(
                 model=getattr(answered, "model_name", None) or model.model_name,
                 style=style,
                 usage=counted(spent),
+                check=reading[0] if reading is not None else None,
+                checker_model=reading[1] if reading is not None else None,
             )
-        lines = problems(result.output, checks)
-        log.info("sending back %s: %s", ", ".join(checks.failed), lines)
+        lines = problems(result.output, checks) + [RECALL] * recalled
+        log.info("sending back %s: %s", ", ".join(checks.failed + ["trivia"] * recalled), lines)
         history = without_reasoning(result.all_messages())
         prompt = repair_request(lines)
     raise AssertionError("unreachable")

@@ -3,6 +3,7 @@ copied first, and what the code makes of the answer."""
 
 import asyncio
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -21,9 +22,12 @@ from app.questions.writing import (
     MAX_TOKENS,
     PASSAGE_TOKENS,
     PROMPT_VERSION,
+    RECALL,
     STYLE_BRIEFS,
     Entry,
     IdeaQuestion,
+    Reader,
+    ReadingFailed,
     assign_styles,
     check_answer,
     check_question,
@@ -278,7 +282,7 @@ def test_the_request_shows_the_idea_its_style_and_every_passage() -> None:
     assert prompt.startswith(
         "The idea: scaling the dot products. Large dot products saturate the softmax, so they "
         "are scaled down.\nThe passages explain how it works and the reason for it."
-        "\n\nWrite the question in this style: ask how or when it goes wrong"
+        "\n\nWrite the question in this style: ask why it goes wrong, as the passages explain it"
     )
     assert f"[chunk 5] {SOURCES[0].citation}\n<<<\n{SOURCES[0].text}\n>>>" in prompt
     assert f"[chunk 6] {SOURCES[1].citation}\n<<<\n{SOURCES[1].text}\n>>>" in prompt
@@ -287,6 +291,10 @@ def test_the_request_shows_the_idea_its_style_and_every_passage() -> None:
     bare = request(concept(kinds=[]), SOURCES, "why_how")
     assert "The passages explain" not in bare
     assert "so they are scaled down.\n\nWrite the question" in bare
+    # Asked how or when it fails, or how it differs, the writer asked for a reported result.
+    assert "in this style: ask why it behaves differently from" in request(
+        concept(), SOURCES, "compare"
+    )
 
 
 def test_an_idea_is_written_from_its_best_passages_as_far_as_they_fit() -> None:
@@ -332,6 +340,19 @@ def test_an_idea_is_written_from_its_best_passages_as_far_as_they_fit() -> None:
         ("What does Theorem 1 guarantee?", 'it mentions "Theorem 1"'),
         ("Why is the proposed method faster?", 'it mentions "the proposed"'),
         ("What does Section IV argue?", 'it mentions "Section IV"'),
+        (
+            "According to the analysis, what happens when the term is left out?",
+            'it mentions "According to the analysis"',
+        ),
+        (
+            "When does hallucination occur according to the reported failure analysis?",
+            'it mentions "according to the reported failure analysis"',
+        ),
+        (
+            "According to the passages, how does the approach go wrong?",
+            'it mentions "According to the passages"',
+        ),
+        ("According to the Bradley-Terry model, why does a wider gap matter?", None),
     ],
 )
 def test_a_question_framed_on_its_document_is_found_out(question: str, problem: str | None) -> None:
@@ -404,6 +425,21 @@ def test_key_points_are_kept_as_the_library_keeps_them() -> None:
         {"text": "heads", "weight": 2, "evidence_quote": HEADS, "chunk_id": 6},
         {"text": "nowhere", "weight": 1, "evidence_quote": "", "chunk_id": None},
     ]
+
+
+def test_inline_mathematics_written_the_latex_way_is_read_as_the_passage_writes_it() -> None:
+    latex = SATURATE.replace("$d_k$", "\\(d_k\\)")
+    retyped = SATURATE.replace("$d_k$", "\\(d_{k}\\)")
+    answered = written(evidence=[(latex, 5), (retyped, 5)], points=[("saturation", 3, 1)] * 2)
+
+    checks = check_answer(answered, SOURCES)
+
+    first, second = checks.evidence
+    # Kept as the passage spells it, so the library quotes the passage.
+    assert (first.grounded, first.quote, first.chunk_id) == (True, SATURATE, 5)
+    assert library_key_points(answered, checks)[0]["evidence_quote"] == SATURATE
+    # Spelling aside, a formula retyped is still retyped, and the problem names it as written.
+    assert second.problem == "the mathematics is not as chunk 5 writes it: \\(d_{k}\\)"
 
 
 def test_a_question_whose_evidence_holds_is_written_in_one_call() -> None:
@@ -485,6 +521,84 @@ def test_what_still_fails_after_the_repair_is_returned_as_it_is() -> None:
     assert len(seen) == 2
 
 
+def reader(*kinds: str) -> tuple[Reader, list[str]]:
+    """The local model reading each question as the next of `kinds`, recording what it read."""
+    read: list[str] = []
+
+    async def reading(question: str) -> tuple[AnswerCheck, str]:
+        read.append(question)
+        kind = kinds[len(read) - 1]
+        check = AnswerCheck(kind=kind, answer="Scaling.", answerable=True, missing="nothing")
+        return check, "qwen3.5:4b"
+
+    return reading, read
+
+
+def test_recall_goes_back_in_the_same_round_as_the_codes_problems() -> None:
+    seen: list[list[ModelMessage]] = []
+    read, questions = reader("recall", "explain")
+
+    result = asyncio.run(
+        write_question(
+            writer([answer(question=DOUBLE), answer()], seen),
+            concept(),
+            SOURCES,
+            "why_how",
+            read=read,
+        )
+    )
+
+    assert questions == [DOUBLE, SINGLE]
+    repair = last_prompt(seen[1])
+    assert "- the question asks more than one thing: it joins a second question on" in repair
+    assert f"- {RECALL}" in repair
+    assert (len(result.answers), result.checks.failed) == (2, [])
+    assert result.check is not None and result.check.kind == "explain"
+    assert result.checker_model == "qwen3.5:4b"
+
+
+def test_an_answer_the_code_passes_goes_back_when_it_reads_as_recall() -> None:
+    seen: list[list[ModelMessage]] = []
+    read, _ = reader("recall", "recall")
+
+    result = asyncio.run(
+        write_question(writer([answer(), answer()], seen), concept(), SOURCES, "why_how", read=read)
+    )
+
+    assert last_prompt(seen[1]).startswith(f"Not all of it holds up:\n\n- {RECALL}\n\nSend")
+    # Read as recall after its repair too, it is returned with the reading that turns it down.
+    assert (len(seen), result.checks.failed) == (2, [])
+    assert result.check is not None and checker_failed(result.check) == ["trivia"]
+
+
+def test_an_answer_that_holds_and_explains_is_written_in_one_call() -> None:
+    seen: list[list[ModelMessage]] = []
+    read, _ = reader("explain")
+
+    result = asyncio.run(
+        write_question(writer([answer()], seen), concept(), SOURCES, "why_how", read=read)
+    )
+
+    assert len(seen) == 1
+    assert result.check is not None and result.check.kind == "explain"
+
+
+def test_a_reading_that_fails_stops_the_writing() -> None:
+    async def broken(question: str) -> tuple[AnswerCheck, str]:
+        raise ConnectionError("Ollama is not running")
+
+    kept: list[IdeaQuestion] = []
+
+    with pytest.raises(ReadingFailed, match="ConnectionError: Ollama is not running"):
+        asyncio.run(
+            write_question(
+                writer([answer()], []), concept(), SOURCES, "why_how", answers=kept, read=broken
+            )
+        )
+
+    assert len(kept) == 1
+
+
 def repair_failing(failure: Exception) -> FunctionModel:
     """A writer whose first answer is sent back, and whose repair fails with `failure`."""
 
@@ -509,17 +623,42 @@ def test_what_a_writing_spent_and_wrote_is_kept_when_the_repair_fails() -> None:
     assert [item.question for item in kept] == [DOUBLE]
 
 
+EXPLAINS = {"kind": "explain", "answer": "Scaling.", "answerable": True, "missing": "nothing"}
+
+
+def test_a_written_question_keeps_the_local_models_reading() -> None:
+    planned = entry()
+    read: list[str] = []
+
+    asyncio.run(
+        write_questions.write(
+            writer([answer()], []), checker(EXPLAINS, read), planned, concept(), SOURCES
+        )
+    )
+
+    assert planned.written and planned.error is None
+    assert planned.check is not None and planned.check.kind == "explain"
+    assert planned.checker_model == "function:respond:"
+    assert read[0].startswith(f"Question: {SINGLE}")
+
+
 def test_a_question_whose_repair_is_turned_down_stands_as_its_first_answer() -> None:
     planned = entry()
     refused = ModelHTTPError(400, "openai/gpt-oss-120b", {"code": "json_validate_failed"})
 
     with pytest.raises(ModelHTTPError):
-        asyncio.run(write_questions.write(repair_failing(refused), planned, concept(), SOURCES))
+        asyncio.run(
+            write_questions.write(
+                repair_failing(refused), checker(EXPLAINS, []), planned, concept(), SOURCES
+            )
+        )
 
     assert planned.written
     assert [item.question for item in planned.answers] == [DOUBLE]
     assert (planned.error or "").startswith("ModelHTTPError: status_code: 400")
     assert [call.usage["requests"] for call in planned.calls] == [1]
+    # The run reads the answer it kept once more: the reading before the repair went with it.
+    assert planned.check is None
 
 
 def test_a_question_the_days_budget_stops_is_written_again() -> None:
@@ -527,12 +666,60 @@ def test_a_question_the_days_budget_stops_is_written_again() -> None:
     gone = QuotaExhausted("groq", "groq is out of tokens for today")
 
     with pytest.raises(QuotaExhausted):
-        asyncio.run(write_questions.write(repair_failing(gone), planned, concept(), SOURCES))
+        asyncio.run(
+            write_questions.write(
+                repair_failing(gone), checker(EXPLAINS, []), planned, concept(), SOURCES
+            )
+        )
 
     # The next run, with a day's budget for its repair, writes it from the start.
     assert not planned.written
     assert (planned.error or "").startswith("QuotaExhausted")
     assert [call.usage["requests"] for call in planned.calls] == [1]
+
+
+def test_a_question_the_local_model_cannot_read_is_written_again() -> None:
+    planned = entry()
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        raise ConnectionError("Ollama is not running")
+
+    broken = FunctionModel(respond, profile=ModelProfile(supports_json_schema_output=True))
+
+    with pytest.raises(ReadingFailed):
+        asyncio.run(
+            write_questions.write(writer([answer()], []), broken, planned, concept(), SOURCES)
+        )
+
+    # Never read, its first answer would go without the repair a reading might have sent it.
+    assert not planned.written
+    assert (planned.error or "").startswith("ReadingFailed: ConnectionError")
+    assert [call.usage["requests"] for call in planned.calls] == [1]
+
+
+def test_the_days_spend_counts_every_question_file_beside_the_inventory(tmp_path: Path) -> None:
+    inventory = tmp_path / "demo.json"
+
+    def saved(name: str, *requests: int) -> Path:
+        calls = [
+            Call(model="m", version=PROMPT_VERSION, usage={"requests": n}, at="t") for n in requests
+        ]
+        path = tmp_path / name
+        path.write_text(json.dumps(entries_json([entry(calls=calls)], {"1.1": SOURCES})))
+        return path
+
+    saved("demo.questions.json", 1, 2)
+    apart = saved("demo.questions-v7.json", 3)
+    saved("other.questions.json", 4)
+
+    def counted_by(path: Path) -> list[int]:
+        calls = write_questions.recorded_elsewhere(inventory, path)
+        return sorted(call.usage["requests"] for call in calls)
+
+    # A run kept apart counts the earlier run beside it; this file's own are counted apart.
+    assert counted_by(apart) == [1, 2]
+    assert counted_by(tmp_path / "demo.questions.json") == [3]
+    assert counted_by(tmp_path / "elsewhere" / "questions.json") == [1, 2, 3]
 
 
 def checker(verdict: dict[str, Any], seen: list[str]) -> FunctionModel:
@@ -646,7 +833,7 @@ def test_a_question_saved_for_another_plan_does_not_fit_this_one() -> None:
     assert misfit(saved, entry(chunk_ids=[5])) == (
         "idea 1.1 was written with passages [5, 6], and is planned with [5]"
     )
-    assert misfit(saved, entry(version="generate-v7")).endswith(
-        f"prompt {PROMPT_VERSION}, and is planned with generate-v7"
+    assert misfit(saved, entry(version="generate-v8")).endswith(
+        f"prompt {PROMPT_VERSION}, and is planned with generate-v8"
     )
     assert misfit(saved, entry(name="dot-product scaling")) is not None
