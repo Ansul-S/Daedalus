@@ -19,7 +19,7 @@ is written into the question's report next to the checks it first went through.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated, Any, Literal, Self, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -56,6 +56,7 @@ from app.llm.embeddings import Embedder, EmbeddingError
 from app.questions.batch import start_run
 from app.questions.generation import Style
 from app.questions.grounding import QuoteCheck, check_quote
+from app.questions.library import correct
 
 log = logging.getLogger(__name__)
 
@@ -458,36 +459,7 @@ async def edit_question(
         else [point.model_dump() for point in body.key_points],
         "status": body.status,
     }
-    changes = {
-        name: {"from": getattr(question, name), "to": value}
-        for name, value in proposed.items()
-        if value is not None and value != getattr(question, name)
-    }
-    if changes:
-        edit: dict[str, Any] = {
-            "at": datetime.now(UTC).isoformat(timespec="seconds"),
-            "reason": body.reason or None,
-            "changes": changes,
-        }
-        for name, change in changes.items():
-            setattr(question, name, change["to"])
-        if "key_points" in changes and checks is not None:
-            edit["quotes"] = [
-                {
-                    "quote": check.quote,
-                    "chunk_id": check.chunk_id,
-                    "score": round(check.score, 1),
-                    "problem": check.problem,
-                }
-                for check in checks
-            ]
-        if "text" in changes:
-            question.embedding = vector
-            edit["embedding"] = "updated" if vector is not None else "cleared"
-        # A new dict, since the column does not track changes made inside the old one
-        question.validation = question.validation | {
-            "edits": [*question.validation.get("edits", []), edit]
-        }
+    correct(question, proposed, reason=body.reason, quotes=checks, vector=vector)
     await session.commit()
     return await _detail(session, user_id, question_id)
 
