@@ -77,8 +77,9 @@ export default defineConfig({
       name: "Web",
       command: "pnpm build && pnpm start",
       url: WEB,
-      // Sign-in off, whatever `.env` holds: the walk is the built-in user's
-      env: { NEXT_PUBLIC_API_URL: API, GITHUB_CLIENT_ID: "" },
+      // Sign-in off and practice not waiting for it, whatever `.env` holds: the walk is the
+      // built-in user's
+      env: { NEXT_PUBLIC_API_URL: API, GITHUB_CLIENT_ID: "", ENVIRONMENT: "local" },
       reuseExistingServer: false,
       timeout: 300_000,
       gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },

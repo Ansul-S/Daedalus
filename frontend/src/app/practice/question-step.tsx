@@ -78,22 +78,25 @@ export function QuestionLoading() {
   );
 }
 
+/** No question until the visitor signs in. */
+export function QuestionSignedOut() {
+  return (
+    <ThreadStep>
+      <StepLabel as="h2" meta="signed out">
+        Question
+      </StepLabel>
+      <div className="mt-3">
+        <SignInNeeded titled={false} />
+      </div>
+    </ThreadStep>
+  );
+}
+
 /** No question to show: none written yet, nobody signed in, or the API didn't answer. */
 export function QuestionProblem({ error, retry }: { error: Error; retry: () => void }) {
   const status = error instanceof ApiError ? error.status : null;
 
-  if (needsSignIn(error)) {
-    return (
-      <ThreadStep>
-        <StepLabel as="h2" meta="signed out">
-          Question
-        </StepLabel>
-        <div className="mt-3">
-          <SignInNeeded titled={false} />
-        </div>
-      </ThreadStep>
-    );
-  }
+  if (needsSignIn(error)) return <QuestionSignedOut />;
 
   if (status === 404) {
     return (

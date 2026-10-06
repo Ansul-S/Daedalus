@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { practiceProgressOptions } from "@/client/@tanstack/react-query.gen";
 import { LabyrinthMark } from "@/components/labyrinth-mark";
-import { Account } from "@/components/sign-in";
+import { Account, useSignInFirst } from "@/components/sign-in";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { number } from "@/lib/progress";
 import { cn } from "@/lib/utils";
@@ -19,9 +19,11 @@ const NAV = [
   { href: "/setup", label: "Setup" },
 ] as const;
 
-/** The streak and the XP, as practice left them; nothing while the API can't be reached. */
+/** The streak and the XP, as practice left them; nothing while nobody is signed in where that
+ * is needed, or while the API can't be reached. */
 function Standing() {
-  const { data } = useQuery(practiceProgressOptions());
+  const signInFirst = useSignInFirst();
+  const { data } = useQuery({ ...practiceProgressOptions(), enabled: signInFirst === false });
   if (!data) return null;
   const { days } = data.streak;
   return (

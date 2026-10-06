@@ -23,6 +23,9 @@ const SIGN_IN_SETTINGS = [
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_SIGN_IN: SIGN_IN_SETTINGS.every((name) => process.env[name]) ? "on" : "",
+    // In production the API answers a request from nobody signed in with 401 (locally it is
+    // the built-in user's), so there the pages wait for a sign-in before asking for practice.
+    NEXT_PUBLIC_SIGN_IN_NEEDED: process.env.ENVIRONMENT === "production" ? "on" : "",
   },
 };
 

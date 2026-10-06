@@ -11,6 +11,7 @@ import {
 } from "@/client/@tanstack/react-query.gen";
 import type { MapOut, ProgressOut, StatsOut } from "@/client/types.gen";
 import { ApiProblem } from "@/components/api-problem";
+import { SignInNeeded, useSignInFirst } from "@/components/sign-in";
 import { Coin } from "@/components/coin";
 import { Commands, FILL_THE_LABYRINTH } from "@/components/commands";
 import { SheetSection, TitleBlock } from "@/components/sheet";
@@ -170,9 +171,11 @@ function Treasury({ coins }: { coins: ProgressOut["coins"] }) {
 }
 
 export function Dashboard({ children }: { children: React.ReactNode }) {
-  const progress = useQuery(practiceProgressOptions());
-  const map = useQuery(practiceMapOptions());
-  const stats = useQuery(practiceStatsOptions());
+  const signInFirst = useSignInFirst();
+  const asking = signInFirst === false;
+  const progress = useQuery({ ...practiceProgressOptions(), enabled: asking });
+  const map = useQuery({ ...practiceMapOptions(), enabled: asking });
+  const stats = useQuery({ ...practiceStatsOptions(), enabled: asking });
   const failed = progress.error ?? map.error ?? stats.error;
   const found = progress.data;
 
@@ -195,6 +198,8 @@ export function Dashboard({ children }: { children: React.ReactNode }) {
           </div>
         ) : failed ? (
           <ApiProblem error={failed} retry={retry} />
+        ) : signInFirst ? (
+          <SignInNeeded />
         ) : (
           <p className="text-fg-2">Drawing the labyrinth…</p>
         )}

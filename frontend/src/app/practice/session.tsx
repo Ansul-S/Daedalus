@@ -17,6 +17,7 @@ import {
 import { answerQuestion, gradeAgain } from "@/client/sdk.gen";
 import type { AttemptOut, KeyPointGradeOut, LimitOut, PracticeOut } from "@/client/types.gen";
 import { SheetSection, TitleBlock } from "@/components/sheet";
+import { useSignInFirst } from "@/components/sign-in";
 import { StepLabel, Thread, ThreadStep } from "@/components/thread";
 import { ApiError } from "@/lib/api-errors";
 import { clearDraft } from "@/lib/drafts";
@@ -26,7 +27,12 @@ import { days, number } from "@/lib/progress";
 
 import { AnswerStep, type Sent } from "./answer-step";
 import { announce } from "./earned";
-import { QuestionLoading, QuestionProblem, QuestionStep } from "./question-step";
+import {
+  QuestionLoading,
+  QuestionProblem,
+  QuestionSignedOut,
+  QuestionStep,
+} from "./question-step";
 import {
   GradingStep,
   NextStep,
@@ -223,6 +229,8 @@ function AnswerAhead() {
 
 export function PracticeSession({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+  const signInFirst = useSignInFirst();
+  const asking = signInFirst === false;
   // Fetched when the page opens and when the reader moves on, never behind their back: a
   // refetch would swap the question under an answer being written, or a verdict being read.
   const next = useQuery({
@@ -230,11 +238,12 @@ export function PracticeSession({ children }: { children: React.ReactNode }) {
     staleTime: Infinity,
     gcTime: 0,
     refetchOnReconnect: false,
+    enabled: asking,
   });
   const [movedOn, setMovedOn] = useState(false);
   const pick = next.data;
   const interview = useInterviewMode();
-  const progress = useQuery(practiceProgressOptions());
+  const progress = useQuery({ ...practiceProgressOptions(), enabled: asking });
   // The round whose answer has been reviewed: it is no longer due, or no longer new
   const round = pick ? `${pick.question.id}:${next.dataUpdatedAt}` : null;
   const [reviewedRound, setReviewedRound] = useState<string | null>(null);
@@ -244,7 +253,7 @@ export function PracticeSession({ children }: { children: React.ReactNode }) {
   const room = map.data?.rooms.find((candidate) => candidate.topic_id === pick?.question.topic_id);
   const found = progress.data;
   // What the daily limits leave: nothing to show where there are none
-  const allowance = useQuery(practiceAllowanceOptions());
+  const allowance = useQuery({ ...practiceAllowanceOptions(), enabled: asking });
   const left = allowance.data?.left ?? null;
   const refusal = allowance.data?.refused_by ?? null;
   const againAt = refusal?.again_at ?? null;
@@ -287,6 +296,8 @@ export function PracticeSession({ children }: { children: React.ReactNode }) {
             <>
               {next.isError ? (
                 <QuestionProblem error={next.error} retry={() => next.refetch()} />
+              ) : signInFirst ? (
+                <QuestionSignedOut />
               ) : (
                 <QuestionLoading />
               )}
