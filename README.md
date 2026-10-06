@@ -508,3 +508,16 @@ refuses the way Dependabot installs them.
 - **DeepEval** (the `eval` group) caps click, rich and tabulate below the versions the API and ingestion use, and uv resolves every group together. `override-dependencies` lifts those caps and keeps the bounds every other package sets, so the evaluation tools don't change what the app runs on; the grader suite's tests cover the parts of DeepEval it uses.
 - **Frontend:** pnpm only installs versions published at least 7 days ago (`minimumReleaseAge`) and blocks dependency install scripts unless they're allowed (`allowBuilds`); both are set in `frontend/pnpm-workspace.yaml`. The pnpm version itself is pinned in `package.json`. Commit `pnpm-lock.yaml`.
 - **Secrets:** never commit `.env`; `.gitignore` already excludes it.
+
+## Licence
+
+Daedalus is licensed under the [Apache License, Version 2.0](LICENSE). [`NOTICE`](NOTICE) holds
+its copyright notice, which a copy or a derived work passes on.
+
+- **Documents in a library** keep their own licences. The demo library holds only papers under
+  CC BY 4.0 and the project's own notes, and the app shows each passage's source and licence
+  beside it.
+- **The art** redraws two public-domain etchings in letters: Charles Holroyd's *Daedalus* (1895)
+  and Antonio Tempesta's *Theseus and the Minotaur* (after 1606).
+- **The fonts** (Big Shoulders, Source Serif 4, JetBrains Mono) come from Google Fonts at build
+  time, under the SIL Open Font License.
