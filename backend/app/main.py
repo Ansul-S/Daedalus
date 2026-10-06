@@ -38,6 +38,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
     generate_unique_id_function=operation_id,
+    root_path=get_settings().root_path,
 )
 app.add_middleware(
     CORSMiddleware,
