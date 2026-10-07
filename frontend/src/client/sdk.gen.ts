@@ -28,7 +28,8 @@ export const health = <ThrowOnError extends boolean = false>(options?: Options<H
 /**
  * Dependencies
  *
- * Database, local models and cloud API keys (whether keys are set, never their values).
+ * Database, local models and cloud API keys (whether keys are set, never their values),
+ * and, while tracing is on, what this process has sent.
  */
 export const dependencies = <ThrowOnError extends boolean = false>(options?: Options<DependenciesData, ThrowOnError>): RequestResult<DependenciesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<DependenciesResponses, unknown, ThrowOnError>({ url: '/health/deps', ...options });
 

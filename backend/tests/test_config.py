@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from pydantic import ValidationError
 
-from app.core.checks import check_cloud_keys, is_installed, run_checks
+from app.core.checks import check_cloud_keys, check_limits, is_installed, run_checks
 from app.core.config import Settings
 
 
@@ -60,3 +60,11 @@ def test_checks_report_fake_models_instead_of_ollama(engine) -> None:
         ("daily limits", "ok"),
     ]
     assert checks[-2].detail == "off: the stand-in models (FAKE_MODELS) are not traced"
+
+
+def test_the_limits_check_says_what_each_limit_allows() -> None:
+    one = check_limits(Settings(_env_file=None, daily_grades_per_user=1, daily_grades=80))
+    ten = check_limits(Settings(_env_file=None, daily_grades_per_user=10))
+
+    assert one.detail == "1 grade a user a practice day, 80 in all over 24 hours"
+    assert ten.detail == "10 grades a user a practice day"

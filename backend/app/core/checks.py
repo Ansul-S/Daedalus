@@ -1,4 +1,5 @@
-"""Dependency checks shared by `GET /health/deps` and `scripts/check_setup.py`."""
+"""Dependency checks shared by `GET /health/deps` and `scripts/check_setup.py`, and one
+only the API can make: what its own tracing has sent."""
 
 from pathlib import Path
 from typing import Literal
@@ -11,7 +12,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import Settings
-from app.llm.tracing import switched_off
+from app.llm.tracing import Tracing, switched_off
 
 Status = Literal["ok", "warn", "fail"]
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "db" / "migrations"
@@ -127,13 +128,27 @@ def check_tracing(settings: Settings) -> Check:
     return Check(name="tracing", status="warn" if one_key else "ok", detail=f"off: {off}")
 
 
+def check_traces_sent(started: Tracing | None) -> Check:
+    """What the running API has sent to Langfuse, while tracing is on: from inside the process
+    that traces, as the API's own health route sees it."""
+    if started is None:
+        return Check(name="traces sent", status="warn", detail="tracing was not started here")
+    sent, refused = started.sender.results["sent"], started.sender.results["refused"]
+    batches = f"{sent} batch{'' if sent == 1 else 'es'} taken, {refused} refused"
+    return Check(
+        name="traces sent", status="warn" if refused else "ok", detail=f"since start: {batches}"
+    )
+
+
 def check_limits(settings: Settings) -> Check:
     """The daily limits on grading. None is a choice locally; a limit of 0 stops grading."""
     per_user, in_all = settings.daily_grades_per_user, settings.daily_grades
     if per_user is None and in_all is None:
         return Check(name="daily limits", status="ok", detail="none: grading is not limited")
     parts = [
-        f"{per_user} grades a user a practice day" if per_user is not None else None,
+        f"{per_user} grade{'' if per_user == 1 else 's'} a user a practice day"
+        if per_user is not None
+        else None,
         f"{in_all} in all over 24 hours" if in_all is not None else None,
     ]
     detail = ", ".join(part for part in parts if part)

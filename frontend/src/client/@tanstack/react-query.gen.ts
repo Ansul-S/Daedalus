@@ -64,7 +64,8 @@ export const dependenciesQueryKey = (options?: Options<DependenciesData>) => cre
 /**
  * Dependencies
  *
- * Database, local models and cloud API keys (whether keys are set, never their values).
+ * Database, local models and cloud API keys (whether keys are set, never their values),
+ * and, while tracing is on, what this process has sent.
  */
 export const dependenciesOptions = (options?: Options<DependenciesData>) => queryOptions<DependenciesResponse, DefaultError, DependenciesResponse, ReturnType<typeof dependenciesQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {

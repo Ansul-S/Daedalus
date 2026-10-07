@@ -8,17 +8,18 @@ from collections.abc import Callable, Iterator, Sequence
 
 import httpx
 import pytest
-from opentelemetry.sdk.trace import ReadableSpan
-from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
+from pydantic import SecretStr
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
 
-from app.core.checks import check_tracing
+from app.core.checks import check_traces_sent, check_tracing
 from app.core.config import Settings
 from app.db.models import EMBEDDING_DIMENSIONS
 from app.grading.grader import grader
@@ -237,6 +238,69 @@ def test_the_sender_counts_the_batches_taken_and_refused() -> None:
 
     assert taken.results == {"sent": 1}
     assert refused.results == {"refused": 2}
+
+
+def batched(started: tracing.Tracing | None) -> InMemorySpanExporter:
+    """What a batch that waits a minute has been sent, as the one Langfuse gets would."""
+    assert started is not None
+    exporter = InMemorySpanExporter()
+    started.provider.add_span_processor(BatchSpanProcessor(exporter, schedule_delay_millis=60_000))
+    return exporter
+
+
+@pytest.mark.parametrize("environment", ["local", "production"])
+def test_deployed_a_piece_of_work_is_sent_as_it_ends(traced_into, environment) -> None:
+    """A deployed API may be frozen once it has answered, before the batch goes out, so there
+    a piece of work's spans are sent as it ends. Locally they wait for the batch."""
+    every_span = traced_into(environment=environment)
+    batch = batched(tracing.current())
+
+    with tracing.traced("grade", attempt=3):
+        writer_run()
+
+    ended = sorted(span.name for span in every_span.get_finished_spans())
+    assert "grade" in ended and len(ended) >= 3
+    sent = sorted(span.name for span in batch.get_finished_spans())
+    assert sent == (ended if environment == "production" else [])
+
+
+def test_deployed_a_failed_piece_of_work_is_sent_too(traced_into) -> None:
+    traced_into(environment="production")
+    batch = batched(tracing.current())
+
+    with pytest.raises(RuntimeError), tracing.traced("grade"):
+        raise RuntimeError("no model answered")
+
+    assert [span.name for span in batch.get_finished_spans()] == ["grade"]
+
+
+def test_the_api_says_what_its_tracing_has_sent(client, settings, traced_into) -> None:
+    def traces_sent() -> dict:
+        checks = client.get("/health/deps").json()
+        return next(check for check in checks if check["name"] == "traces sent")
+
+    settings.langfuse_public_key = KEYS["langfuse_public_key"]
+    settings.langfuse_secret_key = SecretStr(KEYS["langfuse_secret_key"])
+    settings.langfuse_tracing_enabled = True
+    assert traces_sent() == {
+        "name": "traces sent",
+        "status": "warn",
+        "detail": "tracing was not started here",
+    }
+
+    exported = traced_into()
+    with tracing.traced("grade"):
+        writer_run()
+    spans = len(exported.get_finished_spans())
+
+    # Each span goes on its own to the stand-in exporter
+    assert traces_sent()["detail"] == f"since start: {spans} batches taken, 0 refused"
+    refused = tracing.Tracing(TracerProvider(), tracing.Sender(Refusing(), content=False))
+    refused.sender.export([])
+    assert (check_traces_sent(refused).status, check_traces_sent(refused).detail) == (
+        "warn",
+        "since start: 0 batches taken, 1 refused",
+    )
 
 
 def test_each_agent_runs_under_its_own_name() -> None:

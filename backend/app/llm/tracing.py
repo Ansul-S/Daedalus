@@ -15,9 +15,14 @@ the model wrote. LANGFUSE_CONTENT=1 sends all of it, for looking into a prompt.
 Plain OpenTelemetry rather than Langfuse's own client, so that everything on the way out
 passes through `Sender` here: the client's masking hook sees span attributes but not the
 exception events that carry an error's message.
+
+Spans wait in a batch that a background thread sends every few seconds. A deployed API runs
+as a serverless function, frozen as soon as it has answered, so the thread may never get to
+them; there, each piece of work's spans are sent as it ends, before the answer goes out.
 """
 
 import base64
+import logging
 from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -49,7 +54,10 @@ EXPORT_TIMEOUT = 5.0
 # All that an error keeps of itself when content is left out
 ERROR_ATTRIBUTES = ("exception.type", "exception.escaped")
 
+log = logging.getLogger(__name__)
+
 _tracer: Tracer = NoOpTracer()
+_started: "Tracing | None" = None
 
 
 def switched_off(settings: Settings) -> str | None:
@@ -134,10 +142,17 @@ class Sender(SpanExporter):
 class Tracing:
     provider: TracerProvider
     sender: Sender
+    # Each piece of work's spans sent as it ends, not left to the batch: in production
+    each_trace: bool = False
 
     def flush(self) -> bool:
         """Send what is waiting; False when it could not be sent in time."""
         return self.provider.force_flush()
+
+
+def current() -> Tracing | None:
+    """The tracing this process started, or None while it traces nothing."""
+    return _started
 
 
 def start(
@@ -145,7 +160,7 @@ def start(
 ) -> Tracing | None:
     """Trace every agent run and model request from here on, or do nothing when tracing is
     off. `exporter` stands in for Langfuse, and gets each span as it ends."""
-    global _tracer
+    global _tracer, _started
     if switched_off(settings):
         return None
     resource = Resource.create(
@@ -174,14 +189,16 @@ def start(
         )
     )
     _tracer = provider.get_tracer("daedalus")
-    return Tracing(provider, sender)
+    _started = Tracing(provider, sender, each_trace=settings.environment == "production")
+    return _started
 
 
 def stop(tracing: Tracing | None) -> None:
     """Send what is left and stop tracing."""
-    global _tracer
+    global _tracer, _started
     Agent.instrument_all(False)
     _tracer = NoOpTracer()
+    _started = None
     if tracing is not None:
         tracing.provider.shutdown()
 
@@ -212,8 +229,12 @@ def traced(
     for key, value in metadata.items():
         if value is not None:
             attributes[f"langfuse.trace.metadata.{key}"] = value
-    with _tracer.start_as_current_span(name, attributes=attributes) as span:
-        yield span
+    try:
+        with _tracer.start_as_current_span(name, attributes=attributes) as span:
+            yield span
+    finally:
+        if _started is not None and _started.each_trace and not _started.flush():
+            log.warning("The spans of %r were not sent to Langfuse in time", name)
 
 
 @contextmanager

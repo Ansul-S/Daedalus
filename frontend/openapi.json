@@ -37,7 +37,7 @@
           "health"
         ],
         "summary": "Dependencies",
-        "description": "Database, local models and cloud API keys (whether keys are set, never their values).",
+        "description": "Database, local models and cloud API keys (whether keys are set, never their values),\nand, while tracing is on, what this process has sent.",
         "operationId": "dependencies",
         "responses": {
           "200": {
