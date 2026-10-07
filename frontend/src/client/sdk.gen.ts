@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeAllowanceData, PracticeAllowanceResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
+import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DeletePracticeData, DeletePracticeResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeAllowanceData, PracticeAllowanceResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -286,6 +286,19 @@ export const practiceMap = <ThrowOnError extends boolean = false>(options?: Opti
 export const practiceStats = <ThrowOnError extends boolean = false>(options?: Options<PracticeStatsData, ThrowOnError>): RequestResult<PracticeStatsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<PracticeStatsResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/practice/stats',
+    ...options
+});
+
+/**
+ * Delete Practice
+ *
+ * Delete your practice: every answer with its grades, the review history and schedule
+ * they made, and your ratings. The library stays, and so does the count of grades the daily
+ * limits keep (`app.grading.limits`): deleting doesn't give back the day's grades.
+ */
+export const deletePractice = <ThrowOnError extends boolean = false>(options?: Options<DeletePracticeData, ThrowOnError>): RequestResult<DeletePracticeResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<DeletePracticeResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/practice',
     ...options
 });
 

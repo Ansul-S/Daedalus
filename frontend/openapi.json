@@ -1267,6 +1267,33 @@
         ]
       }
     },
+    "/practice": {
+      "delete": {
+        "tags": [
+          "practice"
+        ],
+        "summary": "Delete Practice",
+        "description": "Delete your practice: every answer with its grades, the review history and schedule\nthey made, and your ratings. The library stays, and so does the count of grades the daily\nlimits keep (`app.grading.limits`): deleting doesn't give back the day's grades.",
+        "operationId": "delete_practice",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/ratings": {
       "post": {
         "tags": [
@@ -1717,6 +1744,39 @@
           "count"
         ],
         "title": "DayCountOut"
+      },
+      "DeletedOut": {
+        "properties": {
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "grades": {
+            "type": "integer",
+            "title": "Grades"
+          },
+          "reviews": {
+            "type": "integer",
+            "title": "Reviews"
+          },
+          "cards": {
+            "type": "integer",
+            "title": "Cards"
+          },
+          "ratings": {
+            "type": "integer",
+            "title": "Ratings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempts",
+          "grades",
+          "reviews",
+          "cards",
+          "ratings"
+        ],
+        "title": "DeletedOut"
       },
       "DocumentOut": {
         "properties": {

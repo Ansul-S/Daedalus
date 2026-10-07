@@ -148,6 +148,43 @@ def test_two_users_answering_one_question_keep_schedules_of_their_own(
     assert asyncio.run(card_owners()) == {builtin_user(sessions), someone}
 
 
+def test_deleting_practice_takes_only_your_own(client, sessions, corpus, embedder) -> None:
+    first, _, _ = practised(client, sessions, corpus, embedder)
+    someone = asyncio.run(add_user(sessions, "someone"))
+    act_as(someone)
+    theirs = client.post(f"/questions/{first}/attempts", json={"answer": ANSWER}).json()
+    app.dependency_overrides.pop(user_or_none)
+
+    deleted = client.delete("/practice")
+
+    assert deleted.status_code == 200
+    assert deleted.json() == {"attempts": 1, "grades": 1, "reviews": 1, "cards": 1, "ratings": 1}
+    progress = client.get("/practice/progress").json()
+    assert (progress["xp"], progress["answers"]) == (0, 0)
+    assert client.get("/practice/next").json()["new_count"] == 2
+    assert client.get(f"/questions/{first}").json()["rating"] is None
+    # The library stays, and so does everyone else's practice.
+    assert client.get("/questions").json()["total"] == 2
+    act_as(someone)
+    their_attempts = client.get(f"/questions/{first}/attempts").json()
+    assert [attempt["id"] for attempt in their_attempts] == [theirs["id"]]
+    assert client.get("/practice/progress").json()["answers"] == 1
+
+
+def test_deleting_practice_does_not_give_back_the_day_s_grades(
+    client, sessions, corpus, embedder, settings
+) -> None:
+    settings.daily_grades_per_user = 1
+    first, _, _ = practised(client, sessions, corpus, embedder)
+
+    client.delete("/practice")
+
+    allowance = client.get("/practice/allowance").json()
+    assert (allowance["per_user"]["used"], allowance["left"]) == (1, 0)
+    again = client.post(f"/questions/{first}/attempts", json={"answer": ANSWER})
+    assert again.status_code == 429
+
+
 def test_each_user_s_history_is_replayed_on_its_own(sessions) -> None:
     async def scenario():
         question_id = await add_bare_question(sessions)
@@ -184,6 +221,7 @@ def test_each_user_s_history_is_replayed_on_its_own(sessions) -> None:
         ("GET", "/practice/map", None),
         ("GET", "/practice/stats", None),
         ("GET", "/practice/allowance", None),
+        ("DELETE", "/practice", None),
         ("POST", "/questions/1/attempts", {"answer": ANSWER}),
         ("POST", "/attempts/1/grades", None),
         ("GET", "/attempts/1", None),

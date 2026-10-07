@@ -4,7 +4,8 @@ import { expect, type Page, test } from "@playwright/test";
 
 // The milestone, walked through in the browser on fake models (`make e2e`): a notebook goes
 // in, becomes a topic map and three questions, one is answered and graded against its passage,
-// using the day's one grade, and its room on the dashboard shows it practised.
+// using the day's one grade, and its room on the dashboard shows it practised. Deleting the
+// practice then empties the dashboard, but leaves the day's grade used.
 
 // Three short sections on training deep networks, written for this test
 const NOTEBOOK = path.join(__dirname, "fixtures", "training-notes.ipynb");
@@ -105,5 +106,28 @@ test("a notebook becomes questions, a cited grade and a room practised", async (
     ).toBeVisible();
     const wings = page.getByRole("heading", { name: "The wings · your level" }).locator("..");
     await expect(wings).toContainText(`${xp} XP`);
+  });
+
+  await test.step("delete the practice, without getting the day's grade back", async () => {
+    const drafts = () =>
+      page.evaluate(
+        () => Object.keys(localStorage).filter((key) => key.startsWith("daedalus:draft:")).length,
+      );
+    // The answer written after the limit was reached, kept in the browser
+    expect(await drafts()).toBe(1);
+    await page.getByRole("contentinfo").getByRole("link", { name: "What is kept" }).click();
+    await expect(page).toHaveURL(/\/privacy$/);
+    await page.getByRole("button", { name: "Delete my practice" }).click();
+    await page.getByRole("button", { name: "Delete it" }).click();
+    await expect(page.getByRole("status").filter({ hasText: /^Deleted / })).toHaveText(
+      "Deleted 1 answer, 1 grade, 1 review, 1 scheduled question and 0 ratings.",
+    );
+    expect(await drafts()).toBe(0);
+
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Dashboard" }).click();
+    const wings = page.getByRole("heading", { name: "The wings · your level" }).locator("..");
+    await expect(wings).toContainText("0 XP");
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Practice" }).click();
+    await expect(gradesLeft(page)).toHaveText("0");
   });
 });

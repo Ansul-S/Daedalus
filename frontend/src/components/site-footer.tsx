@@ -37,6 +37,14 @@ export function SiteFooter() {
               </a>
             ),
           },
+          {
+            label: "Privacy",
+            value: (
+              <Link href="/privacy" className="thread-link">
+                What is kept
+              </Link>
+            ),
+          },
           { label: "Cost", value: "$0 · free tiers" },
         ]}
       />

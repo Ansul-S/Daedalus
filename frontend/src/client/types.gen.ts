@@ -210,6 +210,32 @@ export type DayCountOut = {
 };
 
 /**
+ * DeletedOut
+ */
+export type DeletedOut = {
+    /**
+     * Attempts
+     */
+    attempts: number;
+    /**
+     * Grades
+     */
+    grades: number;
+    /**
+     * Reviews
+     */
+    reviews: number;
+    /**
+     * Cards
+     */
+    cards: number;
+    /**
+     * Ratings
+     */
+    ratings: number;
+};
+
+/**
  * DocumentOut
  */
 export type DocumentOut = {
@@ -2066,6 +2092,22 @@ export type PracticeStatsResponses = {
 };
 
 export type PracticeStatsResponse = PracticeStatsResponses[keyof PracticeStatsResponses];
+
+export type DeletePracticeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/practice';
+};
+
+export type DeletePracticeResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeletedOut;
+};
+
+export type DeletePracticeResponse = DeletePracticeResponses[keyof DeletePracticeResponses];
 
 export type AddRatingData = {
     body: RatingIn;

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -71,9 +72,14 @@ export function SignInNeeded({ titled = true }: { titled?: boolean }) {
             the coins. Sign in with GitHub to practise and to keep them. Only your public
             profile is read, never your email.
           </p>
-          <Button size="sm" onClick={() => void signIn()}>
-            Sign in with GitHub
-          </Button>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <Button size="sm" onClick={() => void signIn()}>
+              Sign in with GitHub
+            </Button>
+            <Link href="/privacy" className="thread-link text-small">
+              What is kept
+            </Link>
+          </div>
         </>
       ) : (
         <p>Practice needs a signed-in visitor, and sign-in is not set up here.</p>

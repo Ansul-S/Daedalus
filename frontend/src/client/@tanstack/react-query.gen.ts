@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { addArxivPaper, addRating, answerQuestion, buildTopicMap, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listJobs, listQuestions, listTopics, type Options, practiceAllowance, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument, workerStatus } from '../sdk.gen';
-import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeAllowanceData, PracticeAllowanceResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
+import { addArxivPaper, addRating, answerQuestion, buildTopicMap, deletePractice, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listJobs, listQuestions, listTopics, type Options, practiceAllowance, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument, workerStatus } from '../sdk.gen';
+import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DeletePracticeData, DeletePracticeResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeAllowanceData, PracticeAllowanceResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -674,6 +674,27 @@ export const practiceStatsOptions = (options?: Options<PracticeStatsData>) => qu
     },
     queryKey: practiceStatsQueryKey(options)
 });
+
+/**
+ * Delete Practice
+ *
+ * Delete your practice: every answer with its grades, the review history and schedule
+ * they made, and your ratings. The library stays, and so does the count of grades the daily
+ * limits keep (`app.grading.limits`): deleting doesn't give back the day's grades.
+ */
+export const deletePracticeMutation = (options?: Partial<Options<DeletePracticeData>>): UseMutationOptions<DeletePracticeResponse, DefaultError, Options<DeletePracticeData>> => {
+    const mutationOptions: UseMutationOptions<DeletePracticeResponse, DefaultError, Options<DeletePracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deletePractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
 
 /**
  * Add Rating

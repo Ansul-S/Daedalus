@@ -33,3 +33,14 @@ export function clearDraft(questionId: number): void {
     // nothing was kept
   }
 }
+
+/** Every draft in this browser, for when the practice they belong to is deleted. */
+export function clearDrafts(): void {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(PREFIX)) localStorage.removeItem(key);
+    }
+  } catch {
+    // nothing was kept
+  }
+}

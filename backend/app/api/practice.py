@@ -10,7 +10,7 @@ and its charts are all worked out from the review history when they are asked fo
 the daily limits on grading leave (`app.grading.limits`).
 
 All of it is the user's own (`app.api.users`): the schedule, the history and what it earned
-are theirs, and nobody else's answers count.
+are theirs, and nobody else's answers count. A user can delete all of it.
 """
 
 from datetime import UTC, date, datetime, timedelta
@@ -18,14 +18,14 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.questions import QuestionOut, _question_out, _sources
 from app.api.ratings import question_ratings
 from app.api.users import UserDep
 from app.core.config import Settings, get_settings
-from app.db.models import Question, Review, Topic, source_updated
+from app.db.models import Attempt, Card, Grade, Question, Rating, Review, Topic, source_updated
 from app.db.session import get_session
 from app.grading.limits import Limit, allowance
 from app.scheduling import labyrinth
@@ -435,3 +435,31 @@ async def practice_stats(session: SessionDep, settings: SettingsDep, user_id: Us
             for day in ahead
         ],
     )
+
+
+class DeletedOut(BaseModel):
+    # What went: answers, their grades, the review history and schedule, and ratings
+    attempts: int
+    grades: int
+    reviews: int
+    cards: int
+    ratings: int
+
+
+@router.delete("/practice")
+async def delete_practice(session: SessionDep, user_id: UserDep) -> DeletedOut:
+    """Delete your practice: every answer with its grades, the review history and schedule
+    they made, and your ratings. The library stays, and so does the count of grades the daily
+    limits keep (`app.grading.limits`): deleting doesn't give back the day's grades."""
+    attempts = select(Attempt.id).where(Attempt.user_id == user_id)
+    counts = {}
+    for name, rows in (
+        ("ratings", delete(Rating).where(Rating.user_id == user_id)),
+        ("reviews", delete(Review).where(Review.user_id == user_id)),
+        ("grades", delete(Grade).where(Grade.attempt_id.in_(attempts))),
+        ("attempts", delete(Attempt).where(Attempt.user_id == user_id)),
+        ("cards", delete(Card).where(Card.user_id == user_id)),
+    ):
+        counts[name] = (await session.execute(rows)).rowcount
+    await session.commit()
+    return DeletedOut(**counts)
