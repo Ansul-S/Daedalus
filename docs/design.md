@@ -13,6 +13,7 @@ Daedalus is an AI/ML interview practice system with two jobs:
 | Question type | Conceptual / theory |
 | Models | Hybrid: local by default, free cloud APIs for bulk work |
 | Interface | Full-stack web app (FastAPI + Next.js) |
+| Demo | Deployed on free tiers (Vercel Hobby, Neon Free) at https://daedalus-demo.vercel.app |
 
 Retrieval and grading are implemented directly rather than through a RAG framework. Each stage (chunking, hybrid search, grader calibration) stays visible and measurable.
 
@@ -401,6 +402,79 @@ Phase 5 adds no tables. Its labels (`data/eval/`) and reports (`data/reports/`) 
 - **No questions were generated for the evaluation.** The sets are small but honest. Question generation's 45% (Phase 2) stays open, and a better generator is its own piece of work.
 - **Left for later:** comparing full-text normalizations on the larger sets; a hosted reranker, if Phase 6 wants one; and grading answers written after `grade-v1`, which a further change to the grader should be judged on.
 
+## Deployment (Phase 6)
+
+```
+ a visitor ─► https://daedalus-demo.vercel.app: one Vercel project (Hobby), every function in cle1
+   /          ─► web: Next.js, the pages, and Better Auth at /auth
+   /api/...   ─► api: FastAPI with ROOT_PATH=/api, one Python function (63.66 MB, 300 s at most)
+                   ─► Neon Free: Postgres 17 + pgvector in us-east-2 (Ohio), pooled, 0.25 CU at most
+                   ─► Qwen on Groq grades, Gemini when it can't; no Ollama, keyword search only
+                   ─► Langfuse: each piece of work's spans, sent as it ends, without text
+
+ sign in  ─► GitHub, asked for the public profile only ─► Better Auth keeps the visitor (auth_*)
+             ─► a 15-minute EdDSA token ─► the API checks it against /auth/jwks ─► users
+ a grade  ─► a slot in grade_requests, taken under a lock: 10 a user a practice day and 80 in
+             all over 24 hours ─► past either, 429, and the practice page holds the answer back
+ delete   ─► /privacy ─► DELETE /practice: answers, grades, the schedule, ratings; slots stay
+
+ push to main ─► CI: Backend · Frontend · End-to-end ─► Vercel builds at once, and Deployment
+                 Checks hold the address until all three pass. Other branches build nothing.
+ the library  ─► written and reviewed on the Mac, in a database of its own ─► copied to Neon
+```
+
+Phase 6 adds three kinds of table:
+- `users` (migration 0009), with a `user_id` on attempts, reviews, cards and ratings;
+- Better Auth's `auth_user`, `auth_session`, `auth_account`, `auth_verification` and `auth_jwks` (0010);
+- `grade_requests` (0011).
+
+### Deployment decisions
+- **Each visitor's practice is their own; the library is shared.**
+  - A `users` row stands for each sign-in (provider and subject). Attempts, reviews, cards and ratings carry a `user_id`, and grades follow their attempt. XP, the streak, coins, mastery, the picker and the labyrinth are all worked out per user.
+  - Locally, a built-in user, `('local', 'local')`, owns everything and nobody needs to sign in. In production, a per-person route answers 401 to a request from nobody signed in, and another user's attempt or grade answers 404.
+  - The demo's library is read-only: corrections, ingestion, the topic map and generation answer 403.
+- **Sign-in is Better Auth with GitHub, in the Next.js app.** Auth.js was the first choice, but it went into maintenance in September 2025, its maintainers recommending Better Auth for new projects. Neon Auth would tie local development to Neon.
+  - It answers at `/auth`, not `/api/auth`: deployed, `/api` belongs to the API.
+  - Its tables come from an Alembic migration (0010), made from the SQL Better Auth's own generator prints. They are named `auth_*` beside the API's `users`, and Alembic still owns the schema.
+  - The browser asks Better Auth for a 15-minute token (EdDSA) and sends it as `Authorization: Bearer`. The API checks its signature, issuer, audience and expiry against the keys at `/auth/jwks` (PyJWT, cached per process), so a request needs no session lookup.
+  - The minimum is kept about a visitor. GitHub is asked for the public profile only, so no email address is seen; the account's required email is GitHub's no-reply address, made of the id and the username. Sessions keep no IP address, and GitHub's tokens are not stored.
+  - Without its four settings sign-in isn't offered, and the app is the built-in user's, as before.
+- **Daily limits keep the free tiers shared: 10 grades a user a practice day, 80 in all over 24 hours.**
+  - Groq's free Qwen grades about 110 answers a day, and 80 leaves room for grading again and for the owner.
+  - A user's day starts at 04:00 in `PRACTICE_TIMEZONE`. The count in all looks back 24 hours, as the providers' own allowances do.
+  - The count is kept in `grade_requests`, not `grades`. A slot is taken under a Postgres advisory lock before the model is asked, so twenty requests sent at once can't all pass on one count. The slot outlives its grade, so deleting practice gives nothing back. It records what each grade cost by model, which the pacer starts from. Rows are kept for two days.
+  - A grade counts when a model replied, failed or not, since the reply spent tokens. One that no model answered doesn't count. A refused request writes nothing, and the answer stays in the browser as a draft.
+  - Past a limit, the API answers 429 with the limit and `Retry-After`. `GET /practice/allowance` tells the page what is left, and the page holds the answer back until grading opens again, saying when.
+  - `DAILY_GRADES_PER_USER` and `DAILY_GRADES` left unset mean no limit locally and 10 and 80 in production; 0 switches grading off.
+- **One Vercel project serves both, through Services** (beta, on Hobby): the frontend at `/`, the API at `/api`. One domain means no CORS and one deploy. The API gets the original path, so `ROOT_PATH=/api` goes to FastAPI as its `root_path`, and the routes stay as they are.
+- **Ohio for everything.** Neon's project is in aws us-east-2, and every Vercel function runs in cle1 next to it. Neon has no region in India, and a project's region can't be changed later. From India, a warm call takes 0.5 to 1.0 s, mostly the round trip.
+- **Only `main` deploys, and only once CI passes.** `git.deploymentEnabled` builds `main` alone, since a preview would share the demo's database and keys. Vercel's Deployment Checks hold each production deployment until Backend, Frontend and End-to-end pass, then move the address to it. No Vercel token is stored in GitHub.
+- **The demo library is openly licensed and made on the Mac.**
+  - It holds eight CC BY 4.0 arXiv papers, picked from 82 candidates by the licence arXiv records, and notes written for the repository.
+  - They were ingested into a database of their own. Questions were written from a concept inventory, one question per idea, checked, then reviewed against the rubric; 35 were kept.
+  - The seven library tables were copied to Neon in one transaction and checked row for row. The development database and its practice never leave the Mac.
+  - Each passage shows its licence, linked, and so does the library shelf, beside the authors.
+- **The cold start was measured before anything changed.** The rule, fixed first: import the model libraries lazily only if the first call after an idle spell took longer than the throwaway deploy's 5.0 s.
+  - It took 6.30 and 6.15 s. So each provider's libraries are now imported when its model is built: openai behind Ollama's model, Gemini's SDK with aiohttp, and Groq's.
+  - `import app.main` went from 1.70 to 1.03 s on the M4, and the first call to 4.44 and 4.73 s (see [measurements](#phase-6-measurements)). The first grade on a new instance imports them instead.
+  - Pydantic AI itself still loads at start-up: tracing instruments it in the lifespan, which Vercel runs.
+  - Keeping the function or Neon warm doesn't fit the free tiers. Neon awake all month at 0.25 CU would take about 180 CU-hours of its 100.
+- **Neon's compute is held to 0.25 CU,** so that its 100 CU-hours a month last. It scales to zero after five idle minutes, which the free plan doesn't allow turning off.
+- **Tracing is on in production, without content.**
+  - A serverless function is frozen as soon as it has answered, so the background thread that sends spans in batches never ran there, and no deployed grade reached Langfuse.
+  - In production each piece of work's spans are now sent as it ends, before the answer goes out, failed ones too.
+  - `/health/deps` says what the instance answering it has sent, or that tracing wasn't started in it.
+- **Privacy: a note, a length limit and deleting one's practice.**
+  - `/privacy` says what sign-in keeps, where an answer goes and where it is kept, what stays in the browser, and what tracing sends. There are no analytics.
+  - `DELETE /practice` removes a visitor's answers, grades, review history and schedule, and ratings, and the page clears the drafts kept in the browser. The sign-in record stays.
+  - Answers are at most 8,000 characters, and the grader keeps ignoring instructions inside them.
+- **Practice days are counted in UTC** for the demo, whose visitors could be anywhere.
+- **Left for later:**
+  - deleting a visitor's sign-in record from the app;
+  - sending the API's own 429 live (the page holds an answer back before it is sent, so only the tests send it);
+  - the question page's server and browser renderings, which differ once in a while (React error #418);
+  - vector search in production, which would need a hosted embedding model.
+
 ## Tech stack (free tiers as of September 2026)
 
 ### Models
@@ -443,6 +517,7 @@ Each task has its own fallback chain (Pydantic AI `FallbackModel`): generation u
 | LLM calls | **Pydantic AI** (MIT): typed Pydantic outputs; native Groq, Google, Mistral and OpenRouter providers; Ollama via `OllamaModel`; `FallbackModel`; OpenTelemetry tracing. |
 | Orchestration | Plain Python services first; **LangGraph** (MIT) in Phase 7 for an interviewer that asks follow-up questions. |
 | API | **FastAPI** + Pydantic v2 + **SQLAlchemy 2** + **Alembic** + `pgvector` + `pydantic-settings`. Feedback isn't streamed: a grade on Groq takes about 2 s. |
+| Sign-in | **Better Auth** 1.7.5 (MIT) in the Next.js app, with GitHub as the provider and its tables in the app's Postgres (through **pg**, node-postgres). The API checks its EdDSA tokens with **PyJWT** against the keys Better Auth publishes. |
 | Review scheduling | **fsrs** (py-fsrs 6.3.2, MIT): FSRS-6 without learning steps, a retention of 0.9 and at most 30 days between reviews. Scores map to Again / Hard / Good / Easy; a topic's mastery is the mean over its questions of the latest score times the chance of recall. |
 | Frontend | **Next.js** 16 (App Router, TypeScript) · **React** 19 · **Tailwind** 4 · **shadcn/ui** (Radix), restyled to the design system · **TanStack Query** · **@hey-api/openapi-ts** (typed client generated from FastAPI's OpenAPI schema) · **react-markdown + remark-gfm + remark-math + rehype-katex** · **canvas-confetti** (the level-up burst) · charts in SVG by the app's own components · fonts self-hosted through `next/font` |
 
@@ -458,10 +533,12 @@ Each task has its own fallback chain (Pydantic AI `FallbackModel`): generation u
 ### Free hosting
 | Piece | Free option | Limits |
 |---|---|---|
-| Next.js + FastAPI | **Vercel Hobby** (FastAPI as a Python function) | Personal, non-commercial use. 300 s per request. 500 MB Python bundle, so only the backend's main dependencies are deployed. |
-| Postgres + pgvector | **Neon Free** | 0.5 GB per project · 100 compute-hours/month · sleeps after 5 idle minutes · no card. Use the pooled connection string. |
+| Next.js + FastAPI | **Vercel Hobby**: one project through Services (the frontend at `/`, FastAPI as one Python function at `/api`), in cle1 | Personal, non-commercial use. 300 s per request, 2 GB and 1 vCPU, 4 h of active CPU and 1M invocations a month. 500 MB Python bundle, so only the backend's main dependencies are deployed (63.66 MB). Runtime logs are kept for an hour. |
+| Postgres + pgvector | **Neon Free**, in aws us-east-2 (Ohio), next to the functions | 0.5 GB per project · 100 CU-hours/month (the compute is held to 0.25 CU) · scales to zero after 5 idle minutes · no card. The pooled connection string. |
+| Sign-in | A **GitHub OAuth app** for the demo's address | Asked for nothing beyond the public profile. |
 | LLMs | Groq and Gemini keys as Vercel environment variables | Free hosts can't run models, so the deployed app grades with cloud models. |
-| Ingestion + generation | Local machine | Results are copied to Neon with `pg_dump` / restore, or the CLI scripts point at Neon directly. |
+| Tracing | **Langfuse Cloud Hobby**, the same project as locally | Production traces carry `deployment.environment.name` = production. |
+| Ingestion + generation | Local machine | The demo's library is made in a database of its own and its tables are copied to Neon. The deployed app never writes to the library. |
 
 ## Pitfalls (as of September 2026)
 - **GitHub Models** shut down on July 30, 2026, though many tutorials still recommend it.
@@ -695,6 +772,36 @@ Measured on the same Mac and library: 124 passages from four documents; 60 gener
 - **Tokens:** Phase 5 spent about 40K Groq tokens: about 18K on the local live run of the stand-ins (estimated, before the report counted tokens), 15.7K on the run in CI and 5.7K on the tracing check. Everything else ran on saved grades or local models.
 - **Tests:** 614 fast tests in about 37 s, locally and in CI.
 
+## Phase 6 measurements
+Measured on the demo (Vercel Hobby in cle1, Neon Free in us-east-2) from India, and on the M4. A throwaway deploy measured the free tiers first, on 29 September.
+
+- **The first calls after an idle spell:** the API's health (a new instance), the documents (the first call to reach the database), then the health again, one after the other.
+
+  | When | Idle | Health, cold | Documents | Health, warm |
+  |---|---|---|---|---|
+  | 29 Sep, the throwaway deploy | 16 min | 5.0 s | | 0.6 s |
+  | 6 Oct | about 40 min | 6.30 s | 1.50 s | 0.54 s |
+  | 7 Oct, morning | about 13 h | 6.15 s | 1.50 s | 1.00 s |
+  | 7 Oct, providers imported on use | 32 min | 4.44 s | 3.59 s | 0.67 s |
+  | 7 Oct, the milestone check | 16 min | 4.73 s | 1.42 s | 0.89 s |
+
+  - On 7 Oct, where the request logs were read, each first call started a new instance: an instance logs Alembic's start-up lines once, and the calls after it ran on the same one. So the documents call is Neon waking and answering, 1.4 to 3.6 s end to end.
+  - `import app.main` with the production settings on the M4 takes 1.03 s, against 1.70 s before the providers were imported on use (median of 9 runs each). The providers were 0.65 s of it: openai 0.36, Gemini's SDK 0.16, aiohttp 0.05 and Groq's 0.03.
+  - On the throwaway deploy, the first database checkout took 709 ms (Neon waking, then TLS), the next 3 ms, and queries 1.4 ms at the median.
+- **Live grades,** by Qwen 3.8 on Groq with no fallback needed: 1.2 s and 1,692 tokens on 6 Oct; 1.81 s and 4,606 tokens on 7 Oct, after the site had slept.
+- **The deployment:**
+  - A build takes 47 s to 1 min 47 s on Vercel's 2-vCPU build machine. It installs the backend's main dependencies from `uv.lock` (no dev, eval or ingest group) and compiles their bytecode; on Linux they take 144 MB.
+  - The API function is 63.66 MB of the 500 MB allowed, and the web service's functions 1.34 MB each, all in cle1.
+- **A push to `main` is live about two minutes later.** On 7 Oct (949d12c):
+  - CI started at 14:35:53 UTC.
+  - The deployment was Ready by 14:37:06, while the address still served the one before.
+  - End-to-end passed at 14:37:50, and the address had moved by 14:38:19.
+  - A push to another branch built nothing.
+- **A 70 s request completed** on the throwaway deploy, so a grade that waits out Qwen's output limit isn't cut off.
+- **The demo library on Neon:** 9 documents (8 papers and the notes), 198 passages, 311 topics and 35 questions, from 8 of the 9 documents. Every table is identical, row for row, to the database it was made in.
+- **Tokens:** writing the library's questions took several runs of the writer. The last two, of 26 and 13 questions, took 106K and 48K Groq tokens, and the concept inventory before them 91K. The live checks took three grades.
+- **Tests:** 852 fast tests, up from 614 in Phase 5.
+
 ## Roadmap
 **Phase 0: Setup**
 - Postgres + pgvector (Docker), FastAPI backend, Next.js frontend, setup checks (`make check`).
@@ -774,10 +881,12 @@ Measured on the same Mac and library: 124 passages from four documents; 60 gener
 - **CI** (GitHub Actions): lint, the tests, the stand-in suite, the frontend's build and the end-to-end test on every push. The stand-ins can be graded live by hand. Dependabot keeps the Python lock and the actions up to date.
 - **Tracing** to Langfuse, over OpenTelemetry: latency, tokens, model and provider for every model call, grouped by piece of work with its prompt version. No prompt or answer text is sent unless asked for.
 
-**Phase 6: Free deployment**
-- Frontend and the backend's main dependencies on Vercel; Neon as the database; cloud models only.
-- Sign-in plus a per-user daily limit stored in Postgres, so visitors can't exhaust the free quotas.
-- The public demo uses only original notes and openly licensed arXiv papers.
+**Phase 6: Free deployment** (built; see [Deployment](#deployment-phase-6) and the [milestone result](#phase-6-milestone-result))
+- The demo at https://daedalus-demo.vercel.app: the frontend and the API as one Vercel project, Neon as the database, cloud models only, deployed from `main` once CI passes.
+- Users: each visitor's practice is their own, with sign-in through GitHub (Better Auth) checked by the API on every per-person route. Locally the built-in user needs no sign-in.
+- Daily limits on grading, 10 a user a practice day and 80 in all, counted before a model is asked and shown on the practice page.
+- The demo library: eight CC BY 4.0 papers and notes written for the repository, 35 questions, each passage shown with its licence.
+- A privacy note, deleting one's practice, and tracing from the deployed functions without text.
 
 **Phase 7: Optional extras**
 - LangGraph interviewer with follow-up questions and a mock-interview report.
@@ -788,7 +897,8 @@ Measured on the same Mac and library: 124 passages from four documents; 60 gener
 Daedalus/
 ├── .github/                  # CI on every push, the live grader run by hand, Dependabot
 ├── docker-compose.yml        # postgres + pgvector
-├── env.example               # settings and their defaults
+├── env.example               # settings and their defaults, and the deployed ones
+├── vercel.json               # the deployment: web and api services, rewrites, region, main only
 ├── Makefile                  # setup, run, ingest, test and lint commands
 ├── db/init/                  # enables pgvector when the database is created
 ├── data/                     # uploads, arXiv downloads, calibration answers, evaluation labels
@@ -798,7 +908,8 @@ Daedalus/
 │   ├── app/
 │   │   ├── main.py           # FastAPI app + routers
 │   │   ├── api/              # health, documents + jobs + the worker, search (citations, source
-│   │   │                     #   links), questions + topics, attempts + grades, practice, ratings
+│   │   │                     #   links), questions + topics, attempts + grades, practice, ratings;
+│   │   │                     #   users = who is asking (the built-in user, or a checked token)
 │   │   ├── core/             # settings, dependency checks
 │   │   ├── db/               # SQLAlchemy models, sessions, Alembic migrations
 │   │   ├── llm/              # model routing (fallback chains), per-provider pacing, embeddings,
@@ -827,6 +938,7 @@ Daedalus/
 │   │   │   └── batch.py          # planning a batch and working through it
 │   │   ├── grading/
 │   │   │   ├── grader.py         # prompt, schema, grading an answer, storing the grade
+│   │   │   ├── limits.py         # the daily limits, counted in grade_requests
 │   │   │   └── scoring.py        # the score, from the labels and the key points' weights
 │   │   └── scheduling/
 │   │       ├── schedule.py       # the rating a grade earns, py-fsrs, practice days
@@ -841,10 +953,11 @@ Daedalus/
 │                             #   fixtures/grader_suite/ = the grader suite's stand-ins
 └── frontend/                 # Next.js (App Router) + Tailwind + shadcn/ui, restyled
     ├── src/app/              # pages: landing, practice, question bank, library, dashboard,
-    │                         #   setup, pattern book
+    │                         #   setup, privacy, pattern book; auth/ = Better Auth's routes
     ├── src/components/       # the design system's pieces; ui/ = shadcn/ui components
     ├── src/client/           # typed API client, generated by make client
-    ├── src/lib/              # API errors, grades, drafts, progress in words, the glyph pictures
+    ├── src/lib/              # API errors, sign-in and the session, grades, drafts, the daily
+    │                         #   limits and progress in words, the glyph pictures
     ├── e2e/                  # the end-to-end test and the notebook written for it
     └── playwright.config.ts  # the servers the end-to-end test runs on
 ```
@@ -858,7 +971,7 @@ Daedalus/
 | 3 | Grader agreement with hand grades reaches Spearman ρ ≥ 0.7 before scores are trusted. **Passed**: ρ 0.95 and Cohen's κ 0.82 on 75 hand-graded answers (ρ 0.96 before two flawed questions were corrected in Phase 4); see below. |
 | 4 | A Playwright test covers upload → generate → practice → cited feedback → dashboard update. **Passed**: `make e2e` walks it in a browser on stand-in models, in about 25 s; see below. |
 | 5 | Retrieval report produced; DeepEval suite runs in CI (LLM-dependent tests on demand, to save free quota). **Passed**: `make eval-retrieval` reports on three question sets, CI runs the grader's suite on stand-in answers at every push, and the live grade, a workflow started by hand, passed in CI too; see below. |
-| 6 | The deployed app works after waking from sleep, and daily limits are enforced. |
+| 6 | The deployed app works after waking from sleep, and daily limits are enforced. **Passed**: after 16 idle minutes the demo's API answered in 4.73 s and a grade followed in 1.81 s, and each daily limit, lowered for the check, held the next answer back on the live site; see below. |
 
 The landing page quotes row 3's figures, read from this table when the frontend is built: a
 change here shows there after the next `pnpm build`, and the build fails if the row stops
@@ -1173,6 +1286,48 @@ The check asked for two things:
   - **Pydantic AI's tracing would have sent text in error messages** with content turned off.
     The exporter strips it (see the [decisions](#evaluation-decisions)).
 
+## Phase 6 milestone result
+**Passed: the deployed demo works after waking from sleep, and its daily limits are
+enforced.** Checked on 7 October 2026 at https://daedalus-demo.vercel.app, from India.
+
+1. **After sleep.** After 16 idle minutes, with no request in between, the API's first call
+   started a new instance and answered in 4.73 s, and Neon woke for the next call in 1.42 s
+   (see [measurements](#phase-6-measurements)). A visitor then signed in with GitHub and
+   answered a question. Qwen 3.8 on Groq graded it in 1.81 s, the question was scheduled, and
+   the header showed the XP it earned.
+2. **Daily limits,** lowered for the check through the project's settings and then restored:
+   - With 1 grade a user, the next answer was held back with "No grades left · more tomorrow
+     at 09:30", the start of the next practice day (04:00 UTC).
+   - With 1 in all, it was held back until 24 hours after that grade (21:22 India time).
+   - Neither refusal spent a token or wrote a row.
+3. **Traced.** The grade reached Langfuse as one trace: the grade, the grader's run and its
+   request to Qwen, with no text of the question or the answer.
+4. **Privacy.** `/privacy` is live. Deleting the practice there removed the visitor's 3
+   answers, 3 grades, 3 reviews and 2 scheduled questions from Neon. Their sign-in stayed, and
+   so did the day's grade in the limits' count.
+
+- **What it proves:**
+  - A visitor reaching the demo after it has slept waits about 5 s for the first call, then
+    gets warm speed.
+  - Neither one visitor nor all of them together can empty the free quotas, and a refused
+    grade costs nothing.
+  - The deployed API's model calls can be watched without their text.
+- **What it can't prove:**
+  - How the demo holds up under many visitors at once: one visitor checked it.
+  - How far the free tiers stretch over a month. Vercel's 4 h of active CPU and Neon's 100
+    CU-hours were not measured against real use.
+  - The API's own refusal past a limit (429) live: the page holds the answer back before it is
+    sent, and the tests send it.
+- **What it found:**
+  - **No grade on the deployed app had been traced.** The spans waited for a batch that a
+    frozen function never sent. They now leave as each piece of work ends.
+  - **The cold start was 6.2 to 6.3 s,** above the throwaway deploy's 5.0 s, until the model
+    providers' libraries were imported on use.
+  - **Signed out, every page logged refused requests** for practice data in the browser's
+    console. The pages now wait for the sign-in lookup before asking.
+  - **Several instances serve the demo at once,** so what one instance reports about itself,
+    such as the traces it has sent, is not the whole picture.
+
 ## References
 - Groq limits: https://console.groq.com/docs/rate-limits · models: https://console.groq.com/docs/models
 - Gemini API pricing / free tier: https://ai.google.dev/gemini-api/docs/pricing · limits: https://ai.google.dev/gemini-api/docs/rate-limits
@@ -1192,6 +1347,8 @@ The check asked for two things:
 - arXiv API terms: https://info.arxiv.org/help/api/tou.html
 - Neon pricing: https://neon.com/pricing · Render free tier: https://render.com/docs/free
 - Vercel function limits: https://vercel.com/docs/functions/limitations
+- FastAPI on Vercel: https://vercel.com/docs/frameworks/backend/fastapi · lifespan events: https://vercel.com/changelog/fastapi-lifespan-events-are-now-supported-on-vercel
+- Better Auth: https://www.better-auth.com/docs · Auth.js maintained by the Better Auth team: https://github.com/nextauthjs/next-auth/discussions/13252
 - Hugging Face Spaces hardware and plans: https://huggingface.co/docs/hub/spaces-overview
 - Qdrant free tier: https://costbench.com/software/vector-databases/qdrant/free-plan/
 - Supabase free tier: https://uibakery.io/blog/supabase-pricing

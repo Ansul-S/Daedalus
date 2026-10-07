@@ -6,7 +6,9 @@ AI/ML interview practice built on your own study material. Daedalus generates co
 
 Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work and fast grading.
 
-**Status:** Phases 1–5 are built: ingestion and retrieval, question generation, grading, the practice app, and its evaluation. PDFs, notebooks and arXiv papers are split into passages, searchable with page, cell or section citations; a topic map is built over them, and questions are written from the passages and checked against them. In the browser you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the question comes back on a review schedule (FSRS). On 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.95). Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank corrects, retires and rates questions, and the library adds material and writes questions, all from the browser. An end-to-end test (`make e2e`) walks through the whole app on stand-in models. Search and the grader are measured by commands in the repository (`make eval-retrieval`, `make eval-grader`), CI runs the tests, the grader's stand-in suite and the end-to-end test on every push, and every model call can be traced to Langfuse without its text. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**The demo:** https://daedalus-demo.vercel.app, on free tiers (Vercel and Neon). Its library holds eight openly licensed papers and notes written for it, and free cloud models grade the answers. Sign in with GitHub to practise, with ten grades a day; [what it keeps](https://daedalus-demo.vercel.app/privacy) about a visitor, and how to delete it, is on its privacy page.
+
+**Status:** Phases 1–6 are built: ingestion and retrieval, question generation, grading, the practice app, its evaluation, and a free deployment. PDFs, notebooks and arXiv papers are split into passages, searchable with page, cell or section citations; a topic map is built over them, and questions are written from the passages and checked against them. In the browser you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the question comes back on a review schedule (FSRS). On 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.95). Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank corrects, retires and rates questions, and the library adds material and writes questions, all from the browser. An end-to-end test (`make e2e`) walks through the whole app on stand-in models. Search and the grader are measured by commands in the repository (`make eval-retrieval`, `make eval-grader`), CI runs the tests, the grader's stand-in suite and the end-to-end test on every push, and every model call can be traced to Langfuse without its text. The app is deployed as a public demo (see [Deploying](#deploying)): each visitor signs in with GitHub and keeps a practice of their own, and daily limits share the free tiers between visitors. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
 
 ## Prerequisites (macOS)
 
@@ -170,6 +172,9 @@ With the API running and the frontend built and started (step 5 of [Setup](#setu
 - **Interview mode** gives each answer three minutes, counted down on a dimension line that runs on into overtime.
 - **Progress.** Answers earn XP, levels, a daily streak and coins. The dashboard draws your topics as a labyrinth of rooms, hatched by mastery, with the Minotaur in the weakest.
 - **The question bank** (`/questions`) shows every question with its passages and checks, and corrects, retires or rates it. **The library** (`/library`) adds material, builds the topic map and writes questions, with `make worker` running.
+- **Signing in** is optional locally: without it, all practice belongs to a built-in user. With a GitHub OAuth app's id and secret, `BETTER_AUTH_URL` and a `BETTER_AUTH_SECRET` in `.env` (see `env.example`), the header offers sign-in with GitHub, and each person who signs in keeps a practice of their own. GitHub is asked for the public profile only.
+- **Daily limits** on grading are off locally unless `DAILY_GRADES_PER_USER` or `DAILY_GRADES` is set; deployed, they hold each visitor to 10 grades a practice day and everyone to 80 over 24 hours. The practice page shows the grades left, and past a limit it keeps the answer as a draft until grading opens again.
+- **Privacy** (`/privacy`) says what is kept about you and where answers go, and deletes your practice: your answers and grades, the review schedule and your ratings, and the drafts in the browser.
 
 Each page is described in [frontend/README.md](frontend/README.md#pages).
 
@@ -287,7 +292,7 @@ no other model anything, and takes a few seconds.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /health`, `GET /health/deps` | The API is up; status of the database, the models, the API keys and tracing |
+| `GET /health`, `GET /health/deps` | The API is up; status of the database, the models, the API keys, tracing and the daily limits, and, while tracing is on, what the answering process has sent |
 | `POST /documents/upload` | Upload a `.pdf` or `.ipynb` as the multipart field `file`. Options as query parameters: `ocr`, `formulas`, `force` |
 | `POST /documents/arxiv` | Add a paper: `{"arxiv_id": "1706.03762"}`, optionally with `ocr`, `formulas` and `force` |
 | `GET /documents`, `GET /documents/{id}` | Documents with their status, details, chunk count, how many of those chunks the topic map has tagged, and latest job |
@@ -308,8 +313,12 @@ no other model anything, and takes a few seconds.
 | `GET /practice/progress` | XP, level and streak, and the ten coins: when each was minted, or how far along it is |
 | `GET /practice/map` | The dashboard's labyrinth: a room for each topic with questions, with its mastery and reviews due, the passages between the rooms, today's thread and the Minotaur's room |
 | `GET /practice/stats` | The latest 12 scores, graded answers on each of the last 14 days, and questions due on each of the next 7 |
+| `GET /practice/allowance` | What the daily limits leave: your grades today and everyone's over the last 24 hours, each with what it allows, and the limit that refuses a grade now, if any, with when it allows one again |
+| `DELETE /practice` | Delete your practice: every answer with its grades, the review history and schedule, and your ratings. Answers with what was deleted. The day's grades still count against the limits |
 | `POST /ratings` | Rate a question good or poor, or a grade fair or unfair: `{"question_id": 31, "value": -1, "note": "…"}` (or `grade_id`), `value` 1 or -1, with an optional note of at most 500 characters. Returns **201**. The latest rating comes with the question or grade as `rating` |
 
+- **Who is asking.** Locally a request is the built-in user's unless it carries a sign-in token. In production a token is needed on every per-person route (practice, attempts and grades, ratings), which answer 401 without one. The token is Better Auth's, sent as `Authorization: Bearer` and checked against the keys the frontend publishes at `/auth/jwks`. Another user's attempt or grade answers 404. The library is read by anyone, and in production nobody can change it: corrections answer 403 too.
+- **Past a daily limit,** answering and grading again return **429** with the limit that refuses and `Retry-After`, and nothing is written down. A grade counts once a model has replied, even if it failed.
 - **Adding material.** Both `POST` endpoints return **202** while the document's job is queued or running, and **200** when there is nothing to wait for because the document is already ingested.
   - A file over `MAX_UPLOAD_MB` gets 413; any other file type gets 415.
   - With `ENVIRONMENT=production`, both return 403, since ingestion runs locally.
@@ -366,7 +375,7 @@ curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"qu
 | `make check` | Checks the database and its migrations, Ollama and its models, API keys, and whether model calls are traced. `make check LIVE=1` also sends a one-word prompt to each model, traces them, and says whether Langfuse took the traces. |
 | `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`); in CI they fail instead. |
 | `make test-slow` | The PDF parsing test, which loads Docling's models |
-| `make e2e` | Walks through the app in a browser on stand-in models, in a database of its own: from the landing page through the library to a graded answer and its room on the dashboard. `make e2e ARGS=--headed` shows the browser. It needs Postgres (`make db-up`), ports 8000 and 3000 free, and Playwright's Chromium, downloaded once (see [frontend/README.md](frontend/README.md#the-end-to-end-test)) |
+| `make e2e` | Walks through the app in a browser on stand-in models, in a database of its own: from the landing page through the library to a graded answer, the day's last grade used, its room on the dashboard, and the practice deleted. `make e2e ARGS=--headed` shows the browser. It needs Postgres (`make db-up`), ports 8000 and 3000 free, and Playwright's Chromium, downloaded once (see [frontend/README.md](frontend/README.md#the-end-to-end-test)) |
 | `make lint` | Ruff (backend) and ESLint (frontend) |
 | `make help` | Lists all commands |
 
@@ -379,6 +388,8 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `ENVIRONMENT` | `local` | `production` means a free cloud host: cloud models only, keyword search only, no ingestion |
 | `CORS_ORIGINS` | `["http://localhost:3000"]` | Origins allowed to call the API |
 | `DATABASE_URL` | `postgresql+psycopg://daedalus:daedalus@localhost:5433/daedalus` | Matches `docker-compose.yml` |
+| `ROOT_PATH` | empty | The path a proxy serves the API under and passes on with each request: `/api` on Vercel. Routes match without it, and the API's docs ask for its schema with it |
+| `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | empty | Sign-in with GitHub, offered once all four are set: the frontend's address (the issuer of the tokens the API checks), a long random secret (e.g. `openssl rand -base64 32`), and a GitHub OAuth app's id and secret, with the callback `<frontend>/auth/callback/github`. Without them, practice is the built-in user's |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Local model server |
 | `GRADER_MODEL`, `HELPER_MODEL`, `SECOND_OPINION_MODEL`, `EMBEDDING_MODEL` | `qwen3.5:9b`, `qwen3.5:4b`, `gemma4:12b`, `qwen3-embedding:0.6b` | Local models |
 | `EMBEDDING_NUM_CTX` | `2048` | Context size of embedding requests. It keeps the embedding model at about 2 GB (2.9 GB at 16K) and still fits an 800-token chunk with its title and label. |
@@ -389,6 +400,7 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `TOKENIZER_MODEL` | `Qwen/Qwen3-Embedding-0.6B` | Tokenizer that measures chunk sizes: the embedding model's own |
 | `TOPIC_SIMILARITY` | `0.8` | How close two concept tags have to be to share a topic. Higher keeps topics narrow; 0.7 merged RNN, LSTM, ReLU and dropout into one. |
 | `DUPLICATE_SIMILARITY` | `0.75` | Above this, two questions are the same question in other words. Short texts sit much closer together than passages do, so the line is far below the 0.9 it looks like it should be. |
+| `DAILY_GRADES_PER_USER`, `DAILY_GRADES` | empty | Daily limits on grading: grades a user a practice day, and grades by everyone over the last 24 hours. Empty, there is no limit locally, and 10 and 80 in production; 0 switches grading off |
 | `PRACTICE_TIMEZONE` | `UTC` | The time zone practice days are counted in, e.g. `Asia/Kolkata`. A day starts at 04:00 there, so a session past midnight still counts as one day. |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | empty | A Langfuse project's keys. With both set, every model call is traced (see [Tracing model calls](#tracing-model-calls)) |
 | `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | The Langfuse project's region: `https://us.cloud.langfuse.com` for the US, or a self-hosted address. `LANGFUSE_HOST`, the older name, is read too |
@@ -396,7 +408,7 @@ Settings come from environment variables, then from `.env`. `env.example` lists 
 | `LANGFUSE_TRACING_ENABLED` | `true` | `false` stops tracing and keeps the keys. The tests set it, so they never send a trace |
 | `FAKE_MODELS` | `false` | Stand-ins for every model, for testing (`backend/app/llm/fakes.py`): they answer at once, the same way every time, and send nothing anywhere. What they write is made up, so point `DATABASE_URL` at a throwaway database. `make e2e` runs the whole app on them in a database of its own. `make check` says when they are on, `make calibrate` refuses them, and so does `ENVIRONMENT=production`. |
 
-The frontend has three settings of its own, which it doesn't take from the repository's `.env`: set them in the environment it is built and run in, or in `frontend/.env.local`.
+The frontend reads the same `.env` at the repository's root (variables already set win). It takes the sign-in settings and `DATABASE_URL`, where Better Auth keeps its tables, from there, and `ENVIRONMENT`, which decides at build time whether practice waits for a sign-in. It also has three settings of its own, which can go in the same file:
 
 | Setting | Default | Purpose |
 |---|---|---|
@@ -410,12 +422,13 @@ The frontend has three settings of its own, which it doesn't take from the repos
 .github/          CI on every push, the live grader run by hand, Dependabot
 backend/          FastAPI app (uv)
   app/api/        HTTP routes: health, documents, jobs and the worker, search, questions and
-                  topics, attempts and grades, practice, ratings
+                  topics, attempts and grades, practice, ratings; who is asking (users.py)
   app/core/       settings, setup checks
   app/db/         tables (SQLAlchemy) and Alembic migrations
   app/evaluation/ retrieval evaluation: question sets, labels, scores, fusion variants; the
                   grader's regression suite: its metrics and what a run has to meet
-  app/grading/    grading an answer against its question's sources, and scoring it
+  app/grading/    grading an answer against its question's sources, scoring it, and the daily
+                  limits
   app/ingest/     parsers (PDF, arXiv, notebooks), chunking, file storage, job queue, pipeline
   app/llm/        model routing, per-provider pacing, embeddings, tracing, and stand-ins for
                   testing
@@ -430,16 +443,19 @@ backend/          FastAPI app (uv)
   tests/          fixtures/grader_suite/ holds the stand-in answers of the grader's suite
 frontend/         Next.js (App Router, TypeScript, Tailwind)
   src/app/        pages: the landing page, practice, the question bank, the library, the
-                  dashboard, setup, and the pattern book, which shows the design system
+                  dashboard, setup, privacy, and the pattern book, which shows the design
+                  system; auth/ answers for Better Auth's sign-in
   src/components/ the design system's pieces; ui/ holds shadcn/ui components restyled to it
   src/client/     typed API client, generated by make client
-  src/lib/        API address and errors, theme, grades and drafts, questions and their validation
+  src/lib/        API address and errors, sign-in and the session, theme, grades and drafts, the
+                  daily limits in words, questions and their validation
                   reports, interview mode, what practice earned, the level-up burst, the grader's
                   measurement read from the design notes, and the glyph pictures' engine, grids
                   and drawings
   e2e/            the end-to-end test: a walk through the app in the browser on stand-in models
 db/init/          SQL that runs when the database is first created (enables pgvector)
 docs/             Design, decisions, measurements and roadmap
+vercel.json       The deployment: the frontend and API services, routes, region, main only
 data/             Your material, uploads, downloads, calibration answers, evaluation labels and
                   reports (not committed)
 ```
@@ -480,6 +496,10 @@ What leaves the machine:
 - **Plain OpenTelemetry,** sent to Langfuse's OTLP endpoint (`backend/app/llm/tracing.py`):
   Pydantic AI's own spans, one span per piece of work and one per embedding request. Nothing
   else in the app is instrumented.
+- **Deployed** (`ENVIRONMENT=production`), each piece of work's spans are sent as it ends, before
+  the answer goes out: a serverless function is frozen as soon as it has answered, before the
+  batch would go. Its traces carry the environment `production`, and `/health/deps` says what
+  the process answering it has sent.
 
 `make check` says whether tracing is on and what a trace holds, and `make check LIVE=1` says
 whether Langfuse took the traces of its test prompts.
@@ -496,11 +516,51 @@ about two minutes, with no secrets and nothing sent to a model provider:
 - **End-to-end:** `make e2e` in headless Chromium, on stand-in models. A failed walk uploads
   Playwright's trace.
 
+The demo deploys from `main` once all three jobs pass (see [Deploying](#deploying)).
+
 **Grader, live** runs only when started by hand from the Actions tab. It grades the stand-ins
 with the real grader (about 16K Groq tokens, 11 minutes) and needs a `GROQ_API_KEY` repository secret.
 Without one, it says so. Dependabot proposes updates to `backend/uv.lock` and to the actions
 weekly. The frontend's packages are updated by hand (`pnpm update`), since pnpm's 7-day rule
 refuses the way Dependabot installs them.
+
+## Deploying
+
+The demo is one Vercel project (Hobby) with a Neon database (Free). `vercel.json` describes the project:
+- the frontend (`frontend/`) and the API (`backend/`, `app.main:app`, up to 300 s a request, without its tests and scripts) as two services;
+- `/api/...` sent to the API and everything else to the frontend;
+- every function in `cle1`, beside the database;
+- builds for `main` only.
+
+1. **The database.** Create a Neon project in the region next to the functions (aws us-east-2 for `cle1`), and cap its compute, e.g. at 0.25 CU, so that the free hours last the month. Create the tables by running `make migrate` with `DATABASE_URL` set to Neon's pooled connection string, written `postgresql+psycopg://…`.
+2. **The library.** The deployed app can't ingest material or write questions, so build the library locally, in a database of its own. Copy its seven tables (`documents`, `chunks`, `chunk_tags`, `topics`, `chunk_topics`, `questions`, `question_sources`) to Neon keeping their ids, since questions point at their passages by id. Then move each table's id sequence past the copied rows. Keep to sources whose licence allows it: the demo's are CC BY 4.0 papers and notes written for it.
+3. **Sign-in.** Create a GitHub OAuth app for the deployed address: homepage `https://<domain>`, callback `https://<domain>/auth/callback/github`.
+4. **The project.** Import the repository in Vercel's dashboard; it finds the services in `vercel.json`. Set these Production environment variables (`env.example` lists them too):
+
+   | Setting | Value |
+   |---|---|
+   | `ENVIRONMENT` | `production` |
+   | `DATABASE_URL` | Neon's pooled connection string, written `postgresql+psycopg://…` |
+   | `ROOT_PATH` | `/api` |
+   | `NEXT_PUBLIC_API_URL` | `/api`: the browser's address for the API, written into the build |
+   | `API_URL`, `SITE_URL` | `https://<domain>/api` (absolute: the setup page asks from the server), `https://<domain>` |
+   | `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` | `https://<domain>`, and a new secret |
+   | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the OAuth app's |
+   | `GROQ_API_KEY`, `GEMINI_API_KEY` | the cloud models' keys |
+   | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | optional: tracing, without text |
+
+   Left unset, the daily limits hold grading to 10 a user and 80 in all. Practice days are counted in UTC unless `PRACTICE_TIMEZONE` says otherwise.
+5. **Deploys.** Every push to `main` builds. Under the project's Deployment Checks, choose CI's Backend, Frontend and End-to-end jobs, and the address moves to a new deployment only once all three have passed. A push to any other branch builds nothing. A changed environment variable takes effect at the next deployment (Redeploy, in the dashboard).
+6. **Checking it.** `https://<domain>/api/health/deps` shows the database and its schema's revision, whether each key is set (never its value), tracing and the daily limits.
+
+With `ENVIRONMENT=production` the API:
+- grades with cloud models only (Qwen on Groq, then Gemini) and searches by keyword only;
+- refuses ingestion, the topic map, generation and corrections (403);
+- answers practice only to someone signed in (401 otherwise);
+- holds grading to the daily limits;
+- sends each piece of work's traces as it ends.
+
+The functions sleep when nobody uses them: the first call after an idle spell took 4.4 to 4.7 s from India, then 0.5 to 1 s ([measurements](docs/design.md#phase-6-measurements)).
 
 ## Dependency safety
 

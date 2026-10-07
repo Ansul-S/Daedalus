@@ -36,9 +36,10 @@ Set them in the environment or in `frontend/.env.local`.
 | `/library` | The material questions are written from: add PDFs, notebooks and arXiv papers, build the topic map and write questions, following each job as the worker runs it (see below) |
 | `/dashboard` | What practice has built: the labyrinth of topics, the level and its wing, the days practised, the latest scores and the coins (see below) |
 | `/setup` | The status of the database, the local models and the API keys, checked each time the page loads |
+| `/privacy` | What is kept about a visitor and where answers go, and Delete my practice: answers, grades, the review schedule and ratings go, and so do the drafts in the browser, after a confirm step on the page. Signed out, it asks for a sign-in first |
 | `/pattern-book` | The design system, live: pigments, type, controls, marks (with the coins, the wing and the states of a job), hatching, glyph pictures and Markdown with LaTeX |
 
-The header shows the streak and the XP, and its name leads back to the landing page.
+The header shows the streak and the XP, and its name leads back to the landing page. With sign-in set up (the four settings in the repository's `.env`), it also shows who is signed in, with Sign in and Sign out. Better Auth answers at `/auth` (`src/app/auth/[...all]`, `src/lib/auth.ts`), and the browser sends the API its short-lived token (`src/lib/session.ts`). Built with `ENVIRONMENT=production`, pages that show practice wait for the sign-in lookup and ask nothing of the API until someone is signed in. The footer links to the privacy page.
 
 ### The landing page
 
@@ -54,6 +55,7 @@ The header shows the streak and the XP, and its name leads back to the landing p
 - **Answering.** Write the answer in Markdown, with `$maths$` for LaTeX, and check it under Preview. `⌘↵` (`Ctrl+↵` elsewhere) submits it; the API takes up to 8,000 characters.
 - **Time.** A stopwatch counts while the question is on screen and the page is in view, and the time goes with the answer.
 - **Interview mode.** The Interview switch beside the answer gives three minutes an answer, as in an interview: the stopwatch becomes a dimension line counting down, then into overtime, and it keeps counting in another tab. The limit goes with the answer, and an answer inside it earns 5 XP more. The browser remembers the switch.
+- **Daily limits.** With limits set, the title block shows the grades left. Once none are left, the answer can still be written, and is kept as a draft, but Submit waits until grading opens again, at the time shown. A refusal from the API (429) shows as a daily limit in the verdict, with the answer kept.
 - **Drafts.** An answer being written is kept in the browser's local storage, with its time, so a reload or a closed tab loses nothing. It is cleared once the answer is graded, and never leaves the browser before it is submitted.
 - **The verdict.** The score and the rating it earns, and when the question comes back; how the score was reached; each key point covered, partly covered or missing, with the words of your answer that earned it, underlined in the answer too; each claim supported, contradicted or unverified, with the passage it was checked against; clarity, strengths, gaps, errors, a follow-up question and a model answer.
 - **What it earned.** Under the score, the XP the answer earned and what made it up, a new level when one is reached (with a burst of Greek letters, unless the system asks for reduced motion), and the coins it minted, each also announced in a corner. The title block below the sheet then shows the new streak, level and XP, and the counts of questions due and new.
@@ -91,7 +93,7 @@ The page runs from material to practice in four steps. Adding material, building
 
 ## The end-to-end test
 
-`make e2e`, from the repository root, walks through the app in a browser on the stand-in models of `FAKE_MODELS` (`backend/app/llm/fakes.py`). Enter the labyrinth on the landing page leads to an empty practice page and on to the library, where the test uploads a notebook written for it (`e2e/fixtures/training-notes.ipynb`, three short sections on training deep networks). The worker reads it into three passages, the topic map finds three topics, and a batch of three questions is written, all accepted. The test answers the question practice brings up and checks the verdict: graded by `fake-grader`, 0.75 and Good, two claims supported and cited by notebook and cell, and the XP earned. On the dashboard the labyrinth has three rooms, the one answered in practised with a mastery of 0.75, and the wing shows the same XP.
+`make e2e`, from the repository root, walks through the app in a browser on the stand-in models of `FAKE_MODELS` (`backend/app/llm/fakes.py`). Enter the labyrinth on the landing page leads to an empty practice page and on to the library, where the test uploads a notebook written for it (`e2e/fixtures/training-notes.ipynb`, three short sections on training deep networks). The worker reads it into three passages, the topic map finds three topics, and a batch of three questions is written, all accepted. The test answers the question practice brings up and checks the verdict: graded by `fake-grader`, 0.75 and Good, two claims supported and cited by notebook and cell, and the XP earned. The run allows one grade a user (`DAILY_GRADES_PER_USER=1`), so the next answer waits with no grades left. On the dashboard the labyrinth has three rooms, the one answered in practised with a mastery of 0.75, and the wing shows the same XP. Last, the footer's privacy link leads to Delete my practice. The delete clears the draft kept in the browser, leaves the dashboard at 0 XP, and still leaves no grades for the day. Sign-in is off in the run.
 
 - **Before the first run,** download the browser it drives, Playwright's own Chromium (about 560 MB once unpacked): `pnpm exec playwright install chromium` in this folder. Postgres has to be running (`make db-up`), and ports 8000 and 3000 free: stop `make api`, and `make web` or `pnpm start`. Ollama and the API keys aren't needed.
 - **A database of its own.** `backend/scripts/e2e.py` makes `daedalus_e2e` afresh on the Postgres server of `make db-up`, and a temporary folder for uploads. Both are removed when the run ends, whether it passed or not, and the development database is never touched. `playwright.config.ts` starts the API, a worker and the frontend on them, and stops them at the end; passages may be small there, so that each of the notebook's sections is one. Playwright started any other way refuses to run, since the database isn't there.
@@ -104,6 +106,8 @@ The page runs from material to practice in four steps. Adding material, building
 
 ```
 src/app/             pages, the root layout (fonts, theme, header, footer), error and 404 pages
+src/app/auth/        Better Auth's routes, at /auth
+src/app/privacy/     the privacy note and deleting one's practice
 src/app/(landing)/   the landing page at /, its parts and its preview picture
 src/app/globals.css  tokens, themes, type roles, hatching and Markdown styles
 src/components/      the design system's pieces: labyrinth mark, Ariadne's thread, hatching,
@@ -112,11 +116,12 @@ src/components/      the design system's pieces: labyrinth mark, Ariadne's threa
                      file drop
 src/components/ui/   shadcn/ui components (Radix, "lyra" style), restyled to the tokens
 src/client/          typed API client (generated)
-src/lib/             API address and error type, theme, reading a grade, drafts, the stopwatch,
-                     interview mode, what practice earned in words, the level-up burst, naming a
-                     question and reading its validation report, the library's work in words,
-                     the grader's measurement from the design notes, the glyph pictures' engine,
-                     grids and drawings
+src/lib/             API address and error type, sign-in (Better Auth's server and the browser's
+                     session), the daily limits in words, theme, reading a grade, drafts, the
+                     stopwatch, interview mode, what practice earned in words, the level-up
+                     burst, naming a question and reading its validation report, the library's
+                     work in words, the grader's measurement from the design notes, the glyph
+                     pictures' engine, grids and drawings
 openapi.json         the API schema the client is generated from (generated)
 e2e/                 the end-to-end test and the notebook written for it
 playwright.config.ts the servers the end-to-end test runs on
