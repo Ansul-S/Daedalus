@@ -35,3 +35,19 @@ def test_behind_a_proxy_the_api_answers_under_its_path() -> None:
     )
 
     assert json.loads(elsewhere.stdout) == [{"status": "ok"}, [{"url": "/api"}]]
+
+
+def test_the_api_starts_without_the_model_providers() -> None:
+    """A deployed API imports itself on every cold start, and the providers' libraries are
+    more than a third of that: they are loaded only once a model is built. The import is made
+    afresh, as a new process would."""
+    providers = ["openai", "google.genai", "groq", "aiohttp"]
+    script = (
+        "import json, sys; import app.main; "
+        f"print(json.dumps([name for name in {providers!r} if name in sys.modules]))"
+    )
+    elsewhere = subprocess.run(
+        [sys.executable, "-c", script], cwd=BACKEND, capture_output=True, text=True, check=True
+    )
+
+    assert json.loads(elsewhere.stdout) == []

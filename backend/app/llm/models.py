@@ -10,28 +10,27 @@ Ollama, so only cloud models are used.
 
 With FAKE_MODELS, every task gets a stand-in from `app.llm.fakes` instead, embeddings
 included: the end-to-end test runs the whole app on them.
+
+Each provider's libraries are imported only when its model is built. Together they are more
+than a third of the API's start-up, which a deployed API pays on every cold start, and most
+requests never call a model.
 """
 
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from groq import AsyncGroq
 from pydantic_ai.models import Model
-from pydantic_ai.models.fallback import FallbackModel
-from pydantic_ai.models.google import GoogleModel
-from pydantic_ai.models.groq import GroqModel
-from pydantic_ai.models.ollama import OllamaModel
-from pydantic_ai.profiles import ModelProfile, merge_profile
-from pydantic_ai.profiles.openai import OpenAIJsonSchemaTransformer
-from pydantic_ai.providers.google import GoogleProvider
-from pydantic_ai.providers.groq import GroqProvider
-from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.settings import ModelSettings
 
 from app.core.config import Settings
 from app.llm import fakes
 from app.llm.embeddings import Embedder
 from app.llm.pacing import Limits, PacedModel, Pacer
+
+if TYPE_CHECKING:
+    from pydantic_ai.models.google import GoogleModel
+    from pydantic_ai.models.groq import GroqModel
+    from pydantic_ai.models.ollama import OllamaModel
 
 # Ollama serves the same output for the same prompt at this seed.
 HELPER_SEED = 7
@@ -61,7 +60,7 @@ GEMINI_FREE = Limits(
 )
 
 
-def ollama(settings: Settings, name: str, http_client: Any = None) -> OllamaModel | None:
+def ollama(settings: Settings, name: str, http_client: Any = None) -> "OllamaModel | None":
     """A model served by the local Ollama.
 
     Ollama turns thinking on by itself for any model that can think, and qwen3.5 can. The
@@ -72,6 +71,10 @@ def ollama(settings: Settings, name: str, http_client: Any = None) -> OllamaMode
     """
     if settings.environment != "local":
         return None
+    from pydantic_ai.models.ollama import OllamaModel
+    from pydantic_ai.profiles import ModelProfile, merge_profile
+    from pydantic_ai.providers.ollama import OllamaProvider
+
     provider = OllamaProvider(base_url=f"{settings.ollama_base_url}/v1", http_client=http_client)
     profile = merge_profile(provider.model_profile(name), ModelProfile(supports_thinking=True))
     return OllamaModel(name, provider=provider, profile=profile)
@@ -84,7 +87,9 @@ def helper_settings() -> ModelSettings:
     return ModelSettings(thinking=False, temperature=0.0, top_p=1.0, seed=HELPER_SEED)
 
 
-def groq(settings: Settings, name: str | None = None, http_client: Any = None) -> GroqModel | None:
+def groq(
+    settings: Settings, name: str | None = None, http_client: Any = None
+) -> "GroqModel | None":
     """Groq, the generation model unless another is named, with the client's own retrying
     turned off.
 
@@ -97,6 +102,12 @@ def groq(settings: Settings, name: str | None = None, http_client: Any = None) -
     """
     if settings.groq_api_key is None:
         return None
+    from groq import AsyncGroq
+    from pydantic_ai.models.groq import GroqModel
+    from pydantic_ai.profiles import ModelProfile, merge_profile
+    from pydantic_ai.profiles.openai import OpenAIJsonSchemaTransformer
+    from pydantic_ai.providers.groq import GroqProvider
+
     client = AsyncGroq(
         api_key=settings.groq_api_key.get_secret_value(), max_retries=0, http_client=http_client
     )
@@ -111,9 +122,12 @@ def groq(settings: Settings, name: str | None = None, http_client: Any = None) -
     return GroqModel(name, provider=provider, profile=profile)
 
 
-def gemini(settings: Settings) -> GoogleModel | None:
+def gemini(settings: Settings) -> "GoogleModel | None":
     if settings.gemini_api_key is None:
         return None
+    from pydantic_ai.models.google import GoogleModel
+    from pydantic_ai.providers.google import GoogleProvider
+
     provider = GoogleProvider(api_key=settings.gemini_api_key.get_secret_value())
     return GoogleModel(settings.gemini_model, provider=provider)
 
@@ -122,7 +136,11 @@ def _chain(*candidates: Model | None) -> Model:
     models = [model for model in candidates if model is not None]
     if not models:
         raise RuntimeError("No model available: set GROQ_API_KEY or GEMINI_API_KEY")
-    return models[0] if len(models) == 1 else FallbackModel(*models)
+    if len(models) == 1:
+        return models[0]
+    from pydantic_ai.models.fallback import FallbackModel
+
+    return FallbackModel(*models)
 
 
 def generation_model(settings: Settings) -> Model:
