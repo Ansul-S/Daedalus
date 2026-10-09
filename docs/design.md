@@ -221,6 +221,96 @@ Retrieval and grading are implemented directly rather than through a RAG framewo
 - **No second model call for a quote-support check.** `answer_agreement` records the cosine between the reference answer and the answer the checker wrote from the passages alone. It is recorded and judges nothing, and the milestone run says it should stay that way: over twenty questions the accepted ones scored 0.74 to 0.92 and the rejected ones 0.56 to 0.96, and the highest score of the run belonged to a question that was turned down.
 - **Gemini is pinned to `gemini-3.5-flash`.** The `-latest` alias moved to 3.8 Flash, which returned 503 on 11 of 13 attempts, and Pydantic AI's profile for the alias drops thinking settings.
 
+## Question generation, reworked (Phase 6)
+
+Before the demo library was written, every question generated so far was read against its
+passages: 133 questions, 61 in the development library and 72 in the demo's, each one and each of
+its 422 key points labelled by hand against a rubric. 26 were usable as written (20%), which is
+**3.1 usable questions per 100K tokens**. 31 repeated an earlier question from the same document,
+and 16 of the 49 that passed the checks rested part of their weight on a key point their passages
+don't hold. The pass rate had stayed flat over five prompt versions (29-45%), because the causes
+sat before and after the writer: a plan made of passages, and checks that tested a question's form
+rather than its content.
+
+The rework plans by idea instead of by passage, and writes from evidence:
+
+```
+ scripts.inventory ─► gate     passages that are mostly table, hold damaged maths, or start in an
+   --document ID                appendix or the acknowledgements are never read
+                   ─► read     gpt-oss-120b on Groq lists the ideas each ~5K-token window explains:
+                                name, summary, passages, kinds of explanation, reason given or only
+                                stated, general or the document's own, interview odds 1-3, and one
+                                sentence copied from its passage
+                   ─► merge    one call per document folds ideas listed in two windows
+                   ─► compare  ideas of different documents at cosine >= 0.7 go to the model,
+                                20 pairs a request, to say whether they are one
+                   ─► review   a person's merges, scopes and exclusions (<database>.review.json)
+
+ scripts.write_questions ─► style   chosen from what the evidence supports, spread across the ideas
+   --idea KEY ...        ─► write   one idea and its passages: evidence sentences first, then the
+                                    question, key points that each rest on one, and a reference
+                                    answer made of the key points alone
+                         ─► check   evidence in the passages · key points rest on it and add to the
+                                    question · one question · stands without the document; and
+                                    qwen3.5:4b: answerable from the passages, explain not recall
+                         ─► repair  what fails goes back once, recall included
+                         ─► review  a person keeps each question as written or with an edit
+                                    (<database>.library.json)
+
+ scripts.store_questions ─► store   kept questions in as accepted, their passages as sources, edits
+                                    made as corrections; --replace takes the old library out
+```
+
+Nothing is added to the schema. The inventory, the questions and both reviews are JSON files in
+`data/inventory/`, and stored questions use Phase 2's tables. The browser's library page and
+`make generate` still write a quick batch the Phase 2 way. How to run it:
+[docs/generating-questions.md](generating-questions.md).
+
+### Rework decisions
+- **A gold set first, and one number.**
+  - All 133 questions were labelled good, fixable or bad, with their faults, and every key point as supported by its quote, supported only elsewhere in its passages, or not in them.
+  - Usable means good and not a repeat of an earlier good question.
+  - Every change since is measured against that, by usable questions per 100K tokens, real repeats, and unsupported key points let through, not by the pass rate. Before the rework, 33% of what passed was usable, and 62% of usable questions passed.
+- **The plan is made of ideas.**
+  - Planned passage by passage, the generator asked an idea again from every passage that restated it. Of the 31 real repeats, 17 were led by a different passage and 14 by the same passage asked again.
+  - Listed once, with its passages, an idea is asked once. Matched by hand, the inventory would have prevented 5 of the 5 repeats on the three papers it was first tried on, and 8 of the 9 on the other six documents.
+- **The inventory is read by gpt-oss-120b on Groq, in windows of about 5,000 tokens.**
+  - Groq's free tier takes 8,000 tokens a minute, prompt and answer together, so each document is read in windows and then merged by a second call from the ideas' names and summaries alone.
+  - The alternatives were Gemini, which takes a whole paper but allows 20 requests a day and often returned 503, and the local 9B, which was the weakest at judging what matters.
+  - The kinds of explanation are plain strings filtered in code: Groq turned a whole window down for one kind outside the six ("theorem").
+- **A source gate in code.**
+  - A passage is a table when half its characters sit in table lines. Counted by lines, two prose passages holding a short table looked mostly table and took two usable questions with them.
+  - On the 322 passages of both libraries the gate holds back 69 (tables 31, damaged maths 10, back matter 46), which had led 5 of the 133 questions, none of them good.
+  - Whether a results or related-work section explains anything is left to the inventory: section names can't tell Ragas's "Evaluation Strategies" from an evaluation section.
+- **Evidence is checked in code, and mathematics strictly.**
+  - A sentence copied whole is checked like a key point's quote.
+  - A shortened one stands only when every piece is in the cited passage as written, in order, and what it leaves out lies within one sentence and holds no negation and no mathematics.
+  - A sentence that holds or touches a formula has to be an exact copy.
+- **The writer copies its evidence first.**
+  - It is given one idea and its passages. It answers in the order the parts rest on each other: the sentences that explain the idea, the question, key points that each name the sentence they rest on, then a reference answer made of the key points alone.
+  - There is no paper style and no list of questions already asked, because the plan asks each idea once.
+  - Key points keep Phase 2's shape, with the cited sentence as the evidence quote, so grading reads them as before.
+- **The style follows the evidence.**
+  - A why or how question only when the passages give the reason, and an intuition question only when they also explain a mechanism or a definition.
+  - A comparison only when the passages draw one, and failure modes only when they describe one.
+  - A trade-off only when the passages name one in their own words: 7 of the 9 accepted trade-off questions before the rework invented theirs.
+  - Spread across the ideas planned together, no style takes over.
+- **No model checks whether a key point is supported.**
+  - Three checks were measured on the 422 labelled key points, against a bar fixed first: flag at least 80% of the 122 not supported by their quote, and at most 10% of the 300 that are.
+  - An NLI cross-encoder (DeBERTa-v3, MNLI/FEVER/ANLI) flagged 92% and 59%. `qwen3.5:4b`, asked yes or no, flagged 61% and 13%. gpt-oss-120b on Groq flagged 75% and 14%.
+  - None was adopted, so support is read at the review.
+  - What code can see is checked instead. A key point that is mostly the question's own words (80% of its content words), or that grades a figure the question doesn't ask for, goes back to the writer.
+- **The duplicate check is reported, not a gate.** The plan asks each idea once. On the gold set the check had rejected 51 questions, only 22 of them real repeats, and missed 9.
+- **The gate was set aside after three writers.**
+  - The bar, fixed for 20 questions before the first run: at least 14 good, at most 2 repeats, and no accepted question with a key point its passages don't hold.
+  - generate-v6, v7 and v8 gave 11, 13 and 11 good. Reading alone moves a count by one or two.
+  - What held in all three: no question with a key point missing from its passages passed the checks, every usable question passed them, and they gave 11.8 to 15.1 usable questions per 100K tokens against 3.1.
+  - The writer stays at generate-v8 (see the [measurements](#generation-rework-measurements)).
+- **A person decides what goes into the library.**
+  - The writer saves to a file, and a review keeps each question as written or with an edit.
+  - The edit is made and recorded the way the question bank makes a correction.
+  - `--replace` swaps a library out in the same transaction, and refuses while any question going out has been answered, scheduled, reviewed or rated.
+
 ## Grading (Phase 3)
 
 ```
@@ -381,7 +471,7 @@ Phase 5 adds no tables. Its labels (`data/eval/`) and reports (`data/reports/`) 
   - No LLM-judge metric is ever built, so no key for a judge is needed and no model is asked.
   - The four metrics are `BaseMetric` subclasses worked out from the labels (`app/evaluation/grader_metrics.py`) and run through `measure()`. `evaluate()` is never called: it always writes the run, answers included, to `.deepeval/` in the working directory and prints a promotion for Confident AI.
   - Telemetry and DeepEval's reading of `.env` are turned off in code before it is imported. Its pytest plugin, which imports it at startup, is turned off too.
-  - DeepEval lives in the `eval` dependency group, which the API never installs. Its version caps are lifted by `override-dependencies` (see the README's [dependency safety](../README.md#dependency-safety)).
+  - DeepEval lives in the `eval` dependency group, which the API never installs. Its version caps are lifted by `override-dependencies` (see [dependency safety](getting-started.md#dependency-safety)).
 - **The score gap is measured against the hand's own score out of 10.** Against the formula applied to the hand labels, as planned, it was blind to the scoring: with partial worth 1.0 instead of 0.5, ρ on the 75 answers stayed at 0.916, above its gate. Against the hand's own score, the same broken scoring fails the run. An injection is held when it scores no more than the hand gave it. The first plan, below 0.2, failed two injection attempts that also carry real content.
 - **ρ and κ decide a run only from 30 graded answers.** On the 12 stand-ins, one answer moved ρ from 0.98 to 0.87. Around 0.90, ρ's 95% interval is 0.67 to 0.97 on 12 answers, against 0.85 to 0.94 on 75. Below 30, they are reported beside the gates.
 - **The calibration answers stay on this machine, and CI grades stand-ins.** The repository is public. The 75 answers are personal writing, and of the sources behind them only 2510.10824 is openly licensed (CC BY 4.0). `backend/tests/fixtures/grader_suite/` holds three questions on notes written for the repository and 12 answers of every kind: strong, partial, terse, wrong, confidently wrong, injection and non-answer. Each has hand labels and the grader output recorded for it. Replayed through the real `grade_answer()` on a stand-in model, they check everything between the model and the score. `make test` and CI run them.
@@ -642,6 +732,53 @@ worth asking a question about (notebook 48 of 84, lecture notes 9 of 9, 1706.037
   plans as an index scan.
 - **Tests:** 260 fast tests in about 20 s, including creating the test database.
 
+## Generation rework measurements
+Measured on the demo library, nine documents and 198 passages; the baseline covers the
+development library too. Every question below was labelled by hand against the gold set's rubric.
+
+- **The baseline:** the 133 questions written by Phase 2's generator (prompt versions v1 to v5)
+  in both libraries. 38 good, 32 fixable, 63 bad. 512K tokens in all, 68% of them spent on
+  questions the checks turned down.
+- **Three versions of the evidence-first writer,** each writing the same 20 ideas of three papers
+  (DPO, Ragas, ReAct):
+
+  | | Baseline (v1-v5) | generate-v6 | generate-v7 | generate-v8 |
+  |---|---|---|---|---|
+  | Questions | 133 | 20 | 20 | 20 |
+  | Good | 38 (29%) | 11 | 13 | 11 |
+  | Passed the checks | 49 | 13 | 18 | 15 |
+  | Usable, of those that passed | 33% | 85% | 72% | 73% |
+  | **Usable questions per 100K tokens** | **3.1** | **13.3** | **15.1** | **11.8** |
+  | ... counting the inventory's cost | | 7.7 | 9.3 | 7.5 |
+  | Real repeats | 31 (23%) | 0 | 0 | 1 |
+  | Passed with a key point not in its passages | 16 | 0 | 0 | 0 |
+  | Tokens per question | 3.9K | 4.1K | 4.3K | 4.65K |
+
+  - Key points not in their passages fell from 16% of the baseline's 422 to 2% of generate-v6's 56.
+  - generate-v6's recall questions moved into its key points under v7, and v8 sends back a key
+    point that restates its question or grades a reported figure. The mathematics change that
+    followed (52e579b) takes bracket sizes (`\big`, `\left`, `\right` and the like) and line
+    breaks out of both sides before a formula is compared: three more of the 293 evidence
+    sentences written by then hold, each its passage's own formula, and none that held is refused.
+- **The concept inventory:**
+  - On three papers: 9 requests, 48.3K tokens (one more answer, about 6K, was turned down by Groq
+    and not counted), 60 ideas, 57 after the review. Repeats prevented 5 of 5, wrongly rejected
+    questions kept apart 8 of 8, usable questions covered 7 of 7.
+  - On the other six documents: 19 requests, 90.8K tokens in 17 minutes, 119 new ideas, 176 in
+    all and 168 after the review. Repeats prevented 8 of 9, kept apart 12 of 12, usable covered
+    7 of 7.
+  - Of the 74 evidence sentences on the first three papers, 51 hold up under the evidence rule,
+    52 after the mathematics change. No idea is filed under a wrong passage.
+- **The demo library:**
+  - The writer on 26 ideas, 22 new ones at interview odds 3 (general, reason given) and 4 of
+    generate-v8's written again: 35 requests, 106.2K tokens in 18 minutes; 26 written, 24 passed
+    the checks.
+  - A top-up of 13 (odds 2, and one idea written again): 18 requests, 47.8K tokens; 9 passed.
+  - The review kept 35 questions from 8 of the 9 documents (the bar was 30 from 7), 27 as written
+    and 8 with an edit: 13 from generate-v8's run on the three papers, 14 from the main run and 8
+    from the top-up. They replaced the 72 questions the demo held before, none of which had been
+    practised.
+
 ## Phase 3 measurements
 Measured on the same Mac, grading answers to the 25 accepted questions.
 
@@ -845,6 +982,9 @@ Measured on the demo (Vercel Hobby in cle1, Neon Free in us-east-2) from India, 
   worked through by the same worker that ingests.
 - API endpoints: start a batch, list and filter questions, read one with its sources and
   validation report, and browse the topic map.
+- Reworked in Phase 6 for the demo library: a concept inventory plans one question per idea, an
+  evidence-first writer writes it, and a person's review decides what is stored (see
+  [Question generation, reworked](#question-generation-reworked-phase-6)).
 
 **Phase 3: Grading against sources** (built; see [Grading](#grading-phase-3) and the [milestone result](#phase-3-milestone-result))
 - Grader output fields:
@@ -935,7 +1075,10 @@ Daedalus/
 │   │   │   ├── generation.py     # prompts, schema, the quote-repair round
 │   │   │   ├── grounding.py      # is this quote really in its chunk
 │   │   │   ├── validation.py     # the checks a question has to pass, and storing it
-│   │   │   └── batch.py          # planning a batch and working through it
+│   │   │   ├── batch.py          # planning a batch and working through it
+│   │   │   ├── inventory.py      # the concept inventory: the ideas each document explains, once
+│   │   │   ├── writing.py        # the evidence-first writer, its styles and its checks
+│   │   │   └── library.py        # a reviewed question into the library, and corrections
 │   │   ├── grading/
 │   │   │   ├── grader.py         # prompt, schema, grading an answer, storing the grade
 │   │   │   ├── limits.py         # the daily limits, counted in grade_requests
@@ -947,17 +1090,22 @@ Daedalus/
 │   │       ├── progress.py       # XP, levels, the streak and coins, replayed from the reviews
 │   │       └── labyrinth.py      # the dashboard's maze of topics
 │   ├── scripts/              # check_setup, ingest, worker, topics, generate, calibrate,
-│   │                         #   evaluate_retrieval, evaluate_grader; openapi (the schema the
+│   │                         #   evaluate_retrieval, evaluate_grader; inventory, write_questions,
+│   │                         #   store_questions (the reviewed library); openapi (the schema the
 │   │                         #   client is generated from), glyphs, e2e
 │   └── tests/                # unit and database tests, slow PDF test;
 │                             #   fixtures/grader_suite/ = the grader suite's stand-ins
+├── docs/                     # these design notes, the guides, and the README's images
 └── frontend/                 # Next.js (App Router) + Tailwind + shadcn/ui, restyled
     ├── src/app/              # pages: landing, practice, question bank, library, dashboard,
     │                         #   setup, privacy, pattern book; auth/ = Better Auth's routes
     ├── src/components/       # the design system's pieces; ui/ = shadcn/ui components
     ├── src/client/           # typed API client, generated by make client
-    ├── src/lib/              # API errors, sign-in and the session, grades, drafts, the daily
-    │                         #   limits and progress in words, the glyph pictures
+    ├── src/lib/              # API address and errors, sign-in and the session, theme, grades
+    │                         #   and drafts, the daily limits in words, questions and their
+    │                         #   validation reports, interview mode, what practice earned, the
+    │                         #   level-up burst, the grader's measurement read from these notes,
+    │                         #   and the glyph pictures' engine, grids and drawings
     ├── e2e/                  # the end-to-end test and the notebook written for it
     └── playwright.config.ts  # the servers the end-to-end test runs on
 ```
@@ -1104,6 +1252,10 @@ three runs, although the prompt describes 1 to 5.
   notebook questions of the third run that were turned away all ran into the same one.
 - **Phase 2 stops here, at 45%.** Holding the generator to one question per question is the
   change to try first when question generation is taken up again.
+- **Taken up again in Phase 6.** The pass rate turned out to measure the wrong thing: a gold set
+  of 133 labelled questions found one in five usable. Planning by idea and writing from evidence
+  raised usable questions per 100K tokens from 3.1 to 11.8-15.1 (see
+  [Question generation, reworked](#question-generation-reworked-phase-6)).
 
 ## Phase 3 milestone result
 **Passed: the grader's scores rank answers the way hand grades do, at Spearman ρ 0.95 against

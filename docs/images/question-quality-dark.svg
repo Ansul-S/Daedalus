@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="338" viewBox="0 0 820 338" role="img" aria-label="Usable questions per 100K tokens: 3.1 before, 13.3, 15.1 and 11.8 with the evidence-first writer">
+<title>Usable questions per 100K tokens: 3.1 before, 13.3, 15.1 and 11.8 with the evidence-first writer</title>
+<rect x="0.5" y="0.5" width="819" height="337" rx="10" fill="#1C1411" stroke="#2B221E"/>
+<text x="32" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" font-weight="600" fill="#F5F0E4" text-anchor="start">Usable questions per 100K tokens</text>
+<text x="32" y="70" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#CFC6BD" text-anchor="start">Usable means labelled good by hand and not a repeat. Higher is better.</text>
+<text x="32" y="114" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F5F0E4" text-anchor="start">Before: one question per passage</text>
+<text x="32" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#A89E96" text-anchor="start">133 questions, prompts v1 to v5</text>
+<path d="M300,106 H381.25 Q385.25,106 385.25,110 V124 Q385.25,128 381.25,128 H300 Z" fill="#665D57"/>
+<text x="395.25" y="123" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#F5F0E4" text-anchor="start">3.1</text>
+<text x="32" y="164" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F5F0E4" text-anchor="start">Evidence-first writer, v6</text>
+<text x="32" y="182" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#A89E96" text-anchor="start">20 questions</text>
+<path d="M300,156 H661.75 Q665.75,156 665.75,160 V174 Q665.75,178 661.75,178 H300 Z" fill="#EC5B5C"/>
+<text x="675.75" y="173" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#F5F0E4" text-anchor="start">13.3</text>
+<text x="32" y="214" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F5F0E4" text-anchor="start">Evidence-first writer, v7</text>
+<text x="32" y="232" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#A89E96" text-anchor="start">20 questions</text>
+<path d="M300,206 H711.25 Q715.25,206 715.25,210 V224 Q715.25,228 711.25,228 H300 Z" fill="#EC5B5C"/>
+<text x="725.25" y="223" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#F5F0E4" text-anchor="start">15.1</text>
+<text x="32" y="264" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#F5F0E4" text-anchor="start">Evidence-first writer, v8 (in use)</text>
+<text x="32" y="282" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#A89E96" text-anchor="start">20 questions</text>
+<path d="M300,256 H620.5 Q624.5,256 624.5,260 V274 Q624.5,278 620.5,278 H300 Z" fill="#EC5B5C"/>
+<text x="634.5" y="273" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#F5F0E4" text-anchor="start">11.8</text>
+<line x1="300" y1="96" x2="300" y2="286" stroke="#3A302B" stroke-width="1"/>
+<text x="32" y="316" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#A89E96" text-anchor="start">Counting the one-off cost of listing each document's ideas: 7.7, 9.3 and 7.5.</text>
+</svg>

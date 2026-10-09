@@ -1,573 +1,178 @@
+<p align="center">
+  <img src="frontend/src/app/(landing)/opengraph-image.jpg" alt="Practice that remembers what you forget: the Daedalus landing page, with Charles Holroyd's etching Daedalus (1895) redrawn in Greek letters on a sinopia red field" width="100%">
+</p>
+
 # Daedalus
 
+**Practice that remembers what you forget.**
+
 [![CI](https://github.com/Ansul-S/Daedalus/actions/workflows/ci.yml/badge.svg)](https://github.com/Ansul-S/Daedalus/actions/workflows/ci.yml)
+[![Licence: Apache 2.0](https://img.shields.io/badge/licence-Apache%202.0-8F2121)](LICENSE)
+[![Live demo](https://img.shields.io/badge/demo-live-8F2121)](https://daedalus-demo.vercel.app)
 
-AI/ML interview practice built on your own study material. Daedalus generates conceptual interview questions from your PDFs, Jupyter notebooks and arXiv papers, then grades your answers against those same sources, with citations.
+Daedalus turns your own study material (PDFs, Jupyter notebooks and arXiv papers) into
+conceptual AI/ML interview questions. It grades each answer claim by claim against the passages
+the question came from, and brings the question back just before you would forget it.
 
-Everything runs on free resources: open-source models on your Mac (Ollama), plus free cloud tiers (Groq, Gemini) for bulk work and fast grading.
+Everything runs on free resources: open-source models on your Mac through Ollama, and the free
+tiers of Groq and Gemini.
 
-**The demo:** https://daedalus-demo.vercel.app, on free tiers (Vercel and Neon). Its library holds eight openly licensed papers and notes written for it, and free cloud models grade the answers. Sign in with GitHub to practise, with ten grades a day; [what it keeps](https://daedalus-demo.vercel.app/privacy) about a visitor, and how to delete it, is on its privacy page.
+The [demo](https://daedalus-demo.vercel.app) asks only for a GitHub sign-in and gives ten grades
+a day. Its [privacy page](https://daedalus-demo.vercel.app/privacy) says what it keeps about you,
+and how to delete it.
 
-**Status:** Phases 1–6 are built: ingestion and retrieval, question generation, grading, the practice app, its evaluation, and a free deployment. PDFs, notebooks and arXiv papers are split into passages, searchable with page, cell or section citations; a topic map is built over them, and questions are written from the passages and checked against them. In the browser you answer the question due next and get the grader's verdict, key point by key point and claim by claim with its source, and the question comes back on a review schedule (FSRS). On 75 hand-graded answers the grader's scores rank them as the hand grades do (Spearman ρ 0.95). Practice earns XP, levels and coins, the dashboard draws your topics as a labyrinth of rooms, and interview mode gives each answer three minutes. The question bank corrects, retires and rates questions, and the library adds material and writes questions, all from the browser. An end-to-end test (`make e2e`) walks through the whole app on stand-in models. Search and the grader are measured by commands in the repository (`make eval-retrieval`, `make eval-grader`), CI runs the tests, the grader's stand-in suite and the end-to-end test on every push, and every model call can be traced to Langfuse without its text. The app is deployed as a public demo (see [Deploying](#deploying)): each visitor signs in with GitHub and keeps a practice of their own, and daily limits share the free tiers between visitors. Architecture, decisions, measurements and roadmap: [docs/design.md](docs/design.md).
+**[Try the demo](https://daedalus-demo.vercel.app)** · [How it works](#how-it-works) ·
+[Results](#results) · [Quick start](#quick-start) · [Documentation](#documentation)
 
-## Prerequisites (macOS)
+## Features
 
-- [uv](https://docs.astral.sh/uv/), [Docker Desktop](https://www.docker.com/products/docker-desktop/), Node.js 22+
-- [Ollama](https://ollama.com) and [pnpm](https://pnpm.io): `brew install ollama pnpm`
+- **Questions from your sources.** Each question's key points quote their passages word for
+  word, and code checks every quote.
+- **Grading with citations.** Each key point is marked covered, partly covered or missing, and
+  each claim is checked against a cited passage.
+- **Spaced repetition.** An FSRS schedule decides when each question comes back, from 1 to 30
+  days later.
+- **Progress you can see.** XP, levels, a streak and coins. The dashboard draws your topics as a
+  labyrinth of rooms, with the Minotaur in the weakest.
+- **Interview mode.** Three minutes per answer, counted down on a dimension line.
+- **Free to run.** Local models through Ollama, free cloud tiers for speed, and a public demo on
+  Vercel and Neon.
 
-## Setup
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshot-grade.png" alt="A graded answer: a score of 1.00, both key points covered with the words that show them, and each claim beside the passage that supports it"></td>
+    <td width="50%"><img src="docs/images/screenshot-dashboard.png" alt="The dashboard: one room per topic, hatched by mastery, with today's thread and the Minotaur in the weakest room"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>A graded answer.</b> Key points, claims and their sources.</sub></td>
+    <td align="center"><sub><b>The dashboard.</b> Your topics as a labyrinth.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshot-question.png" alt="A question in the question bank, with its reference answer and key points, each quoting its passage"></td>
+    <td width="50%"><img src="docs/images/screenshot-library.png" alt="The library's shelves: arXiv papers under CC BY 4.0, each with its passages and questions"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>A question.</b> Every key point quotes its passage.</sub></td>
+    <td align="center"><sub><b>The library.</b> Each source keeps its licence.</sub></td>
+  </tr>
+</table>
 
-1. **Configuration.** `cp env.example .env`, then add free API keys (optional, but recommended: question generation and grading use them first):
-   - Groq: https://console.groq.com/keys
-   - Google AI Studio: https://aistudio.google.com/apikey (free-tier prompts are used to improve Google's products)
+## How it works
 
-   Every other setting has a working default; see [Configuration](#configuration).
-2. **Database.** `make db-up` starts Postgres 17 + pgvector on **port 5433**, so it doesn't clash with a local Postgres on 5432. Then `make migrate` creates the tables.
-3. **Local models.** In a separate terminal run `make ollama`. It starts Ollama with settings sized for a 16 GB Mac: 16K context, one model loaded at a time, flash attention and an 8-bit KV cache. Then download the models (about 18 GB):
-   ```sh
-   for m in qwen3.5:9b qwen3.5:4b gemma4:12b qwen3-embedding:0.6b; do ollama pull "$m"; done
-   ```
-4. **Dependencies.**
-   - Backend: `cd backend && uv sync --group ingest`. The `ingest` group adds the parsing libraries (Docling, PyTorch; the environment takes about 1.3 GB), which the deployed API doesn't need.
-   - Frontend: `cd frontend && pnpm install --frozen-lockfile`.
+```mermaid
+flowchart TB
+    subgraph build ["Build the library, once"]
+        direction LR
+        src["Your material<br/>PDFs · notebooks · arXiv"] --> ingest["1 · Ingest<br/>passages with citations"]
+        ingest --> write["2 · Write questions<br/>one per idea, from evidence"]
+    end
+    subgraph daily ["Practise, every day"]
+        direction LR
+        practise["The question<br/>due next"] --> grade["3 · Grade<br/>key points and claims"]
+        grade --> schedule["4 · Schedule<br/>back before you forget"]
+    end
+    build --> daily
+```
 
-   **Always sync the backend with `uv sync --group ingest`.** A plain `uv sync` removes the ingestion libraries again, because uv removes every package that the requested dependency groups don't include. `make ingest`, `make worker` and `make test-slow` reinstall them before they run.
-5. **Run.** `make api` and `make web` (each in its own terminal), then open http://localhost:3000.
-   - `make web` runs the frontend's development server, which reloads as files change. To run the production build instead: `cd frontend && pnpm build && pnpm start`.
-   - The app opens on its landing page, and Enter the labyrinth goes to the practice page. The Setup page, http://localhost:3000/setup, shows the status of every dependency.
-   - The API's interactive documentation is at http://localhost:8000/docs.
+1. **Ingest.** Documents are split into passages of 300–800 tokens, each keeping its page, cell
+   or section. Search finds them by meaning and by keyword.
+   [More](docs/getting-started.md#adding-study-material)
+2. **Write.** A model lists the ideas each document explains. A writer then asks one question per
+   idea, copying the sentences that explain it before writing anything else. You choose what goes
+   into the library. [More](docs/generating-questions.md)
+3. **Grade.** The grader labels each key point and checks each claim, and code turns the labels
+   into a score. A claim the passages don't cover costs nothing; one they contradict does.
+   [More](docs/grading-and-evaluation.md)
+4. **Schedule.** The score earns a rating (Again, Hard, Good or Easy), and FSRS picks the day the
+   question comes back. [More](docs/getting-started.md#practising)
 
-## Adding study material
+## Results
+
+Every number here comes from a command in the repository or a hand-labelled set, and the
+[design notes](docs/design.md) show how each was measured.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/question-quality-dark.svg">
+  <img src="docs/images/question-quality.svg" width="820" alt="Usable questions per 100K tokens: 3.1 when questions were planned one per passage, then 13.3, 15.1 and 11.8 for three versions of the evidence-first writer; 7.7, 9.3 and 7.5 counting the cost of listing the ideas">
+</picture>
+
+**Questions.** 133 questions from the first generator were labelled by hand, and only one in five
+was usable as written. Planning by idea and writing from evidence gives about four times as many
+usable questions per token. In three test runs of 20, no question with a key point missing from
+its passages passed the checks. ([details](docs/design.md#question-generation-reworked-phase-6))
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/grader-agreement-dark.svg">
+  <img src="docs/images/grader-agreement.svg" width="820" alt="The grader's regression suite on 75 hand-graded answers: Spearman rho 0.954 (needs 0.90), Cohen's kappa 0.817 (needs 0.75), 96% of answers labelled mostly as by hand, 93% scored close to the hand score, 94% of contradictions caught (each needs 90%), and 4 of 4 prompt injections held">
+</picture>
+
+**Grading.** On 75 answers graded by hand, the grader ranks answers the way the hand grades do
+(Spearman ρ 0.95) and labels key points the same way (Cohen's κ 0.82). CI checks the grader on
+stand-in answers at every push. ([details](docs/design.md#phase-5-measurements))
+
+| At a glance | |
+|---|---|
+| Grading an answer | about 2 s, on Groq's free tier |
+| The demo's first call after it sleeps | 4.4–4.7 s from India, then 0.5–1 s |
+| The demo's library | 35 reviewed questions, over eight CC BY 4.0 papers and notes written for the project |
+| Running cost | $0 |
+
+## Quick start
+
+You need a Mac with 16 GB of memory, [uv](https://docs.astral.sh/uv/),
+[Docker Desktop](https://www.docker.com/products/docker-desktop/), Node.js 22+, and
+[Ollama](https://ollama.com) and [pnpm](https://pnpm.io) (`brew install ollama pnpm`).
 
 ```sh
-make ingest SRC="data/notes.pdf data/notebooks 1706.03762"
+cp env.example .env                       # optional: add free Groq and Gemini keys
+make db-up && make migrate                # Postgres 17 + pgvector, on port 5433
+make ollama                               # in a terminal of its own; then download the models (about 18 GB):
+for m in qwen3.5:9b qwen3.5:4b gemma4:12b qwen3-embedding:0.6b; do ollama pull "$m"; done
+(cd backend && uv sync --group ingest) && (cd frontend && pnpm install --frozen-lockfile)
+make api                                  # the API on :8000, in a terminal of its own
+cd frontend && pnpm build && pnpm start   # the app on http://localhost:3000
 ```
 
-`SRC` takes files (`.pdf`, `.ipynb`), folders (searched recursively; hidden folders such as `.ipynb_checkpoints` are skipped) and arXiv IDs or URLs (`1706.03762`, `arXiv:1706.03762v7`, `https://arxiv.org/abs/1706.03762`). Relative paths may start from the repository root. Options go inside `SRC`, for example `make ingest SRC="--force data/notes.pdf"`:
-
-| Option | Effect |
-|---|---|
-| `--force` | Ingest again even if the document is already ingested, e.g. after changing the chunk settings |
-| `--ocr` | Recognize text in scanned PDF pages |
-| `--no-formulas` | Don't convert PDF equations to LaTeX (faster) |
-| `--verbose` | Show library log messages and progress bars |
-
-- **First run.** The first PDF downloads Docling's layout, table and formula models (about 1.1 GB) into the Hugging Face cache. The first ingestion of any kind downloads the embedding model's tokenizer (11 MB).
-- **Duplicates.** A file is identified by its content (SHA-256) and a paper by its arXiv ID. Adding the same material again does nothing unless `--force` is given or a different arXiv version is requested.
-- **Material added through the API** is processed by the worker. Run `make worker` and leave it running; Ctrl+C stops it, and an interrupted job is queued again the next time it starts.
-- **One ingestion at a time.** Only one process ingests at a time, because two copies of Docling next to the local models don't fit in 16 GB. While a worker is running, `make ingest` queues its jobs and waits for the worker to finish them.
-
-### How ingestion works
-
-1. **Queue.** The API or `make ingest` stores the file as `data/uploads/<sha256>.pdf` (or `.ipynb`), or records the arXiv ID, and adds a job to the `jobs` table in Postgres.
-2. **Parse.** The worker claims the job.
-   - PDFs go through Docling: layout, reading order, tables, and formulas as LaTeX.
-   - arXiv papers are read from their HTML version on arxiv.org, or from the PDF when there is none. Title, authors and license come from arXiv's OAI-PMH interface.
-   - Notebooks are read with nbformat: Markdown cells become text, code cells become code blocks, and short text outputs are kept.
-3. **Chunk.** The parsed paragraphs, lists, tables, formulas and code cells are packed into chunks of 300–800 tokens. Each keeps its heading path and page or cell numbers.
-   - A new section or subsection starts a new chunk.
-   - Each chunk is labeled with every section it covers, for example `3 Model Architecture > 3.3 Position-wise Feed-Forward Networks · 3.4 Embeddings and Softmax · 3.5 Positional Encoding`.
-4. **Embed and store.** Each chunk is embedded with `qwen3-embedding`, together with the document title and its section label, and stored with a full-text index. A document's chunks are replaced in one transaction, so a failed re-ingestion keeps the previous ones.
-5. **Search.** `GET /search` takes the top 50 chunks from vector similarity and merges them, with Reciprocal Rank Fusion, with the top 10 from full-text search at half weight (see [Measuring search](#measuring-search)).
-
-Downloads and uploads are kept under `data/` (gitignored; `DATA_DIR` moves it):
-
-```
-data/
-├── uploads/<sha256>.pdf, .ipynb   each file stored once, named by its content hash
-├── arxiv/<id>/                    metadata.json, and v<N>.html (ar5iv.html from the fallback
-│                                  site) or v<N>.pdf; v<N>.no-html records a version without HTML
-├── calibration/                   answers.toml, your hand-graded answers, and grades.jsonl,
-│                                  the grader's grades of them (see make calibrate)
-├── eval/                          hand-questions.toml and also-answers.toml, the labels
-│                                  the retrieval report adds (see make eval-retrieval)
-└── reports/                       retrieval-<date>.md and grader-<date>.md, the reports of
-                                   make eval-retrieval and make eval-grader
-```
-
-## Generating questions
-
-Questions are written from the material you have ingested, in two steps. The first reads the
-library with the local model and has to run once after ingesting; the second writes questions
-and can run as often as you like.
+Then add a paper and write questions from it:
 
 ```sh
-make topics             # tag every chunk and cluster the tags into topics
-make generate N=20      # write 20 questions
+make ingest SRC="1706.03762"   # Attention Is All You Need, from arXiv
+make topics                    # the topic map
+make generate N=10             # ten questions
 ```
 
-### 1. The topic map
+The full setup, every command and every setting are in [Getting started](docs/getting-started.md).
 
-`make topics` asks `qwen3.5:4b` what each chunk explains, for two to five concept tags, and
-whether the chunk is worth asking a question about. Every distinct tag is then embedded and
-clustered, so the same idea in a paper and in a notebook lands in one topic.
+## Tech stack
 
-Options go in `ARGS`, for example `make topics ARGS="--rules-only"`:
-
-| Option | Effect |
+| Layer | Choice |
 |---|---|
-| `--document ID`, `--limit N` | Tag one document only, or at most N chunks |
-| `--retag` | Tag chunks again that already have tags, e.g. after changing the prompt |
-| `--tag-only`, `--cluster-only` | Stop before clustering, or cluster the tags there already are |
-| `--rules-only` | Judge the stored tags by the context-only rules again, with no model calls |
-| `--similarity X` | How close two tags have to be to share a topic (default `TOPIC_SIMILARITY`, 0.8) |
+| Backend | Python, FastAPI, SQLAlchemy 2, Alembic, Pydantic AI |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, TanStack Query |
+| Data and search | Postgres 17 with pgvector and full-text search, fused by rank; Docling for PDFs |
+| Models | Ollama locally (Qwen 3.5, Gemma 4, Qwen3 embeddings); Groq (gpt-oss-120b writes, Qwen 3.8 grades) and Gemini as free cloud tiers |
+| Scheduling | FSRS (py-fsrs) |
+| Quality | pytest, DeepEval with custom metrics, Playwright end-to-end, Langfuse tracing over OpenTelemetry |
+| Hosting | Vercel (Hobby) and Neon (Free), sign-in with GitHub through Better Auth, CI on GitHub Actions |
 
-- It takes about 12 s per chunk, so roughly 25 minutes for a library of 124 chunks. Ollama
-  must be running, and only one process may use the local models at a time: `make topics`
-  doesn't start while a worker, `make ingest` or `make generate` is running. A running worker
-  builds the map when asked through `POST /topics/build`, tagging only the chunks that have no
-  tags yet.
-- A chunk is context-only, and never asked about, when the model says it explains nothing or
-  when a rule says so: chunks that are only code, and scaffolding such as roadmaps, learning
-  objectives, setup and imports, acknowledgments and front matter. Context-only chunks keep
-  their tags and can still be shown alongside a question.
-- Topics keep their ids as long as their names survive, so questions stay filed where they are.
+## Documentation
 
-### 2. Writing questions
-
-`make generate N=20` plans the batch, writes it down, and then works through it. Each question
-goes to Groq's `gpt-oss-120b` (Gemini, then the local model, if Groq is unavailable) with its
-source chunks in delimiters, and comes back as JSON: the question, a reference answer, two to
-four key points each carrying an exact quote from a source, misconceptions, and a difficulty.
-
-Options go in `ARGS`, for example `make generate ARGS="--job 17"`:
-
-| Option | Effect |
+| Guide | What it covers |
 |---|---|
-| `--count N` | How many questions to write (also `N=` on `make generate`) |
-| `--document ID` | Ask about one document only |
-| `--job ID` | Carry on with a batch that stopped early |
-| `--verbose` | Show library log messages |
+| [Getting started](docs/getting-started.md) | Setup, adding material, practising, commands and settings |
+| [Generating questions](docs/generating-questions.md) | The reviewed library and the quick batch |
+| [Grading and evaluation](docs/grading-and-evaluation.md) | How answers are graded, and how the grader and search are measured |
+| [API reference](docs/api.md) | Every endpoint and the rules it follows |
+| [Models and tracing](docs/models-and-tracing.md) | Which model does what, and what tracing sends |
+| [Deploying](docs/deploying.md) | A free deployment on Vercel and Neon, and CI |
+| [Design notes](docs/design.md) | Architecture, decisions, measurements and roadmap |
+| [Frontend](frontend/README.md) | The pages, the design system and the end-to-end test |
 
-- **Passages are picked a source at a time and a topic at a time,** so a batch spreads over
-  the whole library instead of the one document that happens to hold the most material. The
-  style rotates through intuition, why/how, compare, trade-offs, failure modes, connection and
-  paper questions.
-- **A chunk an accepted question already covers is left out,** so a second run breaks new ground.
-- **Before it runs, the whole plan is written down** as one row per question. Ctrl+C loses at
-  most the question in flight; `make generate ARGS="--job 16"` carries the rest on.
-- **Each provider keeps its own pace** (Groq's free tier allows 30 requests and 8,000 tokens a
-  minute, 200,000 a day). A provider that is briefly full is waited out rather than abandoned,
-  and the batch stops cleanly when the day's budget is gone, leaving the rest queued.
-- **Questions queued through the API** are written by the worker, the same one that ingests.
+## Status
 
-### What a question has to pass
-
-Every question is stored either way, with the report behind the verdict, so a rejected one
-says why.
-
-| Check | A question is turned down when |
-|---|---|
-| quotes | a key point's quote is not in the chunk it names, after one round to repair it |
-| answerable | the local model, reading only the sources, cannot answer it |
-| trivia | that model reads it as recalling a fact rather than explaining something |
-| duplicate | it is within `DUPLICATE_SIMILARITY` of a question already accepted |
-
-## Practising
-
-With the API running and the frontend built and started (step 5 of [Setup](#setup)), open http://localhost:3000 and press **Enter the labyrinth**. Set `PRACTICE_TIMEZONE` to your time zone first: practice days, the streak and due dates are counted in it.
-
-- **One question at a time.** The practice page serves the question due for review, most overdue first; with nothing due, a new question from your weakest topic; with nothing new, the one you are likeliest to have forgotten. It says why it picked it.
-- **Answer** in Markdown, with `$…$` for LaTeX, and press `⌘↵`. The verdict comes back in about 2 s: each key point covered, partly covered or missing, each claim checked against a cited passage, the score and the rating it earns, and the day the question comes back, 1 to 30 practice days later (see [Grading answers](#grading-answers), and the [API](#api) on the schedule).
-- **Interview mode** gives each answer three minutes, counted down on a dimension line that runs on into overtime.
-- **Progress.** Answers earn XP, levels, a daily streak and coins. The dashboard draws your topics as a labyrinth of rooms, hatched by mastery, with the Minotaur in the weakest.
-- **The question bank** (`/questions`) shows every question with its passages and checks, and corrects, retires or rates it. **The library** (`/library`) adds material, builds the topic map and writes questions, with `make worker` running.
-- **Signing in** is optional locally: without it, all practice belongs to a built-in user. With a GitHub OAuth app's id and secret, `BETTER_AUTH_URL` and a `BETTER_AUTH_SECRET` in `.env` (see `env.example`), the header offers sign-in with GitHub, and each person who signs in keeps a practice of their own. GitHub is asked for the public profile only.
-- **Daily limits** on grading are off locally unless `DAILY_GRADES_PER_USER` or `DAILY_GRADES` is set; deployed, they hold each visitor to 10 grades a practice day and everyone to 80 over 24 hours. The practice page shows the grades left, and past a limit it keeps the answer as a draft until grading opens again.
-- **Privacy** (`/privacy`) says what is kept about you and where answers go, and deletes your practice: your answers and grades, the review schedule and your ratings, and the drafts in the browser.
-
-Each page is described in [frontend/README.md](frontend/README.md#pages).
-
-## Grading answers
-
-Every answer is graded against the passages its question was written from. The practice page
-sends it; from the command line:
-
-```sh
-curl -X POST localhost:8000/questions/31/attempts -H 'Content-Type: application/json' \
-  -d '{"answer": "An RNN carries a hidden state from one step to the next, so each word is read in the light of the ones before it."}'
-```
-
-The grader labels what it sees, and the score is worked out from the labels:
-
-| Part of a grade | What it says |
-|---|---|
-| key points | each one covered, partial or missing, with the words of the answer that show it |
-| claims | each claim supported or contradicted by a passage, which is cited and linked the way search results are, or unverified when no passage addresses it |
-| score | the key points' weighted coverage (covered 1, partial 0.5), less 0.15 for each contradicted claim, never below 0 |
-| clarity | 1 to 5 for how clearly the answer is written, apart from what it says |
-| feedback | strengths, gaps, errors, a model answer drawn from the passages, and a follow-up question |
-
-- **An unverified claim costs nothing.** The passages don't cover it, which doesn't make it
-  wrong.
-- **Qwen 3.8 on Groq grades,** in about 2 s. The free tier holds it to 1,000 written tokens a
-  minute, so a second answer within the same minute waits its turn. Without Groq the local
-  `qwen3.5:9b` grades (over a minute an answer), then Gemini; gpt-oss, which writes the
-  questions, never grades the answers to them. Answers are sent to Groq.
-- **An answer is kept whatever happens to its grading.** When no model can grade it, it gets
-  a failed grade that says why, and `POST /attempts/{id}/grades` grades it again. Every grade
-  is kept.
-- **The answer is untrusted text.** Instructions inside it, such as a request for full
-  marks, are ignored.
-
-### Checking the grader against your own grades
-
-`make calibrate` measures how far the grader agrees with grades given by hand. It needs
-`GROQ_API_KEY`.
-
-```sh
-make calibrate ARGS=template   # write data/calibration/answers.toml, listing every accepted question
-make calibrate                 # grade the answers not graded yet, then report
-make calibrate ARGS=report     # report on the grades already made, without grading
-```
-
-- **In the file,** add each answer under its question, with one label per key point, how many
-  of its claims contradict the sources and, optionally, your own score out of 10. The file's
-  header shows the format. An answer keeps counting after its question is retired.
-- **The report** gives Spearman's ρ between the grader's scores and the scores your labels
-  give (trusted from 0.7), the same against your own scores, Cohen's κ on the key-point
-  labels, where the two disagree, and the largest differences.
-- **Grading uses Groq's Qwen alone,** about one answer a minute: a grade from a fallback model
-  would measure that model instead. When Groq says the day's allowance is spent, grading
-  stops and the next run carries on.
-- **Grades are kept** in `data/calibration/grades.jsonl`, per answer and prompt version, so a
-  second run grades only what is new. Both files are personal practice data and stay out of
-  the repository.
-
-### The grader's regression suite
-
-`make eval-grader` checks that the grader still agrees with the hand grades, and fails when it
-no longer does. Each answer is a [DeepEval](https://deepeval.com) test case, judged by custom
-metrics worked out from the labels: no model judges anything, and DeepEval sends nothing
-anywhere.
-
-```sh
-make eval-grader                        # the calibration answers, from their saved grades
-make eval-grader LIVE=1                 # grade what has no saved grade first, then check
-make eval-grader SET=stand-ins          # the stand-in answers kept with the tests
-make eval-grader SET=stand-ins LIVE=1   # the stand-ins, graded afresh by the real grader
-```
-
-- **Each answer** is checked for key-point agreement (at least half its key points labelled
-  as yours), score gap (within 0.25 of your own score out of 10, or of your labels scored when
-  you gave none), a contradiction caught (where you counted one) and an injection held (an
-  answer that tries to talk the grader round scores no more than you gave it).
-- **A run passes** when every answer has a grade, Spearman's ρ is at least 0.90 and Cohen's κ
-  at least 0.75, every injection held, and at least 90% of the answers each other check
-  applies to pass it. ρ and κ count from 30 graded answers: on fewer, such as the 12
-  stand-ins, one answer can move ρ by a tenth, so they are reported but don't decide the run.
-- **Replayed, it spends nothing.** The grades saved under the current prompt version are
-  scored by today's rules, so a change to the scoring shows at once. An answer without a
-  saved grade fails with "grade it first": after a prompt change, `LIVE=1` grades the answers
-  again, on Groq's Qwen alone, as `make calibrate` does.
-- **The stand-ins** in `backend/tests/fixtures/grader_suite/` are answers written for the
-  repository, with their hand grades and the output the grader would send back for each.
-  Replayed through the same code as a live grade, they check everything between the model and
-  the score without anyone's practice data, and `make test` runs them. Live, the real grader
-  grades them afresh (about 16K tokens, which the report counts) and nothing is saved.
-- **The report** is printed, and saved to `data/reports/grader-<date>.md` for the calibration
-  answers.
-
-## Measuring search
-
-`make eval-retrieval` searches for every question with saved passages and scores how near the
-top those passages come: hit@1, hit@5, Recall@5 and MRR@5, in vector, full-text and hybrid
-mode. It needs the local embedding model (`make ollama`) for the vector and hybrid modes, asks
-no other model anything, and takes a few seconds.
-
-- **Three sets, scored apart:** the questions practice serves; those plus the questions turned
-  down for reasons that leave them about their passage; and hand-written questions with
-  passages labelled by hand, from `data/eval/hand-questions.toml`.
-- **Strict and lenient.** A question's own passages are its answers. Another passage often
-  answers it too; those confirmed by hand in `data/eval/also-answers.toml` (`verdict = "yes"`)
-  count in the lenient score.
-- **Fusion variants.** The report also tries how much of the full-text ranking hybrid search
-  should use, tuned on the turned-down questions and judged on the others, and says whether the
-  current setting should change.
-- **The report** is printed and saved to `data/reports/retrieval-<date>.md`. Labels that point
-  to passages a re-ingestion has replaced are listed, since those questions score lower until
-  they are labelled again.
-
-## API
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /health`, `GET /health/deps` | The API is up; status of the database, the models, the API keys, tracing and the daily limits, and, while tracing is on, what the answering process has sent |
-| `POST /documents/upload` | Upload a `.pdf` or `.ipynb` as the multipart field `file`. Options as query parameters: `ocr`, `formulas`, `force` |
-| `POST /documents/arxiv` | Add a paper: `{"arxiv_id": "1706.03762"}`, optionally with `ocr`, `formulas` and `force` |
-| `GET /documents`, `GET /documents/{id}` | Documents with their status, details, chunk count, how many of those chunks the topic map has tagged, and latest job |
-| `GET /jobs`, `GET /jobs/{id}` | The newest jobs first (`kind` is `ingest`, `topics` or `generate`; `limit` at most 100), or one job: its status, progress and error |
-| `GET /worker` | Whether a worker is running to take the queued jobs |
-| `GET /search?q=…&limit=10&mode=hybrid` | Search all chunks. `mode` is `hybrid`, `vector` or `keyword`; `limit` is at most 50 |
-| `POST /questions/generate` | Plan and queue a batch: `{"count": 20}`, optionally `document_id`. Returns **202** with the job the worker will run |
-| `GET /questions` | The library, newest first. Filters: `status`, `topic_id`, `style`, `difficulty`, `document_id`, `source_updated`, `rating` (`good`, `poor` or `unrated`, by the latest rating); `limit` and `offset`, with the total of the whole match |
-| `GET /questions/{id}` | One question with its sources, key points and quotes, misconceptions, validation report and token usage |
-| `PATCH /questions/{id}` | Correct or retire a question: any of `text`, `reference_answer`, `key_points` (two to four, replaced as a whole) and `status` (`accepted` or `retired`), with an optional `reason`. Returns the question as `GET` does |
-| `GET /topics` | The topic map with the passages and questions behind each topic |
-| `POST /topics/build` | Queue a build of the topic map: the chunks without tags are tagged, then every tag is grouped into topics. Returns **202** with the job the worker will run |
-| `POST /questions/{id}/attempts` | Answer an accepted question: `{"answer": "…"}`, at most 8,000 characters, optionally with `seconds` taken and an interview `time_limit`. Returns **201** with the attempt, its grade and, once graded, when the question comes back and what the answer earned |
-| `POST /attempts/{id}/grades` | Grade an attempt again, e.g. after a failed grade. Earlier grades are kept |
-| `GET /attempts/{id}` | An attempt with every grade it was given, oldest first |
-| `GET /questions/{id}/attempts` | The answers given to a question, newest first, with their grades; `limit` (at most 100) and `offset` |
-| `GET /practice/next` | The question to practise next, without its reference answer or key points, and why it was picked |
-| `GET /practice/progress` | XP, level and streak, and the ten coins: when each was minted, or how far along it is |
-| `GET /practice/map` | The dashboard's labyrinth: a room for each topic with questions, with its mastery and reviews due, the passages between the rooms, today's thread and the Minotaur's room |
-| `GET /practice/stats` | The latest 12 scores, graded answers on each of the last 14 days, and questions due on each of the next 7 |
-| `GET /practice/allowance` | What the daily limits leave: your grades today and everyone's over the last 24 hours, each with what it allows, and the limit that refuses a grade now, if any, with when it allows one again |
-| `DELETE /practice` | Delete your practice: every answer with its grades, the review history and schedule, and your ratings. Answers with what was deleted. The day's grades still count against the limits |
-| `POST /ratings` | Rate a question good or poor, or a grade fair or unfair: `{"question_id": 31, "value": -1, "note": "…"}` (or `grade_id`), `value` 1 or -1, with an optional note of at most 500 characters. Returns **201**. The latest rating comes with the question or grade as `rating` |
-
-- **Who is asking.** Locally a request is the built-in user's unless it carries a sign-in token. In production a token is needed on every per-person route (practice, attempts and grades, ratings), which answer 401 without one. The token is Better Auth's, sent as `Authorization: Bearer` and checked against the keys the frontend publishes at `/auth/jwks`. Another user's attempt or grade answers 404. The library is read by anyone, and in production nobody can change it: corrections answer 403 too.
-- **Past a daily limit,** answering and grading again return **429** with the limit that refuses and `Retry-After`, and nothing is written down. A grade counts once a model has replied, even if it failed.
-- **Adding material.** Both `POST` endpoints return **202** while the document's job is queued or running, and **200** when there is nothing to wait for because the document is already ingested.
-  - A file over `MAX_UPLOAD_MB` gets 413; any other file type gets 415.
-  - With `ENVIRONMENT=production`, both return 403, since ingestion runs locally.
-- **Search results.** Each result has the chunk text, its section label, its page or cell range, and its rank in each retriever. It also has a citation, such as `RNN Intuition, pp. 7–8` or `Attention Is All You Need, § 3.2.1 Scaled Dot-Product Attention · 3.2.2 Multi-Head Attention`. For arXiv papers, a link points to the section or PDF page.
-- **Without Ollama,** hybrid search falls back to keyword search and says so in `warning`, and `mode=vector` returns 503.
-- **Starting a batch** needs the worker to be running, and returns the batch already in flight rather than planning a second one: two plans made at the same time would pick the same passages and pay for them twice. It returns **200** with no job when nothing is left to ask about, and 403 with `ENVIRONMENT=production`, since checking a question needs the local models.
-- **Building the topic map** also needs the worker, and also returns the build already queued or running rather than a second one, which would find nothing new: a build tags whatever is untagged when it runs. The response says how many chunks are `untagged`. It returns **200** with no job when there is nothing to build from, and 403 with `ENVIRONMENT=production`. A build that fails keeps the tags it wrote, so the next one carries on.
-- **The worker** holds a Postgres advisory lock for as long as it runs, and `GET /worker` reports whether that lock is held (`make ingest` and `make generate` hold it too). A job still marked `running` while no worker is running was stopped part way; the next worker to start queues it again.
-- **A question is served with everything behind it:** the passages it was written from, cited as search results are, what an answer has to cover with the quote that proves each point, and the report from every check it went through, whether it passed or failed.
-- **Correcting a question** holds it to the rule generation works to: each key point's quote has to be in the passage it names, one of the question's sources. Otherwise the edit is refused with 422, each problem pointing at its field, and nothing changes.
-  - A new question text is embedded again for the duplicate check. Without Ollama the question is left without an embedding, and the check passes over it.
-  - Every change is written into the question's validation report, with what it replaced and why.
-  - Retiring a question takes it out of practice and out of the duplicate check, and keeps it and its answers; `{"status": "accepted"}` puts it back where its schedule left off.
-  - A rejected question can't be edited (409).
-- **A grade is served with what it refers to:** each key point's text and weight next to its label, and each claim with the passage behind its verdict, cited and linked. A question that was rejected or retired can't be answered (404). Grading runs on the cloud models first, so unlike writing questions it also works with `ENVIRONMENT=production`.
-- **Practice follows a review schedule (FSRS).** An answer's first successful grade earns a rating: Again below 0.4, Hard below 0.7, Good below 0.9, Easy from 0.9, and Again whenever a claim contradicts the sources. The rating decides the practice day the question comes back, between 1 and 30 days later. `GET /practice/next` serves the question most overdue for review, then a new one from the weakest topic, then practice ahead on the question likeliest to have been forgotten. Grading an answer again doesn't reschedule it.
-- **Practice earns XP, a level and coins,** all worked out from the review history, none of it stored.
-  - An answer earns ten times its score and five for answering, half as much again when the question was due (late or not), five more inside an interview time limit, and, on the day's first answer, the streak's length that day, up to ten. An attempt carries what its first successful grade `earned`: the XP part by part, the level it reached and any coins.
-  - Seven levels start at 50·(n−1)·n XP, from Apprentice at 0 to Daedalus at 2,100. The streak counts practice days in a row.
-  - Each of the ten coins is minted by the first answer that meets its condition. Conditions about the library count only the questions it held at the time, so new questions never take a coin back.
-  - The map's rooms fill a grid six wide, in topic order. A seeded maze joins them, so the same topics always give the same map. The Minotaur waits in the weakest room: the lowest mastery, then the one practised least.
-- **Ratings are evaluation data:** which questions the generator got wrong, and where the grader goes wrong in real use. Every rating is kept and the latest one stands, so a change of mind leaves a trace. Any question can be rated, whatever its status: a rejected question rated good is a check that turned down too much. A failed grade has no verdict to judge and can't be rated (409).
-
-```sh
-curl -X POST localhost:8000/documents/arxiv -H 'Content-Type: application/json' -d '{"arxiv_id": "1706.03762"}'
-curl -F file=@notes.pdf 'localhost:8000/documents/upload?formulas=false'
-curl 'localhost:8000/search?q=why+scale+dot-product+attention&limit=5'
-curl -X POST localhost:8000/topics/build
-curl 'localhost:8000/jobs?kind=topics&limit=1'
-curl -X POST localhost:8000/questions/generate -H 'Content-Type: application/json' -d '{"count": 20}'
-curl 'localhost:8000/questions?status=accepted&difficulty=3&limit=5'
-curl -X PATCH localhost:8000/questions/31 -H 'Content-Type: application/json' -d '{"status": "retired", "reason": "asks for a reported number"}'
-curl 'localhost:8000/questions/31/attempts?limit=5'
-curl -X POST localhost:8000/ratings -H 'Content-Type: application/json' -d '{"question_id": 31, "value": -1, "note": "the second key point repeats the first"}'
-```
-
-## Commands
-
-| Command | What it does |
-|---|---|
-| `make db-up`, `make db-down` | Starts / stops Postgres (data is kept in a Docker volume) |
-| `make migrate` | Applies database migrations |
-| `make ollama` | Runs Ollama with settings sized for a 16 GB Mac |
-| `make api`, `make web` | Runs the API on port 8000 / the frontend's development server on port 3000 |
-| `make client` | Regenerates the frontend's typed API client from the backend's routes. Run it after changing the API |
-| `make glyphs DAEDALUS=… MINOTAUR=…` | Redraws the frontend's glyph pictures from copies of two etchings, Charles Holroyd's *Daedalus* and Antonio Tempesta's *Theseus and the Minotaur* (see [frontend/README.md](frontend/README.md#generated-code)) |
-| `make ingest SRC="…"` | Ingests files, folders and arXiv papers (see [Adding study material](#adding-study-material)) |
-| `make topics` | Tags every chunk with the local model and clusters the tags into topics |
-| `make generate N=20` | Writes questions from the topic map (see [Generating questions](#generating-questions)) |
-| `make worker` | Processes jobs queued through the API: ingestion first, then the topic map, then question batches |
-| `make calibrate` | Grades hand-graded answers and measures how far the grader agrees (see [Checking the grader](#checking-the-grader-against-your-own-grades)) |
-| `make eval-retrieval` | Measures search against the questions' own passages and writes the retrieval report (see [Measuring search](#measuring-search)) |
-| `make eval-grader` | Checks the grader against hand-graded answers and fails when it no longer agrees (see [The grader's regression suite](#the-graders-regression-suite)) |
-| `make check` | Checks the database and its migrations, Ollama and its models, API keys, and whether model calls are traced. `make check LIVE=1` also sends a one-word prompt to each model, traces them, and says whether Langfuse took the traces. |
-| `make test` | Backend tests. Database tests use a separate `daedalus_test` database and are skipped when Postgres isn't running (`make db-up`); in CI they fail instead. |
-| `make test-slow` | The PDF parsing test, which loads Docling's models |
-| `make e2e` | Walks through the app in a browser on stand-in models, in a database of its own: from the landing page through the library to a graded answer, the day's last grade used, its room on the dashboard, and the practice deleted. `make e2e ARGS=--headed` shows the browser. It needs Postgres (`make db-up`), ports 8000 and 3000 free, and Playwright's Chromium, downloaded once (see [frontend/README.md](frontend/README.md#the-end-to-end-test)) |
-| `make lint` | Ruff (backend) and ESLint (frontend) |
-| `make help` | Lists all commands |
-
-## Configuration
-
-Settings come from environment variables, then from `.env`. `env.example` lists them with their defaults; an empty value means the default.
-
-| Setting | Default | Purpose |
-|---|---|---|
-| `ENVIRONMENT` | `local` | `production` means a free cloud host: cloud models only, keyword search only, no ingestion |
-| `CORS_ORIGINS` | `["http://localhost:3000"]` | Origins allowed to call the API |
-| `DATABASE_URL` | `postgresql+psycopg://daedalus:daedalus@localhost:5433/daedalus` | Matches `docker-compose.yml` |
-| `ROOT_PATH` | empty | The path a proxy serves the API under and passes on with each request: `/api` on Vercel. Routes match without it, and the API's docs ask for its schema with it |
-| `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | empty | Sign-in with GitHub, offered once all four are set: the frontend's address (the issuer of the tokens the API checks), a long random secret (e.g. `openssl rand -base64 32`), and a GitHub OAuth app's id and secret, with the callback `<frontend>/auth/callback/github`. Without them, practice is the built-in user's |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local model server |
-| `GRADER_MODEL`, `HELPER_MODEL`, `SECOND_OPINION_MODEL`, `EMBEDDING_MODEL` | `qwen3.5:9b`, `qwen3.5:4b`, `gemma4:12b`, `qwen3-embedding:0.6b` | Local models |
-| `EMBEDDING_NUM_CTX` | `2048` | Context size of embedding requests. It keeps the embedding model at about 2 GB (2.9 GB at 16K) and still fits an 800-token chunk with its title and label. |
-| `GROQ_API_KEY`, `GEMINI_API_KEY` | empty | Free cloud models. `GROQ_MODEL` (`openai/gpt-oss-120b`) writes questions, `GROQ_GRADING_MODEL` (`qwen/qwen3.8-27b`) grades answers, and `GEMINI_MODEL` (`gemini-3.5-flash`) stands in for either |
-| `DATA_DIR` | `data/` in the repository | Uploaded files, arXiv downloads and calibration files |
-| `MAX_UPLOAD_MB` | `50` | Largest accepted file |
-| `CHUNK_MIN_TOKENS`, `CHUNK_MAX_TOKENS` | `300`, `800` | Chunk size range. Documents keep their chunks until they are ingested again with `--force`. |
-| `TOKENIZER_MODEL` | `Qwen/Qwen3-Embedding-0.6B` | Tokenizer that measures chunk sizes: the embedding model's own |
-| `TOPIC_SIMILARITY` | `0.8` | How close two concept tags have to be to share a topic. Higher keeps topics narrow; 0.7 merged RNN, LSTM, ReLU and dropout into one. |
-| `DUPLICATE_SIMILARITY` | `0.75` | Above this, two questions are the same question in other words. Short texts sit much closer together than passages do, so the line is far below the 0.9 it looks like it should be. |
-| `DAILY_GRADES_PER_USER`, `DAILY_GRADES` | empty | Daily limits on grading: grades a user a practice day, and grades by everyone over the last 24 hours. Empty, there is no limit locally, and 10 and 80 in production; 0 switches grading off |
-| `PRACTICE_TIMEZONE` | `UTC` | The time zone practice days are counted in, e.g. `Asia/Kolkata`. A day starts at 04:00 there, so a session past midnight still counts as one day. |
-| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | empty | A Langfuse project's keys. With both set, every model call is traced (see [Tracing model calls](#tracing-model-calls)) |
-| `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | The Langfuse project's region: `https://us.cloud.langfuse.com` for the US, or a self-hosted address. `LANGFUSE_HOST`, the older name, is read too |
-| `LANGFUSE_CONTENT` | `false` | Sends prompts, passages, answers, the models' replies and the text of errors with the traces |
-| `LANGFUSE_TRACING_ENABLED` | `true` | `false` stops tracing and keeps the keys. The tests set it, so they never send a trace |
-| `FAKE_MODELS` | `false` | Stand-ins for every model, for testing (`backend/app/llm/fakes.py`): they answer at once, the same way every time, and send nothing anywhere. What they write is made up, so point `DATABASE_URL` at a throwaway database. `make e2e` runs the whole app on them in a database of its own. `make check` says when they are on, `make calibrate` refuses them, and so does `ENVIRONMENT=production`. |
-
-The frontend reads the same `.env` at the repository's root (variables already set win). It takes the sign-in settings and `DATABASE_URL`, where Better Auth keeps its tables, from there, and `ENVIRONMENT`, which decides at build time whether practice waits for a sign-in. It also has three settings of its own, which can go in the same file:
-
-| Setting | Default | Purpose |
-|---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | The API's address as the browser sees it; the browser calls the API directly. It is written into the build, so a change needs `pnpm build` again. The API's `CORS_ORIGINS` has to include the frontend's address. |
-| `API_URL` | `NEXT_PUBLIC_API_URL` | The API's address as the frontend's server sees it, for when the two differ (e.g. in a container). The Setup page checks the API from the server. |
-| `SITE_URL` | `http://localhost:3000` | The frontend's own address, from which a shared link's preview picture is fetched. It is written into the build. |
-
-## Layout
-
-```
-.github/          CI on every push, the live grader run by hand, Dependabot
-backend/          FastAPI app (uv)
-  app/api/        HTTP routes: health, documents, jobs and the worker, search, questions and
-                  topics, attempts and grades, practice, ratings; who is asking (users.py)
-  app/core/       settings, setup checks
-  app/db/         tables (SQLAlchemy) and Alembic migrations
-  app/evaluation/ retrieval evaluation: question sets, labels, scores, fusion variants; the
-                  grader's regression suite: its metrics and what a run has to meet
-  app/grading/    grading an answer against its question's sources, scoring it, and the daily
-                  limits
-  app/ingest/     parsers (PDF, arXiv, notebooks), chunking, file storage, job queue, pipeline
-  app/llm/        model routing, per-provider pacing, embeddings, tracing, and stand-ins for
-                  testing
-  app/questions/  concept tags, topics, generation, quote grounding, validation, batch runs
-  app/retrieval/  hybrid search and rank fusion
-  app/scheduling/ review schedule (FSRS), the next-question picker, mastery, XP and coins,
-                  the labyrinth map
-  scripts/        setup check, ingest, worker, topics, generate, calibrate, eval-retrieval and
-                  eval-grader commands, the API schema the frontend client is generated from,
-                  the glyph pictures, and make e2e, which runs the end-to-end test in a
-                  database of its own
-  tests/          fixtures/grader_suite/ holds the stand-in answers of the grader's suite
-frontend/         Next.js (App Router, TypeScript, Tailwind)
-  src/app/        pages: the landing page, practice, the question bank, the library, the
-                  dashboard, setup, privacy, and the pattern book, which shows the design
-                  system; auth/ answers for Better Auth's sign-in
-  src/components/ the design system's pieces; ui/ holds shadcn/ui components restyled to it
-  src/client/     typed API client, generated by make client
-  src/lib/        API address and errors, sign-in and the session, theme, grades and drafts, the
-                  daily limits in words, questions and their validation
-                  reports, interview mode, what practice earned, the level-up burst, the grader's
-                  measurement read from the design notes, and the glyph pictures' engine, grids
-                  and drawings
-  e2e/            the end-to-end test: a walk through the app in the browser on stand-in models
-db/init/          SQL that runs when the database is first created (enables pgvector)
-docs/             Design, decisions, measurements and roadmap
-vercel.json       The deployment: the frontend and API services, routes, region, main only
-data/             Your material, uploads, downloads, calibration answers, evaluation labels and
-                  reports (not committed)
-```
-
-## Model routing
-
-`backend/app/llm/models.py` decides which model does what. Pydantic AI's `FallbackModel` moves to the next model if one fails:
-
-- **Question generation:** Groq → Gemini → local `qwen3.5:9b`
-- **Grading:** Groq `qwen/qwen3.8-27b` → local `qwen3.5:9b` → Gemini. gpt-oss, which writes the questions, never grades the answers to them.
-- **Tagging chunks and checking questions:** local `qwen3.5:4b` only, with no fallback. Both run over the whole library, so they stay off the cloud quotas, and both run with thinking off, temperature 0 and a fixed seed, which makes them repeatable.
-- With `ENVIRONMENT=production` (free cloud hosting), Ollama is skipped and only cloud models are used.
-- With `FAKE_MODELS=true`, every task gets a deterministic stand-in instead, embeddings and the counting of chunk sizes included, and nothing is sent to a model. The writer quotes whole sentences of the passage, so its questions pass the checks; the grader labels key points and claims by the words an answer shares with them.
-
-In a batch and when grading, each cloud model also keeps its own pace: a sliding window of requests and tokens (and, for Qwen on Groq, of the tokens it writes), a daily allowance that comes back over 24 hours, and a wait when the provider says `retry-after`. A provider that is briefly full is waited out rather than abandoned, so a 429 doesn't spend the next provider's quota; one that says the day's allowance is spent is skipped until a request's worth has come back, and the next model takes over meanwhile.
-
-## Tracing model calls
-
-With a [Langfuse](https://langfuse.com) project's keys in `.env` (a project on Langfuse Cloud's
-free Hobby plan will do), every model call is traced: each agent run and each request to a
-model, with its provider, model, tokens in and out and how long it took, and each embedding
-request with its model and token count. The calls one piece of work makes form one trace, which
-carries the prompt version and the ids of what it was about:
-
-- a question written: the writer and any repair of its quotes, the checker, and the duplicate
-  check's embeddings;
-- an answer graded, in practice, by `make calibrate` or by `make eval-grader LIVE=1`;
-- a passage tagged, the topic map's tags embedded, a document's passages embedded, a search.
-
-What leaves the machine:
-
-- **By default, no text.** Prompts, passages, answers and what the models reply stay here. An
-  error keeps its type but not its message or stack trace, since from a provider it can quote
-  what the model wrote. `LANGFUSE_CONTENT=true` sends everything, for looking into a prompt.
-- **Nothing without both keys,** and nothing at all with `FAKE_MODELS`. The API, the worker,
-  `make ingest`, `make topics`, `make generate`, `make calibrate` and `make eval-grader LIVE=1`
-  trace their calls; `make eval-retrieval` and replays don't.
-- **Plain OpenTelemetry,** sent to Langfuse's OTLP endpoint (`backend/app/llm/tracing.py`):
-  Pydantic AI's own spans, one span per piece of work and one per embedding request. Nothing
-  else in the app is instrumented.
-- **Deployed** (`ENVIRONMENT=production`), each piece of work's spans are sent as it ends, before
-  the answer goes out: a serverless function is frozen as soon as it has answered, before the
-  batch would go. Its traces carry the environment `production`, and `/health/deps` says what
-  the process answering it has sent.
-
-`make check` says whether tracing is on and what a trace holds, and `make check LIVE=1` says
-whether Langfuse took the traces of its test prompts.
-
-## Continuous integration
-
-GitHub Actions (`.github/workflows/`) checks every push and every pull request to `main`, in
-about two minutes, with no secrets and nothing sent to a model provider:
-
-- **Backend:** Ruff, then the tests against a Postgres service, then the grader's stand-in
-  suite, whose report goes into the job summary. Every dependency group is installed except
-  torch and the CUDA packages, which no test needs.
-- **Frontend:** ESLint and `pnpm build`.
-- **End-to-end:** `make e2e` in headless Chromium, on stand-in models. A failed walk uploads
-  Playwright's trace.
-
-The demo deploys from `main` once all three jobs pass (see [Deploying](#deploying)).
-
-**Grader, live** runs only when started by hand from the Actions tab. It grades the stand-ins
-with the real grader (about 16K Groq tokens, 11 minutes) and needs a `GROQ_API_KEY` repository secret.
-Without one, it says so. Dependabot proposes updates to `backend/uv.lock` and to the actions
-weekly. The frontend's packages are updated by hand (`pnpm update`), since pnpm's 7-day rule
-refuses the way Dependabot installs them.
-
-## Deploying
-
-The demo is one Vercel project (Hobby) with a Neon database (Free). `vercel.json` describes the project:
-- the frontend (`frontend/`) and the API (`backend/`, `app.main:app`, up to 300 s a request, without its tests and scripts) as two services;
-- `/api/...` sent to the API and everything else to the frontend;
-- every function in `cle1`, beside the database;
-- builds for `main` only.
-
-1. **The database.** Create a Neon project in the region next to the functions (aws us-east-2 for `cle1`), and cap its compute, e.g. at 0.25 CU, so that the free hours last the month. Create the tables by running `make migrate` with `DATABASE_URL` set to Neon's pooled connection string, written `postgresql+psycopg://…`.
-2. **The library.** The deployed app can't ingest material or write questions, so build the library locally, in a database of its own. Copy its seven tables (`documents`, `chunks`, `chunk_tags`, `topics`, `chunk_topics`, `questions`, `question_sources`) to Neon keeping their ids, since questions point at their passages by id. Then move each table's id sequence past the copied rows. Keep to sources whose licence allows it: the demo's are CC BY 4.0 papers and notes written for it.
-3. **Sign-in.** Create a GitHub OAuth app for the deployed address: homepage `https://<domain>`, callback `https://<domain>/auth/callback/github`.
-4. **The project.** Import the repository in Vercel's dashboard; it finds the services in `vercel.json`. Set these Production environment variables (`env.example` lists them too):
-
-   | Setting | Value |
-   |---|---|
-   | `ENVIRONMENT` | `production` |
-   | `DATABASE_URL` | Neon's pooled connection string, written `postgresql+psycopg://…` |
-   | `ROOT_PATH` | `/api` |
-   | `NEXT_PUBLIC_API_URL` | `/api`: the browser's address for the API, written into the build |
-   | `API_URL`, `SITE_URL` | `https://<domain>/api` (absolute: the setup page asks from the server), `https://<domain>` |
-   | `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` | `https://<domain>`, and a new secret |
-   | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the OAuth app's |
-   | `GROQ_API_KEY`, `GEMINI_API_KEY` | the cloud models' keys |
-   | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | optional: tracing, without text |
-
-   Left unset, the daily limits hold grading to 10 a user and 80 in all. Practice days are counted in UTC unless `PRACTICE_TIMEZONE` says otherwise.
-5. **Deploys.** Every push to `main` builds. Under the project's Deployment Checks, choose CI's Backend, Frontend and End-to-end jobs, and the address moves to a new deployment only once all three have passed. A push to any other branch builds nothing. A changed environment variable takes effect at the next deployment (Redeploy, in the dashboard).
-6. **Checking it.** `https://<domain>/api/health/deps` shows the database and its schema's revision, whether each key is set (never its value), tracing and the daily limits.
-
-With `ENVIRONMENT=production` the API:
-- grades with cloud models only (Qwen on Groq, then Gemini) and searches by keyword only;
-- refuses ingestion, the topic map, generation and corrections (403);
-- answers practice only to someone signed in (401 otherwise);
-- holds grading to the daily limits;
-- sends each piece of work's traces as it ends.
-
-The functions sleep when nobody uses them: the first call after an idle spell took 4.4 to 4.7 s from India, then 0.5 to 1 s ([measurements](docs/design.md#phase-6-measurements)).
-
-## Dependency safety
-
-- **Python:** uv ignores any package uploaded to PyPI in the last 7 days (`exclude-newer` in `backend/pyproject.toml`). Commit `uv.lock`.
-- **DeepEval** (the `eval` group) caps click, rich and tabulate below the versions the API and ingestion use, and uv resolves every group together. `override-dependencies` lifts those caps and keeps the bounds every other package sets, so the evaluation tools don't change what the app runs on; the grader suite's tests cover the parts of DeepEval it uses.
-- **Frontend:** pnpm only installs versions published at least 7 days ago (`minimumReleaseAge`) and blocks dependency install scripts unless they're allowed (`allowBuilds`); both are set in `frontend/pnpm-workspace.yaml`. The pnpm version itself is pinned in `package.json`. Commit `pnpm-lock.yaml`.
-- **Secrets:** never commit `.env`; `.gitignore` already excludes it.
+Phases 1–6 are built: ingestion and search, question generation, grading, the practice app, its
+evaluation, and a free public deployment. What could come next is on the
+[roadmap](docs/design.md#roadmap).
 
 ## Licence
 

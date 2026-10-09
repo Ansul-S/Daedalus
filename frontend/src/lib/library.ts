@@ -12,7 +12,7 @@ export const DEFAULT_BATCH = 10;
 /** The files the API reads (backend/app/ingest/storage.py). */
 export const FILE_TYPES = [".pdf", ".ipynb"];
 
-// The local model tags a passage in about 12 seconds (README, "The topic map")
+// The local model tags a passage in about 12 seconds (docs/generating-questions.md)
 const TAGGING_SECONDS = 12;
 
 export type JobState = "queued" | "running" | "interrupted" | "done" | "failed";

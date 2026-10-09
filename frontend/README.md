@@ -1,6 +1,6 @@
 # Daedalus frontend
 
-The practice app in the browser: Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4, with TanStack Query and a typed client for the Daedalus API. Setting up the whole project is described in the [main README](../README.md).
+The practice app in the browser: Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4, with TanStack Query and a typed client for the Daedalus API. Setting up the whole project is described in [Getting started](../docs/getting-started.md).
 
 ## Running it
 
