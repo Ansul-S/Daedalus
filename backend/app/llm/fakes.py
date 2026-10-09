@@ -24,8 +24,8 @@ import json
 import math
 import re
 from collections import Counter
-from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
@@ -33,11 +33,6 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.profiles import ModelProfile
 
 from app.db.models import EMBEDDING_DIMENSIONS
-
-if TYPE_CHECKING:
-    from app.interview.follow_ups import FollowUp
-    from app.interview.routing import Gap
-    from app.questions.generation import Source
 
 WRITER = "fake-writer"
 HELPER = "fake-helper"
@@ -295,28 +290,37 @@ def grade(request: str) -> dict[str, Any]:
 
 # ---------- the follow-up writer ----------
 
+# The gap a follow-up writer is told about, and the chunk it names
+GAP = re.compile(r"^Their answer (?:left out|only gestured at|claimed)[^:]*: (.*)$", re.MULTILINE)
+GAP_CHUNK = re.compile(r"\bchunk (\d+)\b", re.IGNORECASE)
 
-async def write_follow_up(
-    question: str, sources: "Sequence[Source]", gap: "Gap", answer: str
-) -> "FollowUp":
-    """A follow-up about the gap: why the sentence behind it holds, with that sentence as its one
-    key point. The sentence is the missed key point's evidence, or else the first one of the
-    passage the gap names."""
-    from app.interview.follow_ups import FollowUp
 
-    by_chunk = {source.chunk_id: source for source in sources}
-    source = by_chunk.get(gap.chunk_id or 0, sources[0])
-    evidence = (gap.point or {}).get("evidence_quote")
-    sentence = evidence or (quotable(source.text) or sentences(source.text))[0]
-    return FollowUp(
-        text=f"Why is it that {inside(sentence)}?",
-        key_points=[
-            {"text": sentence, "weight": 1, "evidence_quote": sentence, "chunk_id": source.chunk_id}
-        ],
-        chunk_ids=[source.chunk_id],
-        model=FOLLOW_UP_WRITER,
-        prompt_version="fake",
+def write_follow_up(request: str) -> dict[str, Any]:
+    """A FollowUpQuestion about the gap: the sentence of the passage the gap names that shares
+    most of its words, asked after without being quoted, as the one key point."""
+    sources = passages(request.rsplit("Passages:\n", 1)[-1])
+    if not sources:
+        raise ValueError("no passages to write a follow-up from")
+    found = GAP.search(request)
+    gap = found.group(1) if found else ""
+    named = GAP_CHUNK.search(request.split("The candidate's answer:", 1)[0])
+    by_chunk = dict(sources)
+    chunk_id = int(named.group(1)) if named and int(named.group(1)) in by_chunk else sources[0][0]
+    text = by_chunk[chunk_id]
+    wanted = content_words(gap)
+    sentence = max(
+        quotable(text) or sentences(text),
+        key=lambda candidate: share(wanted, content_words(candidate)),
     )
+    contradicted = "Their answer claimed:" in request
+    return {
+        "evidence": [{"sentence": sentence, "chunk_id": chunk_id}],
+        "question": "Which part of your answer would you correct, given how it really works?"
+        if contradicted
+        else "What did your answer leave out that the explanation depends on?",
+        "key_points": [{"text": sentence, "weight": 1, "evidence": 1}],
+        "reference_answer": sentence,
+    }
 
 
 # ---------- as models ----------
@@ -351,6 +355,11 @@ def helper() -> FunctionModel:
         raise ValueError(f"the helper has no answer for {asked.name if asked else 'plain text'}")
 
     return _model(HELPER, answer)
+
+
+def follow_up_writer() -> FunctionModel:
+    """Writes an interview's follow-ups, in place of gpt-oss on Groq and the local model."""
+    return _model(FOLLOW_UP_WRITER, lambda messages, info: write_follow_up(prompt(messages)))
 
 
 def grader() -> FunctionModel:

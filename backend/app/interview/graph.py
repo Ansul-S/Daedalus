@@ -184,9 +184,9 @@ async def follow_up(state: State, runtime: Runtime[Context]) -> State:
     """Write a follow-up about the gap in the answer, or note why there is none."""
     context = runtime.context
     session = context.session
-    written = await _turn(session, state["interview_id"], state["round"], "follow_up")
-    if written is not None:
-        return {"turn": written.id, "kind": "follow_up", "followed_up": True}
+    existing = await _turn(session, state["interview_id"], state["round"], "follow_up")
+    if existing is not None:
+        return {"turn": existing.id, "kind": "follow_up", "followed_up": True}
     turn = await session.get_one(InterviewTurn, state["turn"])
     if turn.no_follow_up is not None:
         return {"followed_up": False}
@@ -210,7 +210,8 @@ async def follow_up(state: State, runtime: Runtime[Context]) -> State:
     else:
         assert attempt is not None
         sources = await question_sources(session, question.id)
-        new = await context.writer(question.text, sources, gap, attempt.answer)
+        written = await context.writer(question.text, sources, gap, attempt.answer)
+        new = written.follow_up
         if new is not None:
             follow = InterviewTurn(
                 interview_id=turn.interview_id,
@@ -221,14 +222,18 @@ async def follow_up(state: State, runtime: Runtime[Context]) -> State:
                 key_points=new.key_points,
                 chunk_ids=new.chunk_ids,
                 aim=gap.as_aim(),
-                writer_model=new.model,
-                prompt_version=new.prompt_version,
-                usage=new.usage,
+                writer_model=written.model,
+                prompt_version=written.prompt_version,
+                usage=written.usage,
             )
             session.add(follow)
             await session.commit()
             return {"turn": follow.id, "kind": "follow_up", "followed_up": True}
         why_not = routing.NOT_WRITTEN
+        # What trying cost is kept on the question's turn, where the pacer counts it.
+        turn.writer_model = written.model
+        turn.prompt_version = written.prompt_version
+        turn.usage = written.usage
     turn.no_follow_up = why_not
     await session.commit()
     return {"followed_up": False}

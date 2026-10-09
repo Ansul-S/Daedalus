@@ -32,7 +32,7 @@ from rapidfuzz import fuzz
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Attempt, Grade, GradeRequest, Question, QuestionSource
+from app.db.models import Attempt, Grade, GradeRequest, InterviewTurn, Question, QuestionSource
 from app.grading import limits
 from app.grading.scoring import Score, score
 from app.llm.tracing import traced
@@ -440,10 +440,28 @@ async def grade_attempt(
 
 async def spent_today(session: AsyncSession) -> dict[str, tuple[int, int]]:
     """The requests and tokens each model has spent in the last day, by model name, counting
-    the grades it gave and the questions it wrote together: a free tier's allowance belongs to
-    the model, whatever the work, and Gemini both writes and grades. Grades are counted as the
-    daily limits count them: a failed one that got a reply too, and one since deleted."""
+    the grades it gave, the questions it wrote and the follow-ups it wrote together: a free
+    tier's allowance belongs to the model, whatever the work, and Gemini both writes and grades.
+    Grades are counted as the daily limits count them: a failed one that got a reply too, and
+    one since deleted. A follow-up's writing counts whether or not one held up, as long as its
+    interview is kept."""
     spent = dict(await batch.spent_today(session))
+    usage = InterviewTurn.usage
+    written = await session.execute(
+        select(
+            InterviewTurn.writer_model,
+            func.sum(usage["requests"].as_integer()),
+            func.sum(usage["input_tokens"].as_integer() + usage["output_tokens"].as_integer()),
+        )
+        .where(
+            InterviewTurn.created_at > func.now() - timedelta(days=1),
+            InterviewTurn.writer_model.is_not(None),
+        )
+        .group_by(InterviewTurn.writer_model)
+    )
+    for model, requests, tokens in written.tuples():
+        before = spent.get(model, (0, 0))
+        spent[model] = (before[0] + int(requests or 0), before[1] + int(tokens or 0))
     rows = await session.execute(
         select(
             GradeRequest.model,

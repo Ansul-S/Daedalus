@@ -4,9 +4,10 @@ Question generation is bulk work, so it prefers the free cloud tiers and keeps t
 model as a last resort. Grading is interactive: it goes to Qwen on Groq first, which grades
 in about two seconds where the local model on a 16 GB machine takes a minute or two, then to
 the local model, then to Gemini. The generator is gpt-oss, so grading never falls back to
-it -- a model family does not grade its own questions. Tagging chunks and checking that a
-question is answerable are light local work with no fallback. In production there is no
-Ollama, so only cloud models are used.
+it -- a model family does not grade its own questions. An interview's follow-ups are written
+by gpt-oss as well, and never by Gemini, whose few requests a day are the grader's last
+resort. Tagging chunks and checking that a question is answerable are light local work with
+no fallback. In production there is no Ollama, so only cloud models are used.
 
 With FAKE_MODELS, every task gets a stand-in from `app.llm.fakes` instead, embeddings
 included: the end-to-end test runs the whole app on them.
@@ -164,6 +165,26 @@ def grading_model(settings: Settings, spent: Mapping[str, tuple[int, int]] | Non
         ollama(settings, settings.grader_model),
         _paced(gemini(settings), "gemini", GEMINI_FREE, spent.get(settings.gemini_model)),
     )
+
+
+def follow_up_model(
+    settings: Settings, spent: Mapping[str, tuple[int, int]] | None = None
+) -> Model | None:
+    """Writing an interview's follow-ups: gpt-oss on Groq, which writes the questions, a family
+    apart from the grader's; locally, the local grader model after it. Gemini is left out: its
+    twenty requests a day are the grader's last resort. None when no model can write them."""
+    if settings.fake_models:
+        return fakes.follow_up_writer()
+    spent = spent or {}
+    writers = [
+        model
+        for model in (
+            _paced(groq(settings), "groq", GROQ_FREE, spent.get(settings.groq_model)),
+            ollama(settings, settings.grader_model),
+        )
+        if model is not None
+    ]
+    return _chain(*writers) if writers else None
 
 
 def groq_grader(

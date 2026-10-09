@@ -15,7 +15,7 @@ grade is left for its answer. Interviews are their user's own, and go with their
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,12 +38,13 @@ from app.api.users import UserDep
 from app.core.config import Settings, get_settings
 from app.db.models import Attempt, Interview, InterviewTurn, Question, Topic
 from app.db.session import get_session
+from app.grading.grader import spent_today
 from app.grading.limits import LimitReached, allowance, refusal_message, take
 from app.interview import places
-from app.interview.follow_ups import Writer
+from app.interview.follow_ups import FollowUpWriter, Writer
 from app.interview.picking import plan
 from app.interview.report import Round, report
-from app.llm import fakes
+from app.llm.models import follow_up_model
 from app.scheduling.mastery import standings
 from app.scheduling.schedule import practice_day, rating_name
 
@@ -59,9 +60,16 @@ TIME_LIMIT = 180
 STALLED = timedelta(minutes=5)
 
 
-def get_writer(settings: SettingsDep) -> Writer | None:
-    """Who writes follow-ups: the stand-in with FAKE_MODELS, and nobody otherwise yet."""
-    return fakes.write_follow_up if settings.fake_models else None
+async def get_writer(request: Request, session: SessionDep, settings: SettingsDep) -> Writer | None:
+    """Who writes follow-ups, or None when no model can. Like the grader, the writer is built
+    once a process, with its pacer starting from what the day has already spent."""
+    writer = getattr(request.app.state, "writer", None)
+    if writer is None:
+        model = follow_up_model(settings, await spent_today(session))
+        if model is None:
+            return None
+        writer = request.app.state.writer = FollowUpWriter(model)
+    return writer
 
 
 WriterDep = Annotated[Writer | None, Depends(get_writer)]

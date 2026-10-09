@@ -678,7 +678,8 @@ class InterviewTurn(Base):
     key_points: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     chunk_ids: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
     aim: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    # Who wrote the follow-up, with which prompt, and what it cost
+    # Who wrote the follow-up, with which prompt, and what it cost; on a library question's
+    # turn, the writer that tried and wrote none that held up
     writer_model: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[str | None] = mapped_column(Text)
     usage: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")

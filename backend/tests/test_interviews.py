@@ -39,7 +39,9 @@ from app.db.models import (
     QuestionSource,
     Review,
 )
+from app.grading.grader import spent_today
 from app.interview import routing
+from app.interview.follow_ups import FollowUpWriter, Writing
 from app.interview.picking import plan
 from app.interview.report import Round, report
 from app.llm import fakes
@@ -49,6 +51,11 @@ from app.scheduling.mastery import Standing
 
 SCALED = "divide the dot products by the square root of the key dimension"
 GRADIENTS = "which keeps the softmax gradients large"
+# The scaling passage's one sentence, which the stand-in writer copies as its evidence
+SCALING = (
+    "We divide the dot products by the square root of the key dimension, "
+    "which keeps the softmax gradients large."
+)
 
 
 async def add_library(sessions, corpus, embedder) -> list[int]:
@@ -148,7 +155,10 @@ def interviewer_grader(*, crash: bool = False) -> FunctionModel:
     )
 
 
-def use_writer(writer=fakes.write_follow_up) -> None:
+def use_writer(writer: object = "stand-in") -> None:
+    """Have follow-ups written by `writer`; by default, the real writer on the stand-in model."""
+    if writer == "stand-in":
+        writer = FollowUpWriter(fakes.follow_up_writer())
     app.dependency_overrides[get_writer] = lambda: writer
 
 
@@ -178,6 +188,11 @@ async def charged(sessions) -> list[tuple[str | None, int]]:
             select(GradeRequest.model, GradeRequest.requests).order_by(GradeRequest.id)
         )
         return [tuple(row) for row in rows]
+
+
+async def spent(sessions) -> dict[str, tuple[int, int]]:
+    async with sessions() as session:
+        return await spent_today(session)
 
 
 def kept_in_places(sessions, text: str) -> bool:
@@ -236,7 +251,7 @@ def test_an_interview_follows_up_on_what_answers_missed_and_reports(
     assert first["no_follow_up"] is None
     assert follow["kind"] == "follow_up"
     assert follow["aim"] == {"kind": "missing", "text": "it keeps gradients large"}
-    assert follow["text"] == "Why is it that which keeps the softmax gradients large?"
+    assert follow["text"] == "What did your answer leave out that the explanation depends on?"
     assert interview["waiting"] == follow["id"]
     # The graph was resumed with ids alone: the answer is nowhere in its saved place.
     assert count(sessions, CHECKPOINTS) > 0
@@ -245,7 +260,7 @@ def test_an_interview_follows_up_on_what_answers_missed_and_reports(
     interview = answer(client, interview, "FULL: it keeps them large").json()
     follow = interview["turns"][1]
     assert (follow["answer"], follow["grade"]["score"]) == ("FULL: it keeps them large", 1.0)
-    assert follow["grade"]["key_points"][0]["text"] == GRADIENTS
+    assert follow["grade"]["key_points"][0]["text"] == SCALING
     second = interview["turns"][2]
     assert (second["question_id"], interview["waiting"]) == (second_q, second["id"])
 
@@ -444,9 +459,11 @@ def test_without_a_writer_an_interview_goes_on_without_follow_ups(client, librar
     assert (first["no_follow_up"], second["kind"]) == (routing.NO_WRITER, "question")
 
 
-def test_a_follow_up_that_fails_its_checks_is_left_out(client, library) -> None:
+def test_a_follow_up_that_fails_its_checks_is_left_out(client, sessions, library) -> None:
     async def failing(question, sources, gap, answer):
-        return None
+        return Writing(
+            None, "test-writer", usage={"requests": 2, "input_tokens": 900, "output_tokens": 300}
+        )
 
     use_writer(failing)
     interview = client.post("/interviews", json={"size": 3}).json()
@@ -454,6 +471,8 @@ def test_a_follow_up_that_fails_its_checks_is_left_out(client, library) -> None:
     interview = answer(client, interview, "It is GAP").json()
 
     assert interview["turns"][0]["no_follow_up"] == routing.NOT_WRITTEN
+    # What trying cost still counts toward the writer's day.
+    assert asyncio.run(spent(sessions))["test-writer"] == (2, 1200)
 
 
 def test_an_answer_no_model_could_grade_is_kept_and_not_followed_up(
@@ -595,7 +614,7 @@ def test_langsmith_traces_nothing_whatever_the_environment_says(
 
     async def watching(question, sources, gap, answer):
         seen.append((langsmith_utils.tracing_is_enabled(), get_tracing_context()["enabled"]))
-        return await fakes.write_follow_up(question, sources, gap, answer)
+        return await FollowUpWriter(fakes.follow_up_writer())(question, sources, gap, answer)
 
     use_writer(watching)
     try:
