@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api-errors";
@@ -10,6 +10,27 @@ import { SIGN_IN, SIGN_IN_NEEDED } from "@/lib/sign-in";
 
 const HEADER_BUTTON =
   "cursor-pointer font-mono text-[10.5px] leading-none tracking-[0.1em] whitespace-nowrap uppercase hover:text-fg-2 disabled:opacity-50";
+
+type Session = Pick<ReturnType<typeof authClient.useSession>, "data" | "isPending">;
+
+// Better Auth's store of the session, the one its useSession reads
+const sessionStore: { get(): Session; listen(onChange: () => void): () => void } =
+  authClient.$store.atoms.session;
+
+// As the server renders it: the session is only looked up in the browser
+const LOOKING_UP: Session = { data: null, isPending: true };
+
+function subscribe(onChange: () => void): () => void {
+  return sessionStore.listen(onChange);
+}
+
+// Who is signed in. While the page hydrates it is still being looked up, as the server rendered
+// it, even if the lookup has answered in the meantime; the answer follows at once. Better Auth's
+// useSession gives React the answer as the server's snapshot, so a slow page whose hydration
+// waits for its code would no longer match the server's HTML.
+function useSession(): Session {
+  return useSyncExternalStore(subscribe, () => sessionStore.get(), () => LOOKING_UP);
+}
 
 /** Whether the API refused a request for want of a signed-in visitor. */
 export function needsSignIn(error: unknown): boolean {
@@ -21,7 +42,7 @@ export function needsSignIn(error: unknown): boolean {
  * looked up (the same lookup as the header's), so a page asks once this is false and never
  * sends a request the API would refuse. */
 export function useSignInFirst(): boolean | undefined {
-  const { data, isPending } = authClient.useSession();
+  const { data, isPending } = useSession();
   if (!SIGN_IN_NEEDED) return false;
   // Nobody can sign in where sign-in is not set up
   if (!SIGN_IN) return true;
@@ -30,7 +51,7 @@ export function useSignInFirst(): boolean | undefined {
 
 /** Who is signed in, and the way in or out; nothing while sign-in is off. */
 export function Account() {
-  const { data, isPending } = authClient.useSession();
+  const { data, isPending } = useSession();
   const [leaving, setLeaving] = useState(false);
   if (!SIGN_IN || isPending) return null;
 

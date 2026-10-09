@@ -559,10 +559,13 @@ Phase 6 adds three kinds of table:
   - `DELETE /practice` removes a visitor's answers, grades, review history and schedule, and ratings, and the page clears the drafts kept in the browser. The sign-in record stays.
   - Answers are at most 8,000 characters, and the grader keeps ignoring instructions inside them.
 - **Practice days are counted in UTC** for the demo, whose visitors could be anywhere.
+- **The session is read as still being looked up until a page has hydrated.**
+  - Better Auth's `useSession` gives React the session it holds at that moment as the server's snapshot.
+  - On a slow load, hydration waits for the page's code, and the session lookup answers meanwhile. The header then drew "Sign in" where the server's HTML had nothing, so React threw that HTML away and drew the page again (React error #418).
+  - With the page's code held back 2 s, this happened on every load of every page with the header; after the change it happened on none.
 - **Left for later:**
   - deleting a visitor's sign-in record from the app;
   - sending the API's own 429 live (the page holds an answer back before it is sent, so only the tests send it);
-  - the question page's server and browser renderings, which differ once in a while (React error #418);
   - vector search in production, which would need a hosted embedding model.
 
 ## Tech stack (free tiers as of September 2026)
