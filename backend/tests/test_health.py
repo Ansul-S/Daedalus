@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import textwrap
 
 from fastapi.testclient import TestClient
 
@@ -51,3 +52,75 @@ def test_the_api_starts_without_the_model_providers() -> None:
     )
 
     assert json.loads(elsewhere.stdout) == []
+
+
+def test_fastapi_records_nothing_of_a_request() -> None:
+    """FastAPI's own OpenTelemetry is off: with global providers in place, as an exporter set up
+    from OTEL_* variables would have them, a request, a validation failure and an error leave no
+    span, no log and no measurement, so neither a body sent nor a stack trace can leave. The
+    providers can be set once in a process, so the app is imported afresh in a new one."""
+    script = textwrap.dedent(
+        """
+        import json
+
+        from fastapi.testclient import TestClient
+        from opentelemetry import _logs, metrics, trace
+        from opentelemetry.sdk._logs import LoggerProvider
+        from opentelemetry.sdk._logs.export import (
+            InMemoryLogRecordExporter,
+            SimpleLogRecordProcessor,
+        )
+        from opentelemetry.sdk.metrics import MeterProvider
+        from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+        spans, logs, readings = (
+            InMemorySpanExporter(),
+            InMemoryLogRecordExporter(),
+            InMemoryMetricReader(),
+        )
+        tracer_provider = TracerProvider()
+        tracer_provider.add_span_processor(SimpleSpanProcessor(spans))
+        trace.set_tracer_provider(tracer_provider)
+        logger_provider = LoggerProvider()
+        logger_provider.add_log_record_processor(SimpleLogRecordProcessor(logs))
+        _logs.set_logger_provider(logger_provider)
+        metrics.set_meter_provider(MeterProvider(metric_readers=[readings]))
+
+        from app.main import app
+
+        @app.get("/probe")
+        def probe(n: int) -> None:
+            raise RuntimeError("an error with a stack trace")
+
+        client = TestClient(app, raise_server_exceptions=False)
+        answered = [
+            client.get("/health").status_code,
+            client.get("/probe", params={"n": "a visitor's answer"}).status_code,
+            client.get("/probe", params={"n": 1}).status_code,
+        ]
+        measured = readings.get_metrics_data()
+        print(json.dumps({
+            "answered": answered,
+            "spans": len(spans.get_finished_spans()),
+            "logs": len(logs.get_finished_logs()),
+            "measurements": 0 if measured is None else sum(
+                len(scope.metrics)
+                for resource in measured.resource_metrics
+                for scope in resource.scope_metrics
+            ),
+        }))
+        """
+    )
+    elsewhere = subprocess.run(
+        [sys.executable, "-c", script], cwd=BACKEND, capture_output=True, text=True, check=True
+    )
+
+    assert json.loads(elsewhere.stdout) == {
+        "answered": [200, 422, 500],
+        "spans": 0,
+        "logs": 0,
+        "measurements": 0,
+    }

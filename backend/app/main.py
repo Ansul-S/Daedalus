@@ -39,6 +39,11 @@ app = FastAPI(
     lifespan=lifespan,
     generate_unique_id_function=operation_id,
     root_path=get_settings().root_path,
+    # FastAPI's own OpenTelemetry would record every request, and validation failures with the
+    # body sent and errors with their stack traces, into the global providers, and send them
+    # wherever an OTEL_* variable points. Traces go through app.llm.tracing alone, without
+    # what was asked or answered.
+    telemetry={"tracing": False, "metrics": False, "logs": False, "auto_configure": False},
 )
 app.add_middleware(
     CORSMiddleware,

@@ -40,7 +40,9 @@ What leaves the machine:
   trace their calls; `make eval-retrieval` and replays don't.
 - **Plain OpenTelemetry,** sent to Langfuse's OTLP endpoint (`backend/app/llm/tracing.py`):
   Pydantic AI's own spans, one span per piece of work and one per embedding request. Nothing
-  else in the app is instrumented.
+  else in the app is instrumented. FastAPI's own OpenTelemetry, on by default since 0.142, is
+  switched off (`backend/app/main.py`), so no request, body or stack trace is recorded, whatever
+  `OTEL_*` variables are set.
 - **Deployed** (`ENVIRONMENT=production`), each piece of work's spans are sent as it ends, before
   the answer goes out: a serverless function is frozen as soon as it has answered, before the
   batch would go. Its traces carry the environment `production`, and `/health/deps` says what

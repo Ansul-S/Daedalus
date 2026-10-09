@@ -488,6 +488,7 @@ Phase 5 adds no tables. Its labels (`data/eval/`) and reports (`data/reports/`) 
   - The request parameters, which carry the output schema and the instructions, are not recorded.
   - Each piece of work (a question written, an answer graded, a passage tagged, a search) is one trace, carrying the prompt version and the ids of what it was about. Each embedding request gets a span of its own.
   - Tracing is off without both keys, with `FAKE_MODELS`, and in the tests.
+  - FastAPI's own OpenTelemetry, on by default since 0.142, is switched off (`app/main.py`). It would record every request into the global providers, with a failed validation's body and an error's stack trace, and send them wherever an `OTEL_*` variable points.
 - **Langfuse Cloud's free plan, not self-hosting.** A self-hosted Langfuse needs Postgres, ClickHouse, Redis and MinIO, too much beside Ollama on 16 GB. Arize Phoenix runs locally, but it is licensed Elastic-2.0 rather than open source.
 - **No questions were generated for the evaluation.** The sets are small but honest. Question generation's 45% (Phase 2) stays open, and a better generator is its own piece of work.
 - **Left for later:** comparing full-text normalizations on the larger sets; a hosted reranker, if Phase 6 wants one; and grading answers written after `grade-v1`, which a further change to the grader should be judged on.
