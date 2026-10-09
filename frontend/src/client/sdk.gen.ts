@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DeletePracticeData, DeletePracticeResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeAllowanceData, PracticeAllowanceResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
+import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DeleteAccountData, DeleteAccountResponses, DeletePracticeData, DeletePracticeResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeAllowanceData, PracticeAllowanceResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -321,4 +321,16 @@ export const addRating = <ThrowOnError extends boolean = false>(options: Options
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Delete Account
+ *
+ * Delete your account: your practice, as `DELETE /practice` deletes it, and your sign-in,
+ * which signs you out in every browser. Answers with the practice that was deleted.
+ */
+export const deleteAccount = <ThrowOnError extends boolean = false>(options?: Options<DeleteAccountData, ThrowOnError>): RequestResult<DeleteAccountResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<DeleteAccountResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/account',
+    ...options
 });

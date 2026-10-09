@@ -36,7 +36,7 @@ Set them in the environment or in `frontend/.env.local`.
 | `/library` | The material questions are written from: add PDFs, notebooks and arXiv papers, build the topic map and write questions, following each job as the worker runs it (see below) |
 | `/dashboard` | What practice has built: the labyrinth of topics, the level and its wing, the days practised, the latest scores and the coins (see below) |
 | `/setup` | The status of the database, the local models and the API keys, checked each time the page loads |
-| `/privacy` | What is kept about a visitor and where answers go, and Delete my practice: answers, grades, the review schedule and ratings go, and so do the drafts in the browser, after a confirm step on the page. Signed out, it asks for a sign-in first |
+| `/privacy` | What is kept about a visitor and where answers go, and Delete my practice: answers, grades, the review schedule and ratings go, and so do the drafts in the browser, after a confirm step on the page. Signed in, Delete my account also deletes the sign-in, signs out, and says what went on the page that comes back. Signed out, it asks for a sign-in first |
 | `/pattern-book` | The design system, live: pigments, type, controls, marks (with the coins, the wing and the states of a job), hatching, glyph pictures and Markdown with LaTeX |
 
 The header shows the streak and the XP, and its name leads back to the landing page. With sign-in set up (the four settings in the repository's `.env`), it also shows who is signed in, with Sign in and Sign out. Better Auth answers at `/auth` (`src/app/auth/[...all]`, `src/lib/auth.ts`), and the browser sends the API its short-lived token (`src/lib/session.ts`). Built with `ENVIRONMENT=production`, pages that show practice wait for the sign-in lookup and ask nothing of the API until someone is signed in. The footer links to the privacy page.
@@ -107,7 +107,7 @@ The page runs from material to practice in four steps. Adding material, building
 ```
 src/app/             pages, the root layout (fonts, theme, header, footer), error and 404 pages
 src/app/auth/        Better Auth's routes, at /auth
-src/app/privacy/     the privacy note and deleting one's practice
+src/app/privacy/     the privacy note and deleting one's practice or account
 src/app/(landing)/   the landing page at /, its parts and its preview picture
 src/app/globals.css  tokens, themes, type roles, hatching and Markdown styles
 src/components/      the design system's pieces: labyrinth mark, Ariadne's thread, hatching,

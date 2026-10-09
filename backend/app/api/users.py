@@ -8,7 +8,7 @@ then sends a short-lived token with each request (`Authorization: Bearer`), sign
 whose public half Better Auth publishes at `BETTER_AUTH_URL/auth/jwks`. The API checks the
 token against that key and the token's issuer, audience and expiry, and knows the user by the
 token's subject; it never sees the sign-in itself. A token that doesn't pass is refused with
-401, whatever else the request holds.
+401, whatever else the request holds, and so is one for an account deleted since.
 
 Without a token, locally the built-in user owns all the practice, so the app works as it
 always has without signing in. In production nobody is the built-in user: a per-person route
@@ -23,12 +23,12 @@ import httpx
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import Text, literal, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.db.models import LOCAL_USER, User
+from app.db.models import AUTH_USER, LOCAL_USER, User
 from app.db.session import get_session
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -113,17 +113,26 @@ async def user_id_for(
     session: AsyncSession, provider: str, subject: str, name: str | None = None
 ) -> int:
     """A user's id, adding the user the first time they are seen, in a transaction of its
-    own: they are kept whatever the request goes on to do."""
+    own: they are kept whatever the request goes on to do.
+
+    A signed-in user is added only while Better Auth still has their account. A token outlives
+    the account it was given for by up to 15 minutes, and once the account is deleted
+    (`app.api.account`) the token is refused rather than bringing the user back."""
     found = select(User.id).where(User.provider == provider, User.subject == subject)
     user_id = await session.scalar(found)
     if user_id is None:
+        user = select(literal(provider, Text), literal(subject, Text), literal(name, Text))
+        if provider == SIGNED_IN:
+            # Locked as it is read: a deletion under way is waited for, and one that starts
+            # meanwhile waits until the user is added, then deletes them too.
+            user = user.where(AUTH_USER.c.id == subject).with_for_update(read=True, key_share=True)
         await session.execute(
-            insert(User)
-            .values(provider=provider, subject=subject, name=name)
-            .on_conflict_do_nothing()
+            insert(User).from_select(["provider", "subject", "name"], user).on_conflict_do_nothing()
         )
         await session.commit()
-        user_id = (await session.execute(found)).scalar_one()
+        user_id = await session.scalar(found)
+        if user_id is None:
+            raise refused("this account has been deleted")
     return user_id
 
 

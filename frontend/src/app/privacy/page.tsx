@@ -3,12 +3,14 @@ import type { Metadata } from "next";
 import { Sheet, SheetHead, SheetSection } from "@/components/sheet";
 import { SIGN_IN, SIGN_IN_NEEDED } from "@/lib/sign-in";
 
+import { AccountDeleted, DeleteAccount } from "./delete-account";
 import { DeletePractice } from "./delete-practice";
 
 export const metadata: Metadata = { title: "Privacy" };
 
 // Each line says what the code does: sign-in in src/lib/auth.ts, the grading chain in
-// backend/app/llm/models.py, tracing in backend/app/llm/tracing.py, drafts in src/lib/drafts.ts.
+// backend/app/llm/models.py, tracing in backend/app/llm/tracing.py, drafts in src/lib/drafts.ts,
+// deleting in backend/app/api/practice.py and account.py.
 
 // Built for production, the app is the demo, whose database is on Neon
 const DATABASE = SIGN_IN_NEEDED
@@ -29,17 +31,17 @@ export default function PrivacyPage() {
     <Sheet>
       <SheetSection>
         <SheetHead number="Sheet N-01" title="Privacy" sigil="λ">
-          What Daedalus keeps about you, where your answers go, and how to delete your practice.
+          What Daedalus keeps about you, where your answers go, and how to delete it.
         </SheetHead>
         <div className="border-b border-line-2">
           <Part title="Signing in">
             {SIGN_IN ? (
               <p>
                 Signing in with GitHub keeps your GitHub id, your name and the link to your
-                avatar. GitHub is asked for public data only, so your email address is never
-                seen: the account is given an address made of your GitHub id and username at
-                users.noreply.github.com, which reaches no inbox. GitHub&apos;s tokens and your IP
-                address are not stored.
+                avatar, until you delete your account. GitHub is asked for public data only, so
+                your email address is never seen: the account is given an address made of your
+                GitHub id and username at users.noreply.github.com, which reaches no inbox.
+                GitHub&apos;s tokens and your IP address are not stored.
               </p>
             ) : (
               <p>
@@ -82,7 +84,9 @@ export default function PrivacyPage() {
             </p>
           </Part>
           <Part title="Deleting">
+            <AccountDeleted />
             <DeletePractice />
+            <DeleteAccount />
           </Part>
         </div>
       </SheetSection>

@@ -446,11 +446,8 @@ class DeletedOut(BaseModel):
     ratings: int
 
 
-@router.delete("/practice")
-async def delete_practice(session: SessionDep, user_id: UserDep) -> DeletedOut:
-    """Delete your practice: every answer with its grades, the review history and schedule
-    they made, and your ratings. The library stays, and so does the count of grades the daily
-    limits keep (`app.grading.limits`): deleting doesn't give back the day's grades."""
+async def remove_practice(session: AsyncSession, user_id: int) -> DeletedOut:
+    """Deletes a user's practice, in the session's transaction, and says what went."""
     attempts = select(Attempt.id).where(Attempt.user_id == user_id)
     counts = {}
     for name, rows in (
@@ -461,5 +458,14 @@ async def delete_practice(session: SessionDep, user_id: UserDep) -> DeletedOut:
         ("cards", delete(Card).where(Card.user_id == user_id)),
     ):
         counts[name] = (await session.execute(rows)).rowcount
-    await session.commit()
     return DeletedOut(**counts)
+
+
+@router.delete("/practice")
+async def delete_practice(session: SessionDep, user_id: UserDep) -> DeletedOut:
+    """Delete your practice: every answer with its grades, the review history and schedule
+    they made, and your ratings. The library stays, and so does the count of grades the daily
+    limits keep (`app.grading.limits`): deleting doesn't give back the day's grades."""
+    deleted = await remove_practice(session, user_id)
+    await session.commit()
+    return deleted

@@ -33,11 +33,12 @@ follow.
 | `GET /practice/stats` | The latest 12 scores, graded answers on each of the last 14 days, and questions due on each of the next 7 |
 | `GET /practice/allowance` | What the daily limits leave: your grades today and everyone's over the last 24 hours, each with what it allows, and the limit that refuses a grade now, if any, with when it allows one again |
 | `DELETE /practice` | Delete your practice: every answer with its grades, the review history and schedule, and your ratings. Answers with what was deleted. The day's grades still count against the limits |
+| `DELETE /account` | Delete your account: your practice, as `DELETE /practice` deletes it, and your sign-in, with its sessions in every browser. Answers with the practice that was deleted. Only a signed-in visitor has one: the built-in user gets **409** |
 | `POST /ratings` | Rate a question good or poor, or a grade fair or unfair: `{"question_id": 31, "value": -1, "note": "…"}` (or `grade_id`), `value` 1 or -1, with an optional note of at most 500 characters. Returns **201**. The latest rating comes with the question or grade as `rating` |
 
 ## Rules
 
-- **Who is asking.** Locally a request is the built-in user's unless it carries a sign-in token. In production a token is needed on every per-person route (practice, attempts and grades, ratings), which answer 401 without one. The token is Better Auth's, sent as `Authorization: Bearer` and checked against the keys the frontend publishes at `/auth/jwks`. Another user's attempt or grade answers 404. The library is read by anyone, and in production nobody can change it: corrections answer 403 too.
+- **Who is asking.** Locally a request is the built-in user's unless it carries a sign-in token. In production a token is needed on every per-person route (practice, attempts and grades, ratings), which answer 401 without one. The token is Better Auth's, sent as `Authorization: Bearer` and checked against the keys the frontend publishes at `/auth/jwks`. A token for an account deleted since answers 401. Another user's attempt or grade answers 404. The library is read by anyone, and in production nobody can change it: corrections answer 403 too.
 - **Past a daily limit,** answering and grading again return **429** with the limit that refuses and `Retry-After`, and nothing is written down. A grade counts once a model has replied, even if it failed.
 - **Adding material.** Both `POST` endpoints return **202** while the document's job is queued or running, and **200** when there is nothing to wait for because the document is already ingested.
   - A file over `MAX_UPLOAD_MB` gets 413; any other file type gets 415.

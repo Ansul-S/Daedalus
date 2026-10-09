@@ -1340,6 +1340,33 @@
           }
         ]
       }
+    },
+    "/account": {
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Delete Account",
+        "description": "Delete your account: your practice, as `DELETE /practice` deletes it, and your sign-in,\nwhich signs you out in every browser. Answers with the practice that was deleted.",
+        "operationId": "delete_account",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {

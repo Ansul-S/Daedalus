@@ -12,10 +12,11 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from test_grading_api import ANSWER, add_question, grading, use_grader
 
 from app.api.users import SIGNED_IN, Keys, get_keys
-from app.db.models import LOCAL_USER, User
+from app.db.models import AUTH_USER, LOCAL_USER, User
 from app.main import app
 
 ADDRESS = "http://localhost:3000"
@@ -29,14 +30,17 @@ def public_jwk(private: Ed25519PrivateKey, key_id: str) -> dict:
 
 
 class BetterAuth:
-    """Stands in for the frontend's Better Auth: it signs tokens, and serves its public keys
-    at the JWKS address, counting how often they are fetched."""
+    """Stands in for the frontend's Better Auth: it signs tokens for the users it keeps in
+    `auth_user`, and serves its public keys at the JWKS address, counting how often they are
+    fetched."""
 
-    def __init__(self) -> None:
+    def __init__(self, sessions=None) -> None:
         self.key = Ed25519PrivateKey.generate()
         self.jwks = {"keys": [public_jwk(self.key, "k1")]}
         self.fetches = 0
         self.down = False
+        # The database its users are kept in; none, and it keeps nobody
+        self.sessions = sessions
 
     def serve(self, request: httpx.Request) -> httpx.Response:
         assert str(request.url) == JWKS
@@ -63,6 +67,8 @@ class BetterAuth:
             "iat": now,
             "exp": now + lasts,
         } | claims
+        if self.sessions is not None and payload["sub"] is not None:
+            asyncio.run(self.keep(payload["sub"], payload["name"]))
         headers = {"kid": key_id} if key_id else {}
         return jwt.encode(
             {k: v for k, v in payload.items() if v is not None},
@@ -71,16 +77,34 @@ class BetterAuth:
             headers=headers,
         )
 
+    async def keep(self, subject: str, name: str | None) -> None:
+        """The user a token is for, as Better Auth adds them when they first sign in."""
+        async with self.sessions() as session, session.begin():
+            await session.execute(
+                insert(AUTH_USER)
+                .values(
+                    id=subject,
+                    name=name or "",
+                    email=f"{subject}@users.noreply.github.com",
+                    emailVerified=False,
+                )
+                .on_conflict_do_nothing()
+            )
 
-@pytest.fixture
-def better_auth(client, settings) -> BetterAuth:
+
+def set_up(settings, sessions) -> BetterAuth:
     """Sign-in set up: the API trusts the stand-in's keys, fetched as it would fetch them."""
-    stand_in = BetterAuth()
+    stand_in = BetterAuth(sessions)
     settings.better_auth_url = ADDRESS
     keys = Keys(JWKS, transport=httpx.MockTransport(stand_in.serve))
     # The client fixture clears every override when the test ends.
     app.dependency_overrides[get_keys] = lambda: keys
     return stand_in
+
+
+@pytest.fixture
+def better_auth(client, settings, sessions) -> BetterAuth:
+    return set_up(settings, sessions)
 
 
 def bearer(token: str) -> dict[str, str]:

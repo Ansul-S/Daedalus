@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
-from app.api import documents, grading, health, practice, questions, ratings, search
+from app.api import account, documents, grading, health, practice, questions, ratings, search
 from app.core.config import get_settings
 from app.grading.limits import LimitReached
 from app.llm.models import embedding_model
@@ -59,3 +59,4 @@ app.include_router(questions.router)
 app.include_router(grading.router)
 app.include_router(practice.router)
 app.include_router(ratings.router)
+app.include_router(account.router)

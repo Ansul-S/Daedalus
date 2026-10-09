@@ -508,6 +508,8 @@ Phase 5 adds no tables. Its labels (`data/eval/`) and reports (`data/reports/`) 
  a grade  ─► a slot in grade_requests, taken under a lock: 10 a user a practice day and 80 in
              all over 24 hours ─► past either, 429, and the practice page holds the answer back
  delete   ─► /privacy ─► DELETE /practice: answers, grades, the schedule, ratings; slots stay
+                      ─► DELETE /account: that, the user and Better Auth's auth_* rows, in one
+                         transaction; slots stay, as nobody's
 
  push to main ─► CI: Backend · Frontend · End-to-end ─► Vercel builds at once, and Deployment
                  Checks hold the address until all three pass. Other branches build nothing.
@@ -555,9 +557,13 @@ Phase 6 adds three kinds of table:
   - A serverless function is frozen as soon as it has answered, so the background thread that sends spans in batches never ran there, and no deployed grade reached Langfuse.
   - In production each piece of work's spans are now sent as it ends, before the answer goes out, failed ones too.
   - `/health/deps` says what the instance answering it has sent, or that tracing wasn't started in it.
-- **Privacy: a note, a length limit and deleting one's practice.**
+- **Privacy: a note, a length limit, and deleting one's practice or account.**
   - `/privacy` says what sign-in keeps, where an answer goes and where it is kept, what stays in the browser, and what tracing sends. There are no analytics.
-  - `DELETE /practice` removes a visitor's answers, grades, review history and schedule, and ratings, and the page clears the drafts kept in the browser. The sign-in record stays.
+  - `DELETE /practice` removes a visitor's answers, grades, review history and schedule, and ratings, and the page clears the drafts kept in the browser.
+  - `DELETE /account` removes the practice too, then the visitor's `users` row and Better Auth's record of the sign-in: `auth_user`, with its sessions in every browser and its GitHub account. It is all one transaction in the API. The page then signs out and says what went.
+  - The API deletes the account rather than Better Auth's own `deleteUser`, which would split one deletion over two services: a failure halfway would leave half of it behind. `deleteUser` also wants a sign-in from the last day.
+  - A token outlives its account by up to 15 minutes. So the API adds a user it hasn't seen only while `auth_user` still has them, reading that row under a key-share lock. A token for a deleted account is refused and brings nobody back, even one that arrives during the deletion.
+  - The grade slots stay, with no user: the count in all still holds them. A new account starts its own day's allowance.
   - Answers are at most 8,000 characters, and the grader keeps ignoring instructions inside them.
 - **Practice days are counted in UTC** for the demo, whose visitors could be anywhere.
 - **The session is read as still being looked up until a page has hydrated.**
@@ -565,7 +571,6 @@ Phase 6 adds three kinds of table:
   - On a slow load, hydration waits for the page's code, and the session lookup answers meanwhile. The header then drew "Sign in" where the server's HTML had nothing, so React threw that HTML away and drew the page again (React error #418).
   - With the page's code held back 2 s, this happened on every load of every page with the header; after the change it happened on none.
 - **Left for later:**
-  - deleting a visitor's sign-in record from the app;
   - sending the API's own 429 live (the page holds an answer back before it is sent, so only the tests send it);
   - vector search in production, which would need a hosted embedding model.
 

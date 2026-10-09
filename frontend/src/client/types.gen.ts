@@ -2133,3 +2133,19 @@ export type AddRatingResponses = {
 };
 
 export type AddRatingResponse = AddRatingResponses[keyof AddRatingResponses];
+
+export type DeleteAccountData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/account';
+};
+
+export type DeleteAccountResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeletedOut;
+};
+
+export type DeleteAccountResponse = DeleteAccountResponses[keyof DeleteAccountResponses];

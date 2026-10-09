@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { addArxivPaper, addRating, answerQuestion, buildTopicMap, deletePractice, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listJobs, listQuestions, listTopics, type Options, practiceAllowance, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument, workerStatus } from '../sdk.gen';
-import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DeletePracticeData, DeletePracticeResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeAllowanceData, PracticeAllowanceResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
+import { addArxivPaper, addRating, answerQuestion, buildTopicMap, deleteAccount, deletePractice, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listJobs, listQuestions, listTopics, type Options, practiceAllowance, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument, workerStatus } from '../sdk.gen';
+import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DeleteAccountData, DeleteAccountResponse, DeletePracticeData, DeletePracticeResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeAllowanceData, PracticeAllowanceResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -711,6 +711,26 @@ export const addRatingMutation = (options?: Partial<Options<AddRatingData>>): Us
     const mutationOptions: UseMutationOptions<AddRatingResponse, AddRatingError, Options<AddRatingData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await addRating({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Delete Account
+ *
+ * Delete your account: your practice, as `DELETE /practice` deletes it, and your sign-in,
+ * which signs you out in every browser. Answers with the practice that was deleted.
+ */
+export const deleteAccountMutation = (options?: Partial<Options<DeleteAccountData>>): UseMutationOptions<DeleteAccountResponse, DefaultError, Options<DeleteAccountData>> => {
+    const mutationOptions: UseMutationOptions<DeleteAccountResponse, DefaultError, Options<DeleteAccountData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteAccount({
                 ...options,
                 ...fnOptions,
                 throwOnError: true

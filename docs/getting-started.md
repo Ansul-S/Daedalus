@@ -107,7 +107,7 @@ With the API running and the frontend built and started (step 5 of [Setup](#setu
 - **The question bank** (`/questions`) shows every question with its passages and checks, and corrects, retires or rates it. **The library** (`/library`) adds material, builds the topic map and writes questions, with `make worker` running.
 - **Signing in** is optional locally: without it, all practice belongs to a built-in user. With a GitHub OAuth app's id and secret, `BETTER_AUTH_URL` and a `BETTER_AUTH_SECRET` in `.env` (see `env.example`), the header offers sign-in with GitHub, and each person who signs in keeps a practice of their own. GitHub is asked for the public profile only.
 - **Daily limits** on grading are off locally unless `DAILY_GRADES_PER_USER` or `DAILY_GRADES` is set; deployed, they hold each visitor to 10 grades a practice day and everyone to 80 over 24 hours. The practice page shows the grades left, and past a limit it keeps the answer as a draft until grading opens again.
-- **Privacy** (`/privacy`) says what is kept about you and where answers go, and deletes your practice: your answers and grades, the review schedule and your ratings, and the drafts in the browser.
+- **Privacy** (`/privacy`) says what is kept about you and where answers go, and deletes your practice: your answers and grades, the review schedule and your ratings, and the drafts in the browser. Signed in, it also deletes your account: the practice, and the sign-in with it.
 
 Each page is described in [frontend/README.md](../frontend/README.md#pages).
 

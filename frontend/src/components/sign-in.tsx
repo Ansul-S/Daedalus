@@ -49,6 +49,14 @@ export function useSignInFirst(): boolean | undefined {
   return isPending ? undefined : !data;
 }
 
+/** Whether a visitor is signed in: undefined while that is looked up, and never where sign-in
+ * is off. */
+export function useSignedIn(): boolean | undefined {
+  const { data, isPending } = useSession();
+  if (!SIGN_IN) return false;
+  return isPending ? undefined : Boolean(data);
+}
+
 /** Who is signed in, and the way in or out; nothing while sign-in is off. */
 export function Account() {
   const { data, isPending } = useSession();

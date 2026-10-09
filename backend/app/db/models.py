@@ -615,10 +615,12 @@ class Rating(Base):
 
 
 # Better Auth's tables. Sign-in runs in the frontend, whose Better Auth reads and writes them
-# (frontend/src/lib/auth.ts); the API never does, and knows a signed-in user only by the
-# subject of their token (`User.subject`). They are described here so that the migrations
-# create them and are checked against them: as Better Auth 1.7 lays them out for Postgres,
-# column names and all, with its table names prefixed `auth_`.
+# (frontend/src/lib/auth.ts). The API knows a signed-in user by the subject of their token
+# (`User.subject`), which is their `auth_user` id; it only looks there to see that the account
+# is still there before adding the user, and deletes the account when the user asks
+# (`app.api.account`). They are described here so that the migrations create them and are
+# checked against them: as Better Auth 1.7 lays them out for Postgres, column names and all,
+# with its table names prefixed `auth_`.
 
 
 def _stamp(name: str) -> Column[datetime]:
