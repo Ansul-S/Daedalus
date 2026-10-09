@@ -3,8 +3,8 @@
 import { type DefaultError, type InfiniteData, infiniteQueryOptions, queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { addArxivPaper, addRating, answerQuestion, buildTopicMap, deleteAccount, deletePractice, dependencies, editQuestion, generateQuestions, getAttempt, getDocument, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listJobs, listQuestions, listTopics, type Options, practiceAllowance, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, uploadDocument, workerStatus } from '../sdk.gen';
-import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DeleteAccountData, DeleteAccountResponse, DeletePracticeData, DeletePracticeResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeAllowanceData, PracticeAllowanceResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
+import { addArxivPaper, addRating, answerInterview, answerQuestion, buildTopicMap, deleteAccount, deletePractice, dependencies, editQuestion, endInterview, generateQuestions, getAttempt, getDocument, getInterview, getJob, getQuestion, gradeAgain, health, listAttempts, listDocuments, listInterviews, listJobs, listQuestions, listTopics, type Options, practiceAllowance, practiceMap, practiceNext, practiceProgress, practiceStats, searchChunks, startInterview, uploadDocument, workerStatus } from '../sdk.gen';
+import type { AddArxivPaperData, AddArxivPaperError, AddArxivPaperResponse, AddRatingData, AddRatingError, AddRatingResponse, AnswerInterviewData, AnswerInterviewError, AnswerInterviewResponse, AnswerQuestionData, AnswerQuestionError, AnswerQuestionResponse, BuildTopicMapData, BuildTopicMapResponse, DeleteAccountData, DeleteAccountResponse, DeletePracticeData, DeletePracticeResponse, DependenciesData, DependenciesResponse, EditQuestionData, EditQuestionError, EditQuestionResponse, EndInterviewData, EndInterviewError, EndInterviewResponse, GenerateQuestionsData, GenerateQuestionsError, GenerateQuestionsResponse, GetAttemptData, GetAttemptError, GetAttemptResponse, GetDocumentData, GetDocumentError, GetDocumentResponse, GetInterviewData, GetInterviewError, GetInterviewResponse, GetJobData, GetJobError, GetJobResponse, GetQuestionData, GetQuestionError, GetQuestionResponse, GradeAgainData, GradeAgainError, GradeAgainResponse, HealthData, HealthResponse, ListAttemptsData, ListAttemptsError, ListAttemptsResponse, ListDocumentsData, ListDocumentsResponse, ListInterviewsData, ListInterviewsResponse, ListJobsData, ListJobsError, ListJobsResponse, ListQuestionsData, ListQuestionsError, ListQuestionsResponse, ListTopicsData, ListTopicsError, ListTopicsResponse, PracticeAllowanceData, PracticeAllowanceResponse, PracticeMapData, PracticeMapResponse, PracticeNextData, PracticeNextResponse, PracticeProgressData, PracticeProgressResponse, PracticeStatsData, PracticeStatsResponse, SearchChunksData, SearchChunksError, SearchChunksResponse, StartInterviewData, StartInterviewError, StartInterviewResponse, UploadDocumentData, UploadDocumentError, UploadDocumentResponse, WorkerStatusData, WorkerStatusResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -680,8 +680,9 @@ export const practiceStatsOptions = (options?: Options<PracticeStatsData>) => qu
  * Delete Practice
  *
  * Delete your practice: every answer with its grades, the review history and schedule
- * they made, and your ratings. The library stays, and so does the count of grades the daily
- * limits keep (`app.grading.limits`): deleting doesn't give back the day's grades.
+ * they made, your ratings, and your mock interviews. The library stays, and so does the count
+ * of grades the daily limits keep (`app.grading.limits`): deleting doesn't give back the
+ * day's grades.
  */
 export const deletePracticeMutation = (options?: Partial<Options<DeletePracticeData>>): UseMutationOptions<DeletePracticeResponse, DefaultError, Options<DeletePracticeData>> => {
     const mutationOptions: UseMutationOptions<DeletePracticeResponse, DefaultError, Options<DeletePracticeData>> = {
@@ -711,6 +712,107 @@ export const addRatingMutation = (options?: Partial<Options<AddRatingData>>): Us
     const mutationOptions: UseMutationOptions<AddRatingResponse, AddRatingError, Options<AddRatingData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await addRating({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const listInterviewsQueryKey = (options?: Options<ListInterviewsData>) => createQueryKey('listInterviews', options);
+
+/**
+ * List Interviews
+ *
+ * Your interviews, newest first.
+ */
+export const listInterviewsOptions = (options?: Options<ListInterviewsData>) => queryOptions<ListInterviewsResponse, DefaultError, ListInterviewsResponse, ReturnType<typeof listInterviewsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listInterviews({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listInterviewsQueryKey(options)
+});
+
+/**
+ * Start Interview
+ *
+ * Start a mock interview, with its questions picked the way practice picks them, and ask
+ * the first. Refused (429) while the daily limits leave no grade.
+ */
+export const startInterviewMutation = (options?: Partial<Options<StartInterviewData>>): UseMutationOptions<StartInterviewResponse, StartInterviewError, Options<StartInterviewData>> => {
+    const mutationOptions: UseMutationOptions<StartInterviewResponse, StartInterviewError, Options<StartInterviewData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await startInterview({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getInterviewQueryKey = (options: Options<GetInterviewData>) => createQueryKey('getInterview', options);
+
+/**
+ * Get Interview
+ *
+ * One of your interviews: every question put, each answer's grade, and the report once it
+ * is over. One a failed request left halfway is carried on first.
+ */
+export const getInterviewOptions = (options: Options<GetInterviewData>) => queryOptions<GetInterviewResponse, GetInterviewError, GetInterviewResponse, ReturnType<typeof getInterviewQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getInterview({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getInterviewQueryKey(options)
+});
+
+/**
+ * Answer Interview
+ *
+ * Answer the question the interview waits on. The answer is graded, followed up when its
+ * grade shows a gap, and the interview moves on to its next question or its end. Past a
+ * daily limit nothing is written down and the answer is refused (429).
+ */
+export const answerInterviewMutation = (options?: Partial<Options<AnswerInterviewData>>): UseMutationOptions<AnswerInterviewResponse, AnswerInterviewError, Options<AnswerInterviewData>> => {
+    const mutationOptions: UseMutationOptions<AnswerInterviewResponse, AnswerInterviewError, Options<AnswerInterviewData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await answerInterview({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * End Interview
+ *
+ * End an interview before its last question. The report covers what was answered.
+ */
+export const endInterviewMutation = (options?: Partial<Options<EndInterviewData>>): UseMutationOptions<EndInterviewResponse, EndInterviewError, Options<EndInterviewData>> => {
+    const mutationOptions: UseMutationOptions<EndInterviewResponse, EndInterviewError, Options<EndInterviewData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await endInterview({
                 ...options,
                 ...fnOptions,
                 throwOnError: true

@@ -25,9 +25,20 @@ from app.api.questions import QuestionOut, _question_out, _sources
 from app.api.ratings import question_ratings
 from app.api.users import UserDep
 from app.core.config import Settings, get_settings
-from app.db.models import Attempt, Card, Grade, Question, Rating, Review, Topic, source_updated
+from app.db.models import (
+    Attempt,
+    Card,
+    Grade,
+    Interview,
+    Question,
+    Rating,
+    Review,
+    Topic,
+    source_updated,
+)
 from app.db.session import get_session
 from app.grading.limits import Limit, allowance
+from app.interview import places
 from app.scheduling import labyrinth
 from app.scheduling.mastery import standings
 from app.scheduling.picker import Pick, Reason, next_question
@@ -438,19 +449,26 @@ async def practice_stats(session: SessionDep, settings: SettingsDep, user_id: Us
 
 
 class DeletedOut(BaseModel):
-    # What went: answers, their grades, the review history and schedule, and ratings
+    # What went: answers, their grades, the review history and schedule, ratings, and mock
+    # interviews with their follow-ups
     attempts: int
     grades: int
     reviews: int
     cards: int
     ratings: int
+    interviews: int
 
 
 async def remove_practice(session: AsyncSession, user_id: int) -> DeletedOut:
     """Deletes a user's practice, in the session's transaction, and says what went."""
     attempts = select(Attempt.id).where(Attempt.user_id == user_id)
+    interview_ids = list(
+        await session.scalars(select(Interview.id).where(Interview.user_id == user_id))
+    )
+    await places.forget(session, interview_ids)
     counts = {}
     for name, rows in (
+        ("interviews", delete(Interview).where(Interview.user_id == user_id)),
         ("ratings", delete(Rating).where(Rating.user_id == user_id)),
         ("reviews", delete(Review).where(Review.user_id == user_id)),
         ("grades", delete(Grade).where(Grade.attempt_id.in_(attempts))),
@@ -464,8 +482,9 @@ async def remove_practice(session: AsyncSession, user_id: int) -> DeletedOut:
 @router.delete("/practice")
 async def delete_practice(session: SessionDep, user_id: UserDep) -> DeletedOut:
     """Delete your practice: every answer with its grades, the review history and schedule
-    they made, and your ratings. The library stays, and so does the count of grades the daily
-    limits keep (`app.grading.limits`): deleting doesn't give back the day's grades."""
+    they made, your ratings, and your mock interviews. The library stays, and so does the count
+    of grades the daily limits keep (`app.grading.limits`): deleting doesn't give back the
+    day's grades."""
     deleted = await remove_practice(session, user_id)
     await session.commit()
     return deleted

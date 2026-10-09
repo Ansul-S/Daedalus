@@ -23,6 +23,8 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
+    LargeBinary,
     SmallInteger,
     Table,
     Text,
@@ -47,6 +49,9 @@ CONTENT_TYPES = ("text", "code", "formula", "table")
 LOCAL_USER = ("local", "local")
 QUESTION_STATUSES = ("accepted", "rejected", "retired")
 GRADE_STATUSES = ("graded", "failed")
+INTERVIEW_STATUSES = ("asking", "finished", "ended")
+# A library question put in an interview, or the follow-up to its answer
+TURN_KINDS = ("question", "follow_up")
 # The shapes a question can take, from the design notes: an intuition check, a why or how
 # explanation, a comparison, a trade-off, a failure mode, a link between two concepts that
 # sit in different chunks, or a question about a paper's problem, idea, limits and extensions
@@ -614,6 +619,89 @@ class Rating(Base):
     )
 
 
+class Interview(Base):
+    """A mock interview (`app.interview`): a few library questions asked in turn, each answer
+    perhaps followed up, then a report. It is its user's own, and goes with their practice."""
+
+    __tablename__ = "interviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # The library questions to ask, in order, picked when the interview starts
+    questions: Mapped[list[int]] = mapped_column(ARRAY(Integer))
+    # The topic it keeps to; null for one across topics
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("topics.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(Text, server_default="asking")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # When it was finished, or ended before its last question
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set while a request runs it on, so that no other does at the same time
+    moving_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    turns: Mapped[list["InterviewTurn"]] = relationship(
+        passive_deletes=True, order_by="[InterviewTurn.round, InterviewTurn.kind.desc()]"
+    )
+
+    __table_args__ = (
+        _one_of("status", INTERVIEW_STATUSES),
+        CheckConstraint("cardinality(questions) BETWEEN 1 AND 5", name="questions_valid"),
+    )
+
+
+class InterviewTurn(Base):
+    """A question an interview put: one of the library's, or the follow-up to its answer.
+
+    The answer to a library question is an ordinary attempt, graded, scheduled and earning XP
+    as in practice. A follow-up is written for this interview alone, from its question's
+    passages, so it is kept here with its answer and that answer's grade, which counts toward
+    the daily limits and nothing else.
+    """
+
+    __tablename__ = "interview_turns"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    interview_id: Mapped[int] = mapped_column(
+        ForeignKey("interviews.id", ondelete="CASCADE"), index=True
+    )
+    # Which of the interview's questions it belongs to, from 0
+    round: Mapped[int]
+    kind: Mapped[str] = mapped_column(Text)
+    # The library question; for a follow-up, the one it follows
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"))
+    # The answer to a library question; null until it is answered
+    attempt_id: Mapped[int | None] = mapped_column(ForeignKey("attempts.id", ondelete="SET NULL"))
+    # Why no follow-up came after a library question's answer, when none did
+    no_follow_up: Mapped[str | None] = mapped_column(Text)
+    # A follow-up: what it asks, what an answer has to cover (as a question's key points), the
+    # passages those rest on, and the gap in the answer it aims at
+    text: Mapped[str | None] = mapped_column(Text)
+    key_points: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    chunk_ids: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))
+    aim: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Who wrote the follow-up, with which prompt, and what it cost
+    writer_model: Mapped[str | None] = mapped_column(Text)
+    prompt_version: Mapped[str | None] = mapped_column(Text)
+    usage: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    # A follow-up's answer, and its grade as `Grade` records one, in a single document
+    answer: Mapped[str | None] = mapped_column(Text)
+    seconds: Mapped[float | None]
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    grade: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        _one_of("kind", TURN_KINDS),
+        UniqueConstraint("interview_id", "round", "kind"),
+        # Only a follow-up has words of its own, and only its answer is kept here.
+        CheckConstraint(
+            "(kind = 'follow_up') = (text IS NOT NULL) "
+            "AND (kind = 'follow_up' OR (answer IS NULL AND grade IS NULL))",
+            name="follow_up_fields",
+        ),
+        CheckConstraint("seconds >= 0", name="seconds_valid"),
+    )
+
+
 # Better Auth's tables. Sign-in runs in the frontend, whose Better Auth reads and writes them
 # (frontend/src/lib/auth.ts). The API knows a signed-in user by the subject of their token
 # (`User.subject`), which is their `auth_user` id; it only looks there to see that the account
@@ -706,4 +794,50 @@ AUTH_JWKS = Table(
     Column("expiresAt", DateTime(timezone=True)),
     Column("alg", Text),
     Column("crv", Text),
+)
+
+
+# LangGraph's tables, where its saver keeps each interview's place between requests
+# (`app.interview.graph`), as langgraph-checkpoint-postgres 3.1 lays them out. Migration 0012
+# creates them, so the saver finds them set up; they are described here so that an
+# interview's rows (`thread_id` "interview-<id>") are deleted with it.
+
+CHECKPOINTS = Table(
+    "checkpoints",
+    Base.metadata,
+    Column("thread_id", Text, primary_key=True),
+    Column("checkpoint_ns", Text, primary_key=True, server_default=""),
+    Column("checkpoint_id", Text, primary_key=True),
+    Column("parent_checkpoint_id", Text),
+    Column("type", Text),
+    Column("checkpoint", JSONB, nullable=False),
+    Column("metadata", JSONB, nullable=False, server_default="{}"),
+    Index("checkpoints_thread_id_idx", "thread_id"),
+)
+
+CHECKPOINT_BLOBS = Table(
+    "checkpoint_blobs",
+    Base.metadata,
+    Column("thread_id", Text, primary_key=True),
+    Column("checkpoint_ns", Text, primary_key=True, server_default=""),
+    Column("channel", Text, primary_key=True),
+    Column("version", Text, primary_key=True),
+    Column("type", Text, nullable=False),
+    Column("blob", LargeBinary),
+    Index("checkpoint_blobs_thread_id_idx", "thread_id"),
+)
+
+CHECKPOINT_WRITES = Table(
+    "checkpoint_writes",
+    Base.metadata,
+    Column("thread_id", Text, primary_key=True),
+    Column("checkpoint_ns", Text, primary_key=True, server_default=""),
+    Column("checkpoint_id", Text, primary_key=True),
+    Column("task_id", Text, primary_key=True),
+    Column("idx", Integer, primary_key=True),
+    Column("channel", Text, nullable=False),
+    Column("type", Text),
+    Column("blob", LargeBinary, nullable=False),
+    Column("task_path", Text, nullable=False, server_default=""),
+    Index("checkpoint_writes_thread_id_idx", "thread_id"),
 )

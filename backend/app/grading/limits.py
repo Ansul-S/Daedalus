@@ -29,7 +29,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.db.models import Grade, GradeRequest
+from app.db.models import GradeRequest
 from app.scheduling.schedule import DAY_STARTS, practice_day
 
 Scope = Literal["per_user", "in_all"]
@@ -176,12 +176,13 @@ async def charge(
     session: AsyncSession,
     slot: GradeRequest | None,
     user_id: int,
-    grade: Grade,
+    grade_id: int | None,
     model: str | None,
     usage: RunUsage,
 ) -> None:
     """Write down what a grade cost, in its slot, or in a row of its own when none was taken.
-    A grade no model replied to cost nothing: its slot is given back."""
+    A grade no model replied to cost nothing: its slot is given back. `grade_id` is the grade's
+    row, if it has one: a follow-up's grade is kept on its interview turn instead."""
     if usage.requests == 0:
         if slot is not None:
             await session.delete(slot)
@@ -189,7 +190,7 @@ async def charge(
     if slot is None:
         slot = GradeRequest(user_id=user_id)
         session.add(slot)
-    slot.grade_id = grade.id
+    slot.grade_id = grade_id
     slot.model = model
     slot.requests = usage.requests
     slot.input_tokens = usage.input_tokens

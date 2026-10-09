@@ -54,6 +54,21 @@ def test_the_api_starts_without_the_model_providers() -> None:
     assert json.loads(elsewhere.stdout) == []
 
 
+def test_the_api_starts_without_langgraph() -> None:
+    """LangGraph, with langchain-core and LangSmith, adds about a third of a second to an
+    import: only an interview loads it (`app.interview.graph`)."""
+    libraries = ["langgraph", "langchain_core", "langsmith"]
+    script = (
+        "import json, sys; import app.main; "
+        f"print(json.dumps([name for name in {libraries!r} if name in sys.modules]))"
+    )
+    elsewhere = subprocess.run(
+        [sys.executable, "-c", script], cwd=BACKEND, capture_output=True, text=True, check=True
+    )
+
+    assert json.loads(elsewhere.stdout) == []
+
+
 def test_fastapi_records_nothing_of_a_request() -> None:
     """FastAPI's own OpenTelemetry is off: with global providers in place, as an exporter set up
     from OTEL_* variables would have them, a request, a validation failure and an error leave no

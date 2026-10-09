@@ -348,6 +348,40 @@ def replied(messages: Sequence[ModelMessage]) -> str | None:
     return None
 
 
+@dataclass
+class Outcome:
+    """A grading that ran: the grade, or why there is none, and what the replies cost either
+    way."""
+
+    graded: Graded | None
+    error: str | None
+    # The model that sent the last reply, if any did
+    answered_by: str | None
+    spent: RunUsage
+
+
+async def try_grading(
+    model: Model,
+    question: str,
+    key_points: Sequence[dict[str, Any]],
+    sources: Sequence[Source],
+    answer: str,
+    trace: dict[str, int],
+) -> Outcome:
+    """Grade one answer, traced with `trace`'s attributes, without raising when no model can
+    grade it."""
+    spent = RunUsage()
+    try:
+        with (
+            capture_run_messages() as messages,
+            traced("grade", version=PROMPT_VERSION, **trace),
+        ):
+            graded = await grade_answer(model, question, key_points, sources, answer, spent)
+    except (AgentRunError, ExceptionGroup) as exc:
+        return Outcome(None, why_failed(exc)[:1000], replied(messages), spent)
+    return Outcome(graded, None, graded.model, spent)
+
+
 async def grade_attempt(
     session: AsyncSession, model: Model, attempt: Attempt, slot: GradeRequest | None = None
 ) -> Grade:
@@ -358,27 +392,25 @@ async def grade_attempt(
     in `slot` when one was taken for it."""
     question = await session.get_one(Question, attempt.question_id)
     sources = await question_sources(session, question.id)
-    spent = RunUsage()
-    try:
-        with (
-            capture_run_messages() as messages,
-            traced("grade", version=PROMPT_VERSION, question=question.id, attempt=attempt.id),
-        ):
-            graded = await grade_answer(
-                model, question.text, question.key_points, sources, attempt.answer, spent
-            )
-    except (AgentRunError, ExceptionGroup) as exc:
-        log.warning("attempt %d could not be graded: %s", attempt.id, exc)
-        answered_by = replied(messages)
+    outcome = await try_grading(
+        model,
+        question.text,
+        question.key_points,
+        sources,
+        attempt.answer,
+        {"question": question.id, "attempt": attempt.id},
+    )
+    graded = outcome.graded
+    if graded is None:
+        log.warning("attempt %d could not be graded: %s", attempt.id, outcome.error)
         grade = Grade(
             attempt_id=attempt.id,
             status="failed",
-            error=why_failed(exc)[:1000],
+            error=outcome.error,
             prompt_version=PROMPT_VERSION,
-            usage=limits.usage_of(spent) if spent.requests else {},
+            usage=limits.usage_of(outcome.spent) if outcome.spent.requests else {},
         )
     else:
-        answered_by = graded.model
         grade = Grade(
             attempt_id=attempt.id,
             status="graded",
@@ -400,7 +432,9 @@ async def grade_attempt(
         )
     session.add(grade)
     await session.flush()
-    await limits.charge(session, slot, attempt.user_id, grade, answered_by, spent)
+    await limits.charge(
+        session, slot, attempt.user_id, grade.id, outcome.answered_by, outcome.spent
+    )
     return grade
 
 

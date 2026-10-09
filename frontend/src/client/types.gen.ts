@@ -5,6 +5,20 @@ export type ClientOptions = {
 };
 
 /**
+ * AimOut
+ */
+export type AimOut = {
+    /**
+     * Kind
+     */
+    kind: 'contradicted' | 'missing' | 'partial';
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
  * AllowanceOut
  */
 export type AllowanceOut = {
@@ -233,6 +247,10 @@ export type DeletedOut = {
      * Ratings
      */
     ratings: number;
+    /**
+     * Interviews
+     */
+    interviews: number;
 };
 
 /**
@@ -334,6 +352,68 @@ export type EarnedOut = {
      * Coins
      */
     coins: Array<CoinOut>;
+};
+
+/**
+ * FollowUpGradeOut
+ */
+export type FollowUpGradeOut = {
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Grader Model
+     */
+    grader_model: string | null;
+    /**
+     * Score
+     */
+    score: number | null;
+    /**
+     * Coverage
+     */
+    coverage: number | null;
+    /**
+     * Contradicted
+     */
+    contradicted: number | null;
+    /**
+     * Clarity
+     */
+    clarity: number | null;
+    /**
+     * Key Points
+     */
+    key_points: Array<KeyPointGradeOut>;
+    /**
+     * Claims
+     */
+    claims: Array<ClaimOut>;
+    /**
+     * Strengths
+     */
+    strengths: Array<string>;
+    /**
+     * Gaps
+     */
+    gaps: Array<string>;
+    /**
+     * Errors
+     */
+    errors: Array<string>;
+    /**
+     * Improved Answer
+     */
+    improved_answer: string | null;
+    /**
+     * Seconds
+     */
+    seconds: number | null;
 };
 
 /**
@@ -474,6 +554,109 @@ export type IngestOut = {
     message: string;
     document: DocumentOut;
     job: JobOut | null;
+};
+
+/**
+ * InterviewAnswerIn
+ */
+export type InterviewAnswerIn = {
+    /**
+     * Answer
+     */
+    answer: string;
+    /**
+     * Seconds
+     */
+    seconds?: number | null;
+    /**
+     * Time Limit
+     */
+    time_limit?: number | null;
+    /**
+     * Turn Id
+     */
+    turn_id: number;
+};
+
+/**
+ * InterviewIn
+ */
+export type InterviewIn = {
+    /**
+     * Size
+     */
+    size?: 3 | 5;
+    /**
+     * Topic Id
+     */
+    topic_id?: number | null;
+};
+
+/**
+ * InterviewOut
+ */
+export type InterviewOut = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Status
+     */
+    status: 'asking' | 'finished' | 'ended';
+    /**
+     * Size
+     */
+    size: number;
+    topic: AppApiInterviewsTopicOut | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Turns
+     */
+    turns: Array<TurnOut>;
+    /**
+     * Waiting
+     */
+    waiting: number | null;
+    report: ReportOut | null;
+};
+
+/**
+ * InterviewSummaryOut
+ */
+export type InterviewSummaryOut = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Status
+     */
+    status: 'asking' | 'finished' | 'ended';
+    /**
+     * Size
+     */
+    size: number;
+    topic: AppApiInterviewsTopicOut | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Answered
+     */
+    answered: number;
 };
 
 /**
@@ -1022,6 +1205,36 @@ export type RefusalOut = {
 };
 
 /**
+ * ReportOut
+ */
+export type ReportOut = {
+    /**
+     * Answered
+     */
+    answered: number;
+    /**
+     * Mean Score
+     */
+    mean_score: number | null;
+    /**
+     * Follow Ups
+     */
+    follow_ups: number;
+    /**
+     * Recovered
+     */
+    recovered: number;
+    /**
+     * Review
+     */
+    review: Array<AppApiInterviewsTopicOut>;
+    /**
+     * Rounds
+     */
+    rounds: Array<RoundOut>;
+};
+
+/**
  * ReviewOut
  */
 export type ReviewOut = {
@@ -1075,6 +1288,44 @@ export type RoomOut = {
      * Mastery
      */
     mastery: number;
+};
+
+/**
+ * RoundOut
+ */
+export type RoundOut = {
+    /**
+     * Question Id
+     */
+    question_id: number;
+    /**
+     * Question
+     */
+    question: string;
+    /**
+     * Topic
+     */
+    topic: string | null;
+    /**
+     * Score
+     */
+    score: number | null;
+    /**
+     * Rating
+     */
+    rating: 'again' | 'hard' | 'good' | 'easy' | null;
+    /**
+     * Due
+     */
+    due: string | null;
+    /**
+     * Follow Up Score
+     */
+    follow_up_score: number | null;
+    /**
+     * Recovered
+     */
+    recovered: boolean | null;
 };
 
 /**
@@ -1293,33 +1544,52 @@ export type TopicMapOut = {
 };
 
 /**
- * TopicOut
+ * TurnOut
  */
-export type TopicOut = {
+export type TurnOut = {
     /**
      * Id
      */
     id: number;
     /**
-     * Name
+     * Round
      */
-    name: string;
+    round: number;
     /**
-     * Tags
+     * Kind
      */
-    tags: Array<string>;
+    kind: 'question' | 'follow_up';
     /**
-     * Chunk Count
+     * Question Id
      */
-    chunk_count: number;
+    question_id: number;
     /**
-     * Question Count
+     * Text
      */
-    question_count: number;
+    text: string;
     /**
-     * Accepted Count
+     * Topic
      */
-    accepted_count: number;
+    topic: string | null;
+    /**
+     * Time Limit
+     */
+    time_limit: number;
+    attempt: AttemptOut | null;
+    /**
+     * No Follow Up
+     */
+    no_follow_up: string | null;
+    aim: AimOut | null;
+    /**
+     * Answer
+     */
+    answer: string | null;
+    /**
+     * Seconds
+     */
+    seconds: number | null;
+    grade: FollowUpGradeOut | null;
 };
 
 /**
@@ -1390,6 +1660,50 @@ export type XpOut = {
      * Streak
      */
     streak: number;
+};
+
+/**
+ * TopicOut
+ */
+export type AppApiInterviewsTopicOut = {
+    /**
+     * Id
+     */
+    id: number | null;
+    /**
+     * Name
+     */
+    name: string | null;
+};
+
+/**
+ * TopicOut
+ */
+export type AppApiQuestionsTopicOut = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Chunk Count
+     */
+    chunk_count: number;
+    /**
+     * Question Count
+     */
+    question_count: number;
+    /**
+     * Accepted Count
+     */
+    accepted_count: number;
 };
 
 export type HealthData = {
@@ -1853,7 +2167,7 @@ export type ListTopicsResponses = {
      *
      * Successful Response
      */
-    200: Array<TopicOut>;
+    200: Array<AppApiQuestionsTopicOut>;
 };
 
 export type ListTopicsResponse = ListTopicsResponses[keyof ListTopicsResponses];
@@ -2133,6 +2447,147 @@ export type AddRatingResponses = {
 };
 
 export type AddRatingResponse = AddRatingResponses[keyof AddRatingResponses];
+
+export type ListInterviewsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/interviews';
+};
+
+export type ListInterviewsResponses = {
+    /**
+     * Response List Interviews
+     *
+     * Successful Response
+     */
+    200: Array<InterviewSummaryOut>;
+};
+
+export type ListInterviewsResponse = ListInterviewsResponses[keyof ListInterviewsResponses];
+
+export type StartInterviewData = {
+    body: InterviewIn;
+    path?: never;
+    query?: never;
+    url: '/interviews';
+};
+
+export type StartInterviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * A daily limit
+     */
+    429: RefusalOut;
+};
+
+export type StartInterviewError = StartInterviewErrors[keyof StartInterviewErrors];
+
+export type StartInterviewResponses = {
+    /**
+     * Successful Response
+     */
+    201: InterviewOut;
+};
+
+export type StartInterviewResponse = StartInterviewResponses[keyof StartInterviewResponses];
+
+export type GetInterviewData = {
+    body?: never;
+    path: {
+        /**
+         * Interview Id
+         */
+        interview_id: number;
+    };
+    query?: never;
+    url: '/interviews/{interview_id}';
+};
+
+export type GetInterviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetInterviewError = GetInterviewErrors[keyof GetInterviewErrors];
+
+export type GetInterviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: InterviewOut;
+};
+
+export type GetInterviewResponse = GetInterviewResponses[keyof GetInterviewResponses];
+
+export type AnswerInterviewData = {
+    body: InterviewAnswerIn;
+    path: {
+        /**
+         * Interview Id
+         */
+        interview_id: number;
+    };
+    query?: never;
+    url: '/interviews/{interview_id}/answers';
+};
+
+export type AnswerInterviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * A daily limit
+     */
+    429: RefusalOut;
+};
+
+export type AnswerInterviewError = AnswerInterviewErrors[keyof AnswerInterviewErrors];
+
+export type AnswerInterviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: InterviewOut;
+};
+
+export type AnswerInterviewResponse = AnswerInterviewResponses[keyof AnswerInterviewResponses];
+
+export type EndInterviewData = {
+    body?: never;
+    path: {
+        /**
+         * Interview Id
+         */
+        interview_id: number;
+    };
+    query?: never;
+    url: '/interviews/{interview_id}/end';
+};
+
+export type EndInterviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type EndInterviewError = EndInterviewErrors[keyof EndInterviewErrors];
+
+export type EndInterviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: InterviewOut;
+};
+
+export type EndInterviewResponse = EndInterviewResponses[keyof EndInterviewResponses];
 
 export type DeleteAccountData = {
     body?: never;

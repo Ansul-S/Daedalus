@@ -158,7 +158,14 @@ def test_deleting_practice_takes_only_your_own(client, sessions, corpus, embedde
     deleted = client.delete("/practice")
 
     assert deleted.status_code == 200
-    assert deleted.json() == {"attempts": 1, "grades": 1, "reviews": 1, "cards": 1, "ratings": 1}
+    assert deleted.json() == {
+        "attempts": 1,
+        "grades": 1,
+        "reviews": 1,
+        "cards": 1,
+        "ratings": 1,
+        "interviews": 0,
+    }
     progress = client.get("/practice/progress").json()
     assert (progress["xp"], progress["answers"]) == (0, 0)
     assert client.get("/practice/next").json()["new_count"] == 2
@@ -228,6 +235,11 @@ def test_each_user_s_history_is_replayed_on_its_own(sessions) -> None:
         ("GET", "/attempts/1", None),
         ("GET", "/questions/1/attempts", None),
         ("POST", "/ratings", {"question_id": 1, "value": 1}),
+        ("POST", "/interviews", {"size": 3}),
+        ("GET", "/interviews", None),
+        ("GET", "/interviews/1", None),
+        ("POST", "/interviews/1/answers", {"turn_id": 1, "answer": ANSWER}),
+        ("POST", "/interviews/1/end", None),
     ],
 )
 def test_practice_needs_a_signed_in_user_in_production(

@@ -88,7 +88,14 @@ def test_deleting_an_account_takes_its_practice_and_sign_in_and_nobody_else_s(
     deleted = client.delete("/account", headers=bearer(mine))
 
     assert deleted.status_code == 200
-    assert deleted.json() == {"attempts": 1, "grades": 1, "reviews": 1, "cards": 1, "ratings": 1}
+    assert deleted.json() == {
+        "attempts": 1,
+        "grades": 1,
+        "reviews": 1,
+        "cards": 1,
+        "ratings": 1,
+        "interviews": 0,
+    }
     assert signed_in(sessions) == {
         "auth_user": ["ba-2"],
         "auth_session": ["ba-2"],

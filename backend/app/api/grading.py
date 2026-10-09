@@ -41,7 +41,7 @@ from app.api.ratings import RatingOut, grade_ratings
 from app.api.search import citation, source_link
 from app.api.users import UserDep
 from app.core.config import Settings, get_settings
-from app.db.models import Attempt, Chunk, Document, Grade, Question, Review
+from app.db.models import Attempt, Chunk, Document, Grade, GradeRequest, Question, Review
 from app.db.session import get_session
 from app.grading.grader import grade_attempt, spent_today
 from app.grading.limits import LimitReached, take
@@ -181,10 +181,17 @@ class AttemptOut(BaseModel):
 
 async def _cited(session: AsyncSession, grades: list[Grade]) -> dict[int, tuple[Document, Chunk]]:
     """Every chunk the grades' claims cite, in one query."""
+    return await cited_chunks(session, [grade.claims for grade in grades])
+
+
+async def cited_chunks(
+    session: AsyncSession, claim_lists: list[list[dict[str, Any]]]
+) -> dict[int, tuple[Document, Chunk]]:
+    """Every chunk these claims cite, with its document, in one query."""
     chunk_ids = {
         claim["chunk_id"]
-        for grade in grades
-        for claim in grade.claims
+        for claims in claim_lists
+        for claim in claims
         if claim.get("chunk_id") is not None
     }
     if not chunk_ids:
@@ -203,30 +210,8 @@ def _grade_out(
     cited: dict[int, tuple[Document, Chunk]],
     rating: RatingOut | None,
 ) -> GradeOut:
-    key_points = [
-        KeyPointGradeOut(
-            id=label["id"],
-            text=point["text"],
-            weight=point["weight"],
-            status=label["status"],
-            answer_quote=label["answer_quote"],
-            quote_found=label.get("quote_found"),
-        )
-        for label, point in zip(grade.key_points, question.key_points, strict=False)
-    ]
-    claims = []
-    for claim in grade.claims:
-        source = cited.get(claim["chunk_id"]) if claim.get("chunk_id") is not None else None
-        claims.append(
-            ClaimOut(
-                claim=claim["claim"],
-                verdict=claim["verdict"],
-                why=claim["why"],
-                chunk_id=claim.get("chunk_id"),
-                citation=citation(*source) if source else None,
-                link=source_link(*source) if source else None,
-            )
-        )
+    key_points = key_points_out(grade.key_points, question.key_points)
+    claims = claims_out(grade.claims, cited)
     return GradeOut(
         id=grade.id,
         status=grade.status,
@@ -249,6 +234,43 @@ def _grade_out(
         created_at=grade.created_at,
         rating=rating,
     )
+
+
+def key_points_out(
+    labels: list[dict[str, Any]], points: list[dict[str, Any]]
+) -> list[KeyPointGradeOut]:
+    """Each key point's label, beside the point's own text and weight."""
+    return [
+        KeyPointGradeOut(
+            id=label["id"],
+            text=point["text"],
+            weight=point["weight"],
+            status=label["status"],
+            answer_quote=label["answer_quote"],
+            quote_found=label.get("quote_found"),
+        )
+        for label, point in zip(labels, points, strict=False)
+    ]
+
+
+def claims_out(
+    claims: list[dict[str, Any]], cited: dict[int, tuple[Document, Chunk]]
+) -> list[ClaimOut]:
+    """Each claim's verdict, with the passage behind it cited and linked."""
+    found = []
+    for claim in claims:
+        source = cited.get(claim["chunk_id"]) if claim.get("chunk_id") is not None else None
+        found.append(
+            ClaimOut(
+                claim=claim["claim"],
+                verdict=claim["verdict"],
+                why=claim["why"],
+                chunk_id=claim.get("chunk_id"),
+                citation=citation(*source) if source else None,
+                link=source_link(*source) if source else None,
+            )
+        )
+    return found
 
 
 def _review_out(review: Review | None) -> ReviewOut | None:
@@ -337,6 +359,19 @@ async def answer_question(
     question = await session.get(Question, question_id)
     if question is None or question.status != "accepted":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "question not found")
+    attempt, slot = await save_answer(session, settings, user_id, question_id, body)
+    # The answer is kept whatever becomes of its grading, and so is its slot.
+    await session.commit()
+    await grade_and_schedule(session, grader, settings, attempt, slot)
+    return await _attempt_out(session, user_id, attempt.id)
+
+
+async def save_answer(
+    session: AsyncSession, settings: Settings, user_id: int, question_id: int, body: AnswerIn
+) -> tuple[Attempt, GradeRequest]:
+    """Take a slot for the answer's grade, or refuse it past a daily limit with nothing written
+    (`LimitReached`), then write the answer down, for the caller to commit before any model is
+    asked."""
     slot = await take(session, settings, user_id, datetime.now(UTC))
     attempt = Attempt(
         user_id=user_id,
@@ -346,12 +381,18 @@ async def answer_question(
         time_limit=body.time_limit,
     )
     session.add(attempt)
-    # The answer is kept whatever becomes of its grading, and so is its slot.
-    await session.commit()
+    await session.flush()
+    return attempt, slot
+
+
+async def grade_and_schedule(
+    session: AsyncSession, grader: Model, settings: Settings, attempt: Attempt, slot: GradeRequest
+) -> Grade:
+    """Grade a saved answer in its slot, and reschedule its question by the grade."""
     grade = await grade_attempt(session, grader, attempt, slot)
     await record_review(session, grade, settings.practice_zone)
     await session.commit()
-    return await _attempt_out(session, user_id, attempt.id)
+    return grade
 
 
 @router.post(

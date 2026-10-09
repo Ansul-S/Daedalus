@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DeleteAccountData, DeleteAccountResponses, DeletePracticeData, DeletePracticeResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeAllowanceData, PracticeAllowanceResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
+import type { AddArxivPaperData, AddArxivPaperErrors, AddArxivPaperResponses, AddRatingData, AddRatingErrors, AddRatingResponses, AnswerInterviewData, AnswerInterviewErrors, AnswerInterviewResponses, AnswerQuestionData, AnswerQuestionErrors, AnswerQuestionResponses, BuildTopicMapData, BuildTopicMapResponses, DeleteAccountData, DeleteAccountResponses, DeletePracticeData, DeletePracticeResponses, DependenciesData, DependenciesResponses, EditQuestionData, EditQuestionErrors, EditQuestionResponses, EndInterviewData, EndInterviewErrors, EndInterviewResponses, GenerateQuestionsData, GenerateQuestionsErrors, GenerateQuestionsResponses, GetAttemptData, GetAttemptErrors, GetAttemptResponses, GetDocumentData, GetDocumentErrors, GetDocumentResponses, GetInterviewData, GetInterviewErrors, GetInterviewResponses, GetJobData, GetJobErrors, GetJobResponses, GetQuestionData, GetQuestionErrors, GetQuestionResponses, GradeAgainData, GradeAgainErrors, GradeAgainResponses, HealthData, HealthResponses, ListAttemptsData, ListAttemptsErrors, ListAttemptsResponses, ListDocumentsData, ListDocumentsResponses, ListInterviewsData, ListInterviewsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListQuestionsData, ListQuestionsErrors, ListQuestionsResponses, ListTopicsData, ListTopicsErrors, ListTopicsResponses, PracticeAllowanceData, PracticeAllowanceResponses, PracticeMapData, PracticeMapResponses, PracticeNextData, PracticeNextResponses, PracticeProgressData, PracticeProgressResponses, PracticeStatsData, PracticeStatsResponses, SearchChunksData, SearchChunksErrors, SearchChunksResponses, StartInterviewData, StartInterviewErrors, StartInterviewResponses, UploadDocumentData, UploadDocumentErrors, UploadDocumentResponses, WorkerStatusData, WorkerStatusResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -294,8 +294,9 @@ export const practiceStats = <ThrowOnError extends boolean = false>(options?: Op
  * Delete Practice
  *
  * Delete your practice: every answer with its grades, the review history and schedule
- * they made, and your ratings. The library stays, and so does the count of grades the daily
- * limits keep (`app.grading.limits`): deleting doesn't give back the day's grades.
+ * they made, your ratings, and your mock interviews. The library stays, and so does the count
+ * of grades the daily limits keep (`app.grading.limits`): deleting doesn't give back the
+ * day's grades.
  */
 export const deletePractice = <ThrowOnError extends boolean = false>(options?: Options<DeletePracticeData, ThrowOnError>): RequestResult<DeletePracticeResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<DeletePracticeResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -321,6 +322,73 @@ export const addRating = <ThrowOnError extends boolean = false>(options: Options
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * List Interviews
+ *
+ * Your interviews, newest first.
+ */
+export const listInterviews = <ThrowOnError extends boolean = false>(options?: Options<ListInterviewsData, ThrowOnError>): RequestResult<ListInterviewsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListInterviewsResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/interviews',
+    ...options
+});
+
+/**
+ * Start Interview
+ *
+ * Start a mock interview, with its questions picked the way practice picks them, and ask
+ * the first. Refused (429) while the daily limits leave no grade.
+ */
+export const startInterview = <ThrowOnError extends boolean = false>(options: Options<StartInterviewData, ThrowOnError>): RequestResult<StartInterviewResponses, StartInterviewErrors, ThrowOnError> => (options.client ?? client).post<StartInterviewResponses, StartInterviewErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/interviews',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Interview
+ *
+ * One of your interviews: every question put, each answer's grade, and the report once it
+ * is over. One a failed request left halfway is carried on first.
+ */
+export const getInterview = <ThrowOnError extends boolean = false>(options: Options<GetInterviewData, ThrowOnError>): RequestResult<GetInterviewResponses, GetInterviewErrors, ThrowOnError> => (options.client ?? client).get<GetInterviewResponses, GetInterviewErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/interviews/{interview_id}',
+    ...options
+});
+
+/**
+ * Answer Interview
+ *
+ * Answer the question the interview waits on. The answer is graded, followed up when its
+ * grade shows a gap, and the interview moves on to its next question or its end. Past a
+ * daily limit nothing is written down and the answer is refused (429).
+ */
+export const answerInterview = <ThrowOnError extends boolean = false>(options: Options<AnswerInterviewData, ThrowOnError>): RequestResult<AnswerInterviewResponses, AnswerInterviewErrors, ThrowOnError> => (options.client ?? client).post<AnswerInterviewResponses, AnswerInterviewErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/interviews/{interview_id}/answers',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * End Interview
+ *
+ * End an interview before its last question. The report covers what was answered.
+ */
+export const endInterview = <ThrowOnError extends boolean = false>(options: Options<EndInterviewData, ThrowOnError>): RequestResult<EndInterviewResponses, EndInterviewErrors, ThrowOnError> => (options.client ?? client).post<EndInterviewResponses, EndInterviewErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/interviews/{interview_id}/end',
+    ...options
 });
 
 /**

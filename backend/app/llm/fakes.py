@@ -24,8 +24,8 @@ import json
 import math
 import re
 from collections import Counter
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
@@ -34,9 +34,15 @@ from pydantic_ai.profiles import ModelProfile
 
 from app.db.models import EMBEDDING_DIMENSIONS
 
+if TYPE_CHECKING:
+    from app.interview.follow_ups import FollowUp
+    from app.interview.routing import Gap
+    from app.questions.generation import Source
+
 WRITER = "fake-writer"
 HELPER = "fake-helper"
 GRADER = "fake-grader"
+FOLLOW_UP_WRITER = "fake-follow-up-writer"
 
 # A key point's quote has to be six words or more; a sentence this long leaves room
 QUOTABLE_WORDS = 8
@@ -285,6 +291,32 @@ def grade(request: str) -> dict[str, Any]:
         if gaps
         else "Which of these points would you lead with in an interview, and why?",
     }
+
+
+# ---------- the follow-up writer ----------
+
+
+async def write_follow_up(
+    question: str, sources: "Sequence[Source]", gap: "Gap", answer: str
+) -> "FollowUp":
+    """A follow-up about the gap: why the sentence behind it holds, with that sentence as its one
+    key point. The sentence is the missed key point's evidence, or else the first one of the
+    passage the gap names."""
+    from app.interview.follow_ups import FollowUp
+
+    by_chunk = {source.chunk_id: source for source in sources}
+    source = by_chunk.get(gap.chunk_id or 0, sources[0])
+    evidence = (gap.point or {}).get("evidence_quote")
+    sentence = evidence or (quotable(source.text) or sentences(source.text))[0]
+    return FollowUp(
+        text=f"Why is it that {inside(sentence)}?",
+        key_points=[
+            {"text": sentence, "weight": 1, "evidence_quote": sentence, "chunk_id": source.chunk_id}
+        ],
+        chunk_ids=[source.chunk_id],
+        model=FOLLOW_UP_WRITER,
+        prompt_version="fake",
+    )
 
 
 # ---------- as models ----------

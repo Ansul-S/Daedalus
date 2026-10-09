@@ -843,7 +843,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/TopicOut"
+                    "$ref": "#/components/schemas/app__api__questions__TopicOut"
                   },
                   "title": "Response List Topics"
                 }
@@ -1273,7 +1273,7 @@
           "practice"
         ],
         "summary": "Delete Practice",
-        "description": "Delete your practice: every answer with its grades, the review history and schedule\nthey made, and your ratings. The library stays, and so does the count of grades the daily\nlimits keep (`app.grading.limits`): deleting doesn't give back the day's grades.",
+        "description": "Delete your practice: every answer with its grades, the review history and schedule\nthey made, your ratings, and your mock interviews. The library stays, and so does the count\nof grades the daily limits keep (`app.grading.limits`): deleting doesn't give back the\nday's grades.",
         "operationId": "delete_practice",
         "responses": {
           "200": {
@@ -1341,6 +1341,256 @@
         ]
       }
     },
+    "/interviews": {
+      "get": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "List Interviews",
+        "description": "Your interviews, newest first.",
+        "operationId": "list_interviews",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InterviewSummaryOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Interviews"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Start Interview",
+        "description": "Start a mock interview, with its questions picked the way practice picks them, and ask\nthe first. Refused (429) while the daily limits leave no grade.",
+        "operationId": "start_interview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "A daily limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusalOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/interviews/{interview_id}": {
+      "get": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Get Interview",
+        "description": "One of your interviews: every question put, each answer's grade, and the report once it\nis over. One a failed request left halfway is carried on first.",
+        "operationId": "get_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/interviews/{interview_id}/answers": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Answer Interview",
+        "description": "Answer the question the interview waits on. The answer is graded, followed up when its\ngrade shows a gap, and the interview moves on to its next question or its end. Past a\ndaily limit nothing is written down and the answer is refused (429).",
+        "operationId": "answer_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterviewAnswerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "A daily limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusalOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/interviews/{interview_id}/end": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "End Interview",
+        "description": "End an interview before its last question. The report covers what was answered.",
+        "operationId": "end_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/account": {
       "delete": {
         "tags": [
@@ -1371,6 +1621,29 @@
   },
   "components": {
     "schemas": {
+      "AimOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "contradicted",
+              "missing",
+              "partial"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "AimOut"
+      },
       "AllowanceOut": {
         "properties": {
           "per_user": {
@@ -1793,6 +2066,10 @@
           "ratings": {
             "type": "integer",
             "title": "Ratings"
+          },
+          "interviews": {
+            "type": "integer",
+            "title": "Interviews"
           }
         },
         "type": "object",
@@ -1801,7 +2078,8 @@
           "grades",
           "reviews",
           "cards",
-          "ratings"
+          "ratings",
+          "interviews"
         ],
         "title": "DeletedOut"
       },
@@ -1998,6 +2276,155 @@
           "coins"
         ],
         "title": "EarnedOut"
+      },
+      "FollowUpGradeOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "grader_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grader Model"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "contradicted": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contradicted"
+          },
+          "clarity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity"
+          },
+          "key_points": {
+            "items": {
+              "$ref": "#/components/schemas/KeyPointGradeOut"
+            },
+            "type": "array",
+            "title": "Key Points"
+          },
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimOut"
+            },
+            "type": "array",
+            "title": "Claims"
+          },
+          "strengths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strengths"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Gaps"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors"
+          },
+          "improved_answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Improved Answer"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "error",
+          "grader_model",
+          "score",
+          "coverage",
+          "contradicted",
+          "clarity",
+          "key_points",
+          "claims",
+          "strengths",
+          "gaps",
+          "errors",
+          "improved_answer",
+          "seconds"
+        ],
+        "title": "FollowUpGradeOut"
       },
       "GenerateIn": {
         "properties": {
@@ -2288,6 +2715,229 @@
           "job"
         ],
         "title": "IngestOut"
+      },
+      "InterviewAnswerIn": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "maxLength": 8000,
+            "title": "Answer"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 86400.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "time_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3600.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Limit"
+          },
+          "turn_id": {
+            "type": "integer",
+            "title": "Turn Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer",
+          "turn_id"
+        ],
+        "title": "InterviewAnswerIn"
+      },
+      "InterviewIn": {
+        "properties": {
+          "size": {
+            "type": "integer",
+            "enum": [
+              3,
+              5
+            ],
+            "title": "Size",
+            "default": 3
+          },
+          "topic_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic Id"
+          }
+        },
+        "type": "object",
+        "title": "InterviewIn"
+      },
+      "InterviewOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "asking",
+              "finished",
+              "ended"
+            ],
+            "title": "Status"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__api__interviews__TopicOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/TurnOut"
+            },
+            "type": "array",
+            "title": "Turns"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "size",
+          "topic",
+          "created_at",
+          "finished_at",
+          "turns",
+          "waiting",
+          "report"
+        ],
+        "title": "InterviewOut"
+      },
+      "InterviewSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "asking",
+              "finished",
+              "ended"
+            ],
+            "title": "Status"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__api__interviews__TopicOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "answered": {
+            "type": "integer",
+            "title": "Answered"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "size",
+          "topic",
+          "created_at",
+          "finished_at",
+          "answered"
+        ],
+        "title": "InterviewSummaryOut"
       },
       "JobOut": {
         "properties": {
@@ -3273,6 +3923,57 @@
         ],
         "title": "RefusalOut"
       },
+      "ReportOut": {
+        "properties": {
+          "answered": {
+            "type": "integer",
+            "title": "Answered"
+          },
+          "mean_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Score"
+          },
+          "follow_ups": {
+            "type": "integer",
+            "title": "Follow Ups"
+          },
+          "recovered": {
+            "type": "integer",
+            "title": "Recovered"
+          },
+          "review": {
+            "items": {
+              "$ref": "#/components/schemas/app__api__interviews__TopicOut"
+            },
+            "type": "array",
+            "title": "Review"
+          },
+          "rounds": {
+            "items": {
+              "$ref": "#/components/schemas/RoundOut"
+            },
+            "type": "array",
+            "title": "Rounds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answered",
+          "mean_score",
+          "follow_ups",
+          "recovered",
+          "review",
+          "rounds"
+        ],
+        "title": "ReportOut"
+      },
       "ReviewOut": {
         "properties": {
           "rating": {
@@ -3351,6 +4052,103 @@
           "mastery"
         ],
         "title": "RoomOut"
+      },
+      "RoundOut": {
+        "properties": {
+          "question_id": {
+            "type": "integer",
+            "title": "Question Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "again",
+                  "hard",
+                  "good",
+                  "easy"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "follow_up_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up Score"
+          },
+          "recovered": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovered"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "question",
+          "topic",
+          "score",
+          "rating",
+          "due",
+          "follow_up_score",
+          "recovered"
+        ],
+        "title": "RoundOut"
       },
       "ScoreOut": {
         "properties": {
@@ -3747,46 +4545,128 @@
         ],
         "title": "TopicMapOut"
       },
-      "TopicOut": {
+      "TurnOut": {
         "properties": {
           "id": {
             "type": "integer",
             "title": "Id"
           },
-          "name": {
+          "round": {
+            "type": "integer",
+            "title": "Round"
+          },
+          "kind": {
             "type": "string",
-            "title": "Name"
+            "enum": [
+              "question",
+              "follow_up"
+            ],
+            "title": "Kind"
           },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags"
-          },
-          "chunk_count": {
+          "question_id": {
             "type": "integer",
-            "title": "Chunk Count"
+            "title": "Question Id"
           },
-          "question_count": {
-            "type": "integer",
-            "title": "Question Count"
+          "text": {
+            "type": "string",
+            "title": "Text"
           },
-          "accepted_count": {
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "time_limit": {
             "type": "integer",
-            "title": "Accepted Count"
+            "title": "Time Limit"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttemptOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "no_follow_up": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Follow Up"
+          },
+          "aim": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AimOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FollowUpGradeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
           "id",
-          "name",
-          "tags",
-          "chunk_count",
-          "question_count",
-          "accepted_count"
+          "round",
+          "kind",
+          "question_id",
+          "text",
+          "topic",
+          "time_limit",
+          "attempt",
+          "no_follow_up",
+          "aim",
+          "answer",
+          "seconds",
+          "grade"
         ],
-        "title": "TopicOut"
+        "title": "TurnOut"
       },
       "ValidationError": {
         "properties": {
@@ -3875,6 +4755,79 @@
         ],
         "title": "XpOut",
         "description": "The XP an answer earned, part by part: ten times its score, five for answering, half\nas much again for a question that was due, five inside an interview limit, and, on the\nday's first answer, the streak's length that day, up to ten."
+      },
+      "app__api__interviews__TopicOut": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "TopicOut"
+      },
+      "app__api__questions__TopicOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "chunk_count": {
+            "type": "integer",
+            "title": "Chunk Count"
+          },
+          "question_count": {
+            "type": "integer",
+            "title": "Question Count"
+          },
+          "accepted_count": {
+            "type": "integer",
+            "title": "Accepted Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "tags",
+          "chunk_count",
+          "question_count",
+          "accepted_count"
+        ],
+        "title": "TopicOut"
       }
     },
     "securitySchemes": {

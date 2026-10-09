@@ -2,11 +2,21 @@ import json
 
 from fastapi.routing import APIRoute
 
-from app.api import account, documents, grading, health, practice, questions, ratings, search
+from app.api import (
+    account,
+    documents,
+    grading,
+    health,
+    interviews,
+    practice,
+    questions,
+    ratings,
+    search,
+)
 from app.main import app
 from scripts.openapi import write_schema
 
-ROUTERS = [health, documents, search, questions, grading, practice, ratings, account]
+ROUTERS = [health, documents, search, questions, grading, practice, ratings, interviews, account]
 
 
 def operations() -> list[dict]:
